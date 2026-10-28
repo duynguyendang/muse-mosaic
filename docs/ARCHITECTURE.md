@@ -319,7 +319,7 @@ policy reloads (failed reload keeps serving the old policy).
 - Single-container manglekit-subprocess fallback (only the Splink half of
   the fallback topology is implemented).
 - Embedding model/version/dimension unpinned → vector recall stays skipped;
-  `display_name` authority matrix unassigned (escalates by design).
+  `display_name` authority matrix assigned in `pol-2026-10-28-v1` (agreeing names publish R1; v1 still escalates, pinned by tests).
 - What this document is *not*: a benchmark report, a production hardening
   guide, or a claim about real customer data — all demo inputs are synthetic
   fixtures labelled `-like`, and the Kaggle run is explicitly a scale-and-dirt

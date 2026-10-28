@@ -261,10 +261,26 @@ def test_user_policy_matches_csd_v1_matrix():
         "sap-like": 3,
         "ciam-like": 3,
     }
-    # Open question recorded in README: display_name is allowed but has no
+    # v1 gap (kept for history): display_name is allowed but has no
     # authority ranks. The engine must escalate/deny it, not invent ranks.
     assert "display_name" in policy.allowed_attributes
     assert "display_name" not in policy.authority_matrix
+
+
+def test_user_policy_v2_adds_display_name_ranks():
+    # Policy fix for the P-001 steward-queue pile-up: v2 assigns display_name
+    # authority ranks (mirroring the fixture ranks), so an agreeing
+    # display_name publishes R1 instead of escalating R4 NO_AUTHORITY_RANKS.
+    # v1 is untouched above; the engine resolves explicit versions (G17/G21).
+    path = POLICY_DIR / "user" / "pol-2026-10-28-v1.json"
+    policy = Policy.model_validate_json(path.read_text(encoding="utf-8"))
+    assert policy.policy_version == "pol-2026-10-28-v1"
+    assert policy.authority_matrix["display_name"] == {
+        "sap-like": 1,
+        "salesforce-like": 2,
+        "ciam-like": 3,
+        "ticket": 3,
+    }
 
 
 def test_product_policy_matches_csd_v1_matrix():

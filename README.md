@@ -26,8 +26,8 @@ field, and a visible fail-closed boundary everywhere a guess could leak in.
 
 ## Proven twice: synthetic suite + real dirty data
 
-**1. Synthetic correctness gate — 119 tests passing** (`python3 -m pytest -q`):
-G-01..G-20 user rules plus C1, P-01..P-06 product rules plus T1, H-01..H-03
+**1. Synthetic correctness gate — 121 tests passing** (`python3 -m pytest -q`):
+G-01..G-21 user rules (G21: agreeing display_name publishes under v2) plus C1, P-01..P-06 product rules plus T1, H-01..H-03
 hidden-connection chain/trap, S-01..S-05 matching-engine tests against the
 *live* service (S-04 with the service down, S-05 with a malformed response),
 plus kill-service, idempotency-key (same key + new payload → 409),
@@ -140,6 +140,7 @@ muse-mosaic/
 │   ├── derive.go             # canonicalize -> mkit eval x3 -> map output
 │   ├── policies/
 │   │   ├── user/pol-2026-10-27-v1.{json,mg}        # R1-R4 + L1/C1/C2/T1/I1
+│   │   ├── user/pol-2026-10-28-v1.{json,mg}        # +display_name ranks (G21)
 │   │   └── product/pol-product-2026-10-27-v1.{json,mg}
 │   └── taxonomy -> ../../data/mock/taxonomy (copied into the image)
 ├── scripts/                    # Kaggle e2e harness (frozen sample + run script)
@@ -357,7 +358,7 @@ P-04; unknown terms escalate via T1).
 Current run:
 
 ```text
-119 passed
+121 passed
 ```
 
 - `test_contract.py` — fact/golden/graph contracts, policy + taxonomy coherence
@@ -419,10 +420,12 @@ option and records the question instead of inventing an answer.
    runs structured-only with an explicit `vector_recall: skipped` note, and
    profile embeddings are NULL. Vectors from different models/versions must
    never be mixed once pinning lands.
-5. **`display_name` authority matrix — still escalates.** `display_name` is
-   allowed but has no matrix ranks, so the engine escalates it
-   (`NO_AUTHORITY_RANKS`). A policy owner sets ranks in a new policy version;
-   nothing is copied from the phone matrix.
+5. **`display_name` authority matrix — fixed in `pol-2026-10-28-v1`.** `display_name`
+   was allowed but had no matrix ranks, so the engine escalated it
+   (`NO_AUTHORITY_RANKS`) — this piled up the P-001 steward queue with one item
+   per run even though all sources agreed. v2 assigns sap 1 / salesforce 2 /
+   ciam 3 / ticket 3 (mirroring fixture ranks); agreeing `display_name` now
+   publishes R1 (regression test G21; v1 behaviour pinned by G17). v1 files untouched.
 6. **Product critical attributes.** Empty per CSD silence; weak product claims
    deny via R4 (P-04), unknown terms escalate via T1. Confirm whether a
    low-confidence product conflict should instead escalate.

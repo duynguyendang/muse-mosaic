@@ -368,3 +368,37 @@ def test_G20_sub_minute_ttl_is_rejected_not_coarsened(te_url):
     )
     assert status == 400
     assert out["reason_code"] == "INVALID_TTL_RESOLUTION"
+
+
+def test_G21_display_name_with_matrix_publishes(te_url):
+    """Regression for the P-001 steward-queue pile-up: under the v2 user
+    policy (display_name authority ranks added), an agreeing display_name
+    publishes R1 instead of escalating R4 NO_AUTHORITY_RANKS. v1 behaviour
+    is unchanged (see G17, which pins v1 explicitly)."""
+    status, out = derive(
+        te_url,
+        [
+            fact("fN1", "display_name", "Synthetic Person", "sap-like", 1, T_SAP, True, ttl=172800),
+            fact(
+                "fN2",
+                "display_name",
+                "Synthetic Person",
+                "salesforce-like",
+                2,
+                T_SF,
+                True,
+                ttl=172800,
+            ),
+            fact(
+                "fN3", "display_name", "Synthetic Person", "ciam-like", 3, T_CIAM, True, ttl=172800
+            ),
+        ],
+        key="g21",
+        policy="pol-2026-10-28-v1",
+    )
+    assert status == 200
+    assert out["verdict"] == "published"
+    golden = by_attribute(out)["display_name"]
+    assert golden["winner_fact_id"] == "fN1"
+    assert golden["rule_fired"] == "R1"
+    assert "display_name" not in by_attribute(out, "conflicts")

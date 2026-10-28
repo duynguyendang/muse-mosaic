@@ -84,17 +84,69 @@
     }
   }
 
+  function relTime(iso) {
+    if (!iso) return "";
+    const ms = Date.parse(iso);
+    if (Number.isNaN(ms)) return String(iso);
+    const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+
+  let pendingAll = [];
+
+  function needCounts() {
+    const { entityType, entityId } = currentEntity();
+    const runQueue = fState.ran && lastFriendly ? lastFriendly.steward_queue || [] : null;
+    const pool = runQueue || pendingAll;
+    const mine = pool.filter((s) => s.entity_type === entityType && s.entity_id === entityId).length;
+    const total = runQueue ? mine : pendingAll.length;
+    return { mine, total };
+  }
+
+  function renderDetailLoopLine() {
+    const { mine, total } = needCounts();
+    const { entityType } = currentEntity();
+    const who = entityType === "user" ? "person" : "product";
+    let text = `Escalated, needs a human: ${mine} for this ${who}`;
+    if (total > mine) text += ` — ${total} across all entities`;
+    text += " — see Steward Queue";
+    $("loop-escalated").textContent = text;
+  }
+
   function renderEscalatedCount(k) {
     $("steward-count").textContent = String(k);
-    $("loop-escalated").textContent =
-      `Escalated, needs a human: ${k} items — see Steward Queue`;
-    fState.needCount = k;
+    renderDetailLoopLine();
+    fState.needCount = needCounts().mine;
     renderFStatus();
+    renderFLoop();
   }
 
   /* ---- Friendly View (v2.2 default): same endpoints, same decisions ---- */
-  const fState = { ran: false, working: false, downstream: null, needCount: 0 };
+  const fState = { ran: false, working: false, downstream: null, needCount: 0, splinkPairs: [], policyUser: "", policyProduct: "" };
   let lastFriendly = null;
+  let hasRun = false;
+  function markRan() {
+    if (hasRun) return;
+    hasRun = true;
+    ["sec-graph", "sec-engine", "sec-mosaic", "sec-golden", "sec-downstream"].forEach((id) => {
+      const el = $(id);
+      if (el) el.hidden = false;
+    });
+    const empty = $("detail-empty");
+    if (empty) empty.hidden = true;
+  }
+  function applyPreRunState() {
+    if (hasRun) return;
+    ["sec-graph", "sec-engine", "sec-mosaic", "sec-golden", "sec-downstream"].forEach((id) => {
+      const el = $(id);
+      if (el) el.hidden = true;
+    });
+    const empty = $("detail-empty");
+    if (empty) empty.hidden = false;
+  }
 
   const SRC_PLAIN = {
     "salesforce-like": "Sales system",
@@ -104,6 +156,7 @@
     "pim-like": "Catalogue system",
     "erp-like": "Ledger system",
     "marketplace-like": "Marketplace listing",
+    "ticket-verified": "Ticket system (verified)",
   };
 
   function plainSource(source) {
@@ -136,12 +189,14 @@
       policy_version: payload.policy_version_user,
       taxonomy_version: payload.taxonomy,
     };
+    fState.splinkPairs = (payload.splink && payload.splink.pairs) || [];
     fState.ran = true;
   }
 
   function showDetail(open) {
     document.body.classList.toggle("detail", open);
     document.body.classList.toggle("friendly", !open);
+    $("friendly").hidden = open;
     $("detail-view").hidden = !open;
     if (open) $("detail-view").scrollIntoView();
     else window.scrollTo(0, 0);
@@ -160,6 +215,8 @@
   function renderFStatus() {
     const pill = $("f-status-pill");
     if (!pill) return;
+    const { mine } = needCounts();
+    fState.needCount = mine;
     pill.className = "pill f-only";
     if (loop.engineDown) {
       pill.textContent = "■ Engine down — nothing publishes";
@@ -179,9 +236,33 @@
   }
 
   function renderFSteps() {
-    $("f-step-1").classList.toggle("active", true);
-    $("f-step-2").classList.toggle("active", fState.ran);
-    $("f-step-3").classList.toggle("active", !!fState.downstream);
+    const s1 = $("f-step-1"), s2 = $("f-step-2"), s3 = $("f-step-3");
+    s1.querySelector(".lbl").textContent = fState.ran ? "Messy pieces" : "Start with messy pieces";
+    const setState = (el, mode) => {
+      el.classList.toggle("done", mode === "done");
+      el.classList.toggle("now", mode === "now");
+      el.classList.toggle("active", mode !== "future");
+    };
+    setState(s1, fState.ran ? "done" : "now");
+    setState(s2, !fState.ran ? "future" : (fState.downstream ? "done" : "now"));
+    const stopped = !!(fState.ran && lastFriendly && lastFriendly.verdict === "denied");
+    setState(s3, fState.downstream || stopped ? "done" : "future");
+  }
+
+  const ATTR_PLAIN = {
+    display_name: "Name",
+    name: "Name",
+    phone: "Phone",
+    email: "Email",
+    address: "Address",
+    category: "Category",
+    order_id: "Order",
+  };
+
+  function plainAttr(attribute) {
+    if (ATTR_PLAIN[attribute]) return ATTR_PLAIN[attribute];
+    const base = String(attribute || "?").replace(/[_-]+/g, " ").trim() || "?";
+    return base.charAt(0).toUpperCase() + base.slice(1);
   }
 
   function renderFPieces() {
@@ -191,24 +272,26 @@
       box.innerHTML = `<div class="f-piece">No pieces loaded yet.</div>`;
       return;
     }
-    const byAttr = {};
-    list.forEach((f) => { (byAttr[f.attribute] = byAttr[f.attribute] || []).push(f); });
-    const order = {};
-    Object.entries(byAttr).forEach(([attr, arr]) => {
-      const times = [...new Set(arr.map((f) => f.event_time))].sort();
-      arr.forEach((f) => {
-        if (times.length > 1) order[f.source_id + "|" + f.value] = f.event_time === times[times.length - 1] ? "newer" : "older";
-      });
+    const valuesByAttr = {};
+    list.forEach((f) => {
+      (valuesByAttr[f.attribute] = valuesByAttr[f.attribute] || new Set()).add(f.value);
     });
     const bySource = {};
     list.forEach((f) => { (bySource[f.source] = bySource[f.source] || []).push(f); });
     box.innerHTML = Object.entries(bySource).map(([source, arr]) => {
       const lines = arr.map((f) => {
-        const age = order[f.source_id + "|" + f.value] ? ` · ${order[f.source_id + "|" + f.value]}` : "";
-        const proven = f.verified ? "verified" : "not proven yet";
-        return `<div>${esc(f.attribute)} ${esc(f.value)} <span class="muted">(${proven} · rank ${esc(f.authority_rank)}${age})</span></div>`;
+        const conflict = (valuesByAttr[f.attribute] || new Set()).size > 1
+          ? ` <span class="f-conflict">Different values — this is what we must decide</span>` : "";
+        // Friendly small text is one of two exact forms only, with plain
+        // attribute names: verified rank-1 authority is "trusted for [name]",
+        // unverified is "not proven yet". Verified non-rank-1 facts carry
+        // no tag — rank numbers stay in Detail View.
+        const tag = f.verified
+          ? (f.authority_rank === 1 ? ` <span class="muted">(trusted for ${esc(plainAttr(f.attribute).toLowerCase())})</span>` : "")
+          : ` <span class="muted">(not proven yet)</span>`;
+        return `<div>${esc(plainAttr(f.attribute))} ${esc(f.value)}${tag}${conflict}</div>`;
       }).join("");
-      return `<div class="f-piece"><span class="src">${esc(plainSource(source))} says:</span>${lines}</div>`;
+      return `<div class="f-piece"><span class="src"><span class="f-src-dot" style="background:${SRC_COLOR[source] || "#475569"}"></span>${esc(plainSource(source))} says:</span>${lines}</div>`;
     }).join("");
   }
 
@@ -217,13 +300,52 @@
     return list.find((f) => !f.verified) || list[0] || null;
   }
 
+  function fragmentForFactId(factId) {
+    const { entityId } = currentEntity();
+    return (
+      activeFragments().find((f) => `${entityId}-${f.source_id}` === factId) || null
+    );
+  }
+
+  function friendlyWhy(attribute, value) {
+    // Plain-language proof sentence, built only from the golden field's own
+    // data (winner fact id -> fragment source/rank/verified/event time).
+    // Never leaks rule_fired, winner_fact_id, or policy_version here.
+    if (!value || typeof value !== "object") return "Checked by the engine.";
+    const attrPlain =
+      (attribute === "purchased_products" ? "purchase" : plainAttr(attribute)).toLowerCase();
+    const winner = fragmentForFactId(value.winner_fact_id);
+    if (!winner) return "Checked by the engine.";
+    const src = plainSource(winner.source);
+    const sameAttr = activeFragments().filter((f) => f.attribute === attribute);
+    const newer = sameAttr.filter(
+      (f) => Date.parse(f.event_time) > Date.parse(winner.event_time)
+    );
+    const newerSrc =
+      newer.length > 0 ? plainSource(newer[newer.length - 1].source) : null;
+    const evenThough = newerSrc ? ` Even though ${newerSrc} is newer.` : "";
+    if (winner.authority_rank === 1) {
+      return `${src} wins because it is trusted for ${attrPlain}.${evenThough}`;
+    }
+    if (winner.verified && !newer.length) {
+      return `${src} wins because it is the newest proven value.`;
+    }
+    return "Checked by the engine.";
+  }
+
+  function setFHead(pillText, titleText) {
+    $("f-answer-head").innerHTML =
+      `<span class="f-state-pill">${esc(pillText)}</span>${esc(titleText)}`;
+  }
+
   function renderFAnswer() {
     const box = $("f-answer");
-    const head = $("f-answer-head");
     const body = $("f-answer-body");
+    $("f-answer-cta").hidden = fState.ran;
     box.className = "f-answer";
     if (!fState.ran || !lastFriendly) {
-      head.textContent = "No answer yet";
+      box.classList.add("idle");
+      setFHead("○ Not yet", "No answer yet");
       body.innerHTML = `Run the picture to get one trusted answer — or an honest stop.`;
       return;
     }
@@ -240,25 +362,33 @@
     }
     if (needs > 0) {
       box.classList.add("need");
-      head.textContent = `⚠ Needs a human (${needs}) — we did not guess.`;
+      setFHead(`⚠ Needs a human`, `(${needs}) — we did not guess.`);
       const item = f.steward_queue[0];
       const frag = fragmentForAttribute(item.attribute);
       const what = frag
-        ? `"${frag.value}" for ${item.attribute} came from ${plainSource(frag.source).toLowerCase()} and could not be proven.`
-        : `${item.attribute} could not be proven.`;
-      const ownerLine = `Owner: ${item.owner || "steward-001"} · Decide by: ${item.deadline || "—"} · If no decision: ${item.fallback || "do not use this value"}`;
+        ? `"${frag.value}" for ${plainAttr(item.attribute)} came from ${plainSource(frag.source).toLowerCase()} and could not be proven.`
+        : `${plainAttr(item.attribute)} could not be proven.`;
+      const ownerLines = `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")}</div>`
+        + `<div class="f-steward-meta">Decide by: ${esc(item.deadline || "—")}</div>`
+        + `<div class="f-steward-meta">If no decision: ${esc(item.fallback || "do not use this value")}</div>`;
       let actions;
       if (item.suggested_action) {
-        actions = `<div class="f-act"><button data-f-detail type="button">Decide in Detail View</button></div>`;
+        actions = `<div class="meta">Suggested: <span class="mono">${esc(item.suggested_action)}</span></div>`
+          + `<div class="steward-actions">`
+          + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
+          + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
+          + `<button class="btn-split" data-split="${esc(item.steward_id)}">These are two different people</button>`
+          + `<button class="btn-accept" data-f-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept this suggestion</button>`
+          + `</div>`;
       } else {
         actions = `<div class="steward-actions">`
           + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
           + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
-          + `<button data-split="${esc(item.steward_id)}">These are two different people</button>`
+          + `<button class="btn-split" data-split="${esc(item.steward_id)}">These are two different people</button>`
           + `</div>`;
       }
       body.innerHTML = `<div class="f-steward-q">${esc(what)}</div>`
-        + `<div class="f-steward-meta">${esc(ownerLine)}</div>` + actions
+        + ownerLines + actions
         + (f.decision_id
           ? `<div class="f-field"><button data-f-proof3 type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
           : "")
@@ -266,14 +396,15 @@
       bindStewardActions(body);
       const pb3 = body.querySelector("[data-f-proof3]");
       if (pb3) pb3.addEventListener("click", () => explain(f.decision_id));
-      const detailBtn = body.querySelector("[data-f-detail]");
-      if (detailBtn) detailBtn.addEventListener("click", () => showDetail(true));
+      const fa = body.querySelector("[data-f-accept]");
+      if (fa) fa.addEventListener("click", () =>
+        stewardAcceptAsk(fa.getAttribute("data-f-accept"), fa.getAttribute("data-action"), fa));
       return;
     }
     const golden = f.golden;
     if (golden && Object.keys(golden.attributes || {}).length > 0) {
       box.classList.add("ok");
-      head.textContent = `✓ Trusted picture — ${entityId}`;
+      setFHead("✓ Trusted picture", ` — ${entityId}`);
       const fields = Object.entries(golden.attributes || {}).map(([name, value]) => {
         if (name === "purchased_products" && Array.isArray(value)) {
           const cats = value.map((p) => p.category || "?").join(", ");
@@ -281,11 +412,10 @@
             + `<div class="f-why">Verified links, checked by the engine</div></div>`;
         }
         const val = (value && typeof value === "object") ? value.value : value;
-        const why = (value && typeof value === "object")
-          ? `${value.rule_fired || ""} · winner ${value.winner_fact_id || ""} · ${value.policy_version || ""}` : "";
-        return `<div class="f-field"><b>${esc(name)}:</b> <span class="f-val">${esc(val)}</span>`
-          + (why ? `<div class="f-why">${esc(why)}</div>` : "")
-          + `<button data-f-explain type="button">Why this value?</button></div>`;
+        const why = friendlyWhy(name, value);
+        return `<div class="f-field"><b>${esc(plainAttr(name))}:</b> <span class="f-val">${esc(val)}</span>`
+          + `<div class="f-why">${esc(why)}</div>`
+          + `<button data-f-explain="${esc(name)}" type="button">Why this value?</button></div>`;
       }).join("");
       body.innerHTML = fields + downstreamLine;
       if (f.decision_id) {
@@ -293,11 +423,11 @@
           `<div class="f-field"><button data-f-explain type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`);
       }
       body.querySelectorAll("[data-f-explain]").forEach((btn) =>
-        btn.addEventListener("click", () => explain(f.decision_id)));
+        btn.addEventListener("click", () => explain(f.decision_id, btn.getAttribute("data-f-explain") || undefined)));
       return;
     }
     box.classList.add("stop");
-    head.textContent = "■ No trusted value — we stop, we do not guess.";
+    setFHead("■ No trusted value", " — we stop, we do not guess.");
     body.innerHTML = `<div>No value passed every check, so no agent may act on this person yet.</div>`
       + `<div class="f-act"><button data-f-detail type="button">See why we stopped</button></div>`
       + (f.decision_id
@@ -312,33 +442,87 @@
   function renderFProof() {
     const el = $("f-proof-text");
     if (!el) return;
+    const open = `<b class="f-muse">Muse</b> suggested the links. The <b class="f-eng">engine</b> checked them. `;
     if (!fState.ran || !lastFriendly) {
-      el.textContent = "Muse suggests, the engine checks. Nothing derived yet.";
+      el.innerHTML = `${open}Nothing derived yet.`;
       return;
     }
     const t = lastFriendly.golden ? Object.keys(lastFriendly.golden.attributes || {}).length : 0;
     const n = (lastFriendly.steward_queue || []).length;
-    el.textContent = n > 0
-      ? `Muse suggested the links. The engine checked them. ${t} field${t === 1 ? "" : "s"} trusted, ${n} need${n === 1 ? "s" : ""} a human.`
-      : `Muse suggested the links. The engine checked them. All ${t} fields trusted.`;
+    el.innerHTML = open + (n > 0
+      ? `${t} field${t === 1 ? "" : "s"} trusted, ${n} need${n === 1 ? "s" : ""} a human.`
+      : `All ${t} fields trusted.`);
   }
 
   function renderFLoop() {
     const el = $("f-loop-text");
     if (!el) return;
-    const k = fState.needCount;
-    el.textContent = k > 0
-      ? `Mosaic is watching: it cleaned ${loop.autoGoldens} by itself, ${k} need${k === 1 ? "s" : ""} you.${loop.lastAutoRunAt ? ` Last cleaned by itself: ${loop.lastAutoRunAt}.` : ""}`
-      : `Mosaic is watching: it cleaned ${loop.autoGoldens} by itself, nothing needs you right now.`;
+    const { mine, total } = needCounts();
+    $("f-loop-review").hidden = mine === 0 && total === 0;
+    if (!fState.ran) {
+      el.textContent = "Nothing cleaned yet — try the example below.";
+      return;
+    }
+    const clean = `it cleaned ${loop.autoGoldens} by itself`;
+    const when = loop.lastAutoRunAt
+      ? ` Last cleaned by itself: ${relTime(loop.lastAutoRunAt)}.` : "";
+    if (mine > 0) {
+      el.innerHTML = `Mosaic is watching: ${clean}, <b>${mine} need${mine === 1 ? "s" : ""} you</b>.${esc(when)}`;
+    } else if (total > 0) {
+      el.textContent = `Mosaic is watching: ${clean}, nothing needs you right now (${total} across all entities).${when}`;
+    } else {
+      el.textContent = `Mosaic is watching: ${clean}, nothing needs you right now.${when}`;
+    }
   }
 
   function renderFriendly() {
+    renderFStakes();
+    renderFPlan();
     renderFPieces();
     renderFAnswer();
     renderFProof();
     renderFLoop();
     renderFSteps();
     renderFStatus();
+    // "Show how it was decided" only makes sense once a decision exists.
+    $("f-show-detail").hidden = !fState.ran;
+    $("f-show-detail-2").hidden = !fState.ran;
+  }
+
+  function renderFPlan() {
+    const el = $("f-plan-body");
+    if (!el) return;
+    // Built only from data the frontend already has: entity types from the
+    // loaded fragments, match fields from the last build's Splink pairs
+    // (blocking_rule), policy/taxonomy versions from /health or the payload.
+    // Entity kinds come from the current selection (loaded fragments carry
+    // no entity_type of their own: they are per-entity by construction),
+    // plus an uploaded dataset of another type when one is staged.
+    const { entityType: currentType } = currentEntity();
+    const kinds = [currentType];
+    if (window.__uploadedEntityType && window.__uploadedEntityType !== currentType) {
+      kinds.push(window.__uploadedEntityType);
+    }
+    const kindNames = kinds.map((t) => (t === "user" ? "people" : t === "product" ? "products" : t));
+    const pairs = (fState.splinkPairs || []).map((p) => p.blocking_rule).filter(Boolean);
+    const fields = [...new Set(pairs)].join(" + ");
+    const pol = fState.policyUser && fState.policyProduct
+      ? `Cleaning rules ${fState.policyUser} / ${fState.policyProduct}`
+      : "Cleaning rules (versions load with health)";
+    const tax = loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version)
+      ? `Names we recognise: ${loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version)}` : "";
+    el.innerHTML = `<div class="f-plan-line">Things we track: ${esc(kindNames.join(", ") || "—")}.</div>`
+      + `<div class="f-plan-line">Match by: ${esc(fields || "exact identifiers (shown after the first build)")}</div>`
+      + `<div class="f-plan-line">${esc(pol)}${tax ? ` · ${esc(tax)}` : ""}</div>`;
+  }
+
+  function renderFStakes() {
+    const el = $("f-stakes");
+    if (!el) return;
+    const { entityType } = currentEntity();
+    el.textContent = entityType === "product"
+      ? "Someone searched for this product. Which category should search use?"
+      : "Someone needs a one-time code. Which phone should we send it to? If we guess wrong, the code goes to the wrong person.";
   }
 
   function noteAutoRun(payload) {
@@ -367,6 +551,31 @@
     }[c]));
   }
 
+  function inlinePrompt(title, def) {
+    // Replaces the old browser prompt: same question, inline modal, cancel-safe.
+    return new Promise((resolve) => {
+      const dlg = $("prompt-dialog");
+      $("prompt-title").textContent = title;
+      const input = $("prompt-input");
+      input.value = def == null ? "" : String(def);
+      const ok = $("prompt-ok");
+      const cancel = $("prompt-cancel");
+      const done = (value) => {
+        ok.removeEventListener("click", onOk);
+        cancel.removeEventListener("click", onCancel);
+        dlg.close();
+        resolve(value);
+      };
+      const onOk = () => done(input.value);
+      const onCancel = () => done(null);
+      ok.addEventListener("click", onOk);
+      cancel.addEventListener("click", onCancel);
+      dlg.showModal();
+      input.focus();
+      input.select();
+    });
+  }
+
   function setStatus(text) {
     statusLine.textContent = text;
   }
@@ -383,6 +592,20 @@
       );
     }
     return data;
+  }
+
+  function renderTaxonomyBadge(healthTaxonomy) {
+    // The badge must never sit on "checking…" after health loads: show it
+    // only once a taxonomy version is actually known (health or first run).
+    const known = loop.taxonomy || healthTaxonomy || "";
+    const badge = $("taxonomy-badge");
+    if (!badge) return;
+    if (known) {
+      badge.hidden = false;
+      badge.textContent = `Taxonomy: ${known}`;
+    } else {
+      badge.hidden = true;
+    }
   }
 
   async function refreshHealth() {
@@ -412,9 +635,9 @@
       }
       $("policy-badge").textContent =
         `Policy: ${data.policy_version_user || "?"} / ${data.policy_version_product || "?"}`;
-      if (loop.taxonomy) {
-        $("taxonomy-badge").textContent = `Taxonomy: ${loop.taxonomy}`;
-      }
+      fState.policyUser = data.policy_version_user || "";
+      fState.policyProduct = data.policy_version_product || "";
+      renderTaxonomyBadge(data.taxonomy_version);
       $("config-summary").textContent =
         `Config in force — Policy: ${data.policy_version_user || "?"} / ${data.policy_version_product || "?"}` +
         (loop.taxonomy ? ` · Taxonomy: ${loop.taxonomy}` : "") +
@@ -464,7 +687,7 @@
   }
 
   async function defineCustomEntity() {
-    const raw = window.prompt("Define entity as type/id (e.g. user/P-001):", "user/");
+    const raw = await inlinePrompt("Define entity as type/id (e.g. user/P-001):", "user/");
     if (!raw) { entitySel.selectedIndex = 0; return loadFragments(); }
     const value = raw.trim();
     if (!/^[a-z][a-z0-9_]*\/.+/.test(value)) {
@@ -494,16 +717,34 @@
     loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
   }
 
+  function friendlyEntityLabel(entityType, entityId) {
+    const pool = fragments.length ? fragments : activeFragments();
+    const pick = (attr, source) => {
+      const rows = pool.filter((f) => f.attribute === attr);
+      return (rows.find((f) => f.source === source) || rows[0] || {}).value;
+    };
+    if (entityType === "user") {
+      const name = pick("display_name", "sap-like") || entityId;
+      return `Person — ${name} (${entityId})`;
+    }
+    const name = pick("category", "pim-like") || pick("name", "pim-like") || entityId;
+    return `Product — ${name} (${entityId})`;
+  }
+
   async function loadFragments() {
     const { entityType, entityId } = currentEntity();
+    $("graph-path").hidden = true;
     const data = await api(`/fragments/${entityType}/${entityId}`);
     fragments = data.fragments || [];
     tickets = data.tickets || [];
+    const opt = [...entitySel.options].find((o) => o.value === `${entityType}/${entityId}`);
+    if (opt) opt.textContent = friendlyEntityLabel(entityType, entityId);
     renderFragments();
     renderFriendly();
-    setStatus(
-      `Loaded ${fragments.length} synthetic fragments${tickets.length ? ` + ${tickets.length} ticket(s)` : ""}.`
-    );
+    const shown = activeFragments().length;
+    const ticketNote = (ticketBox.checked && tickets.length)
+      ? ` (includes ${tickets.length} ticket(s))` : "";
+    setStatus(`Loaded ${shown} synthetic fragments${ticketNote}.`);
   }
 
   function activeFragments() {
@@ -526,7 +767,8 @@
 
   function renderFragments() {
     const list = activeFragments();
-    proposerBody.innerHTML = list.map((f) => `
+    proposerBody.innerHTML = `<div class="card"><span class="muted">Loaded fragments — no builder trace yet. Resolve or build to see Scout / Linker / Cluster / Taxonomist / Critic claims.</span></div>`
+      + list.map((f) => `
       <div class="card ${f.verified ? "info" : "warn"}">
         <h3><span class="swatch" style="background:${SRC_COLOR[f.source] || "var(--tomb)"}"></span>
         ${esc(f.attribute)} <span class="muted mono">${esc(f.value)}</span></h3>
@@ -561,7 +803,7 @@
       lastResolve = payload;
       if (payload.taxonomy_version) {
         loop.taxonomy = payload.taxonomy_version;
-        $("taxonomy-badge").textContent = `Taxonomy: ${loop.taxonomy}`;
+        renderTaxonomyBadge();
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
@@ -582,6 +824,7 @@
       }
       setStatus(`Decision ${payload.decision_id} — verdict: ${payload.verdict}.`);
       setFriendlyFromResolve(payload);
+      markRan();
       renderFriendly();
     } catch (error) {
       setStatus(`Resolve failed (fail-closed): ${error.message}`);
@@ -600,7 +843,8 @@
       `<div class="meta">▸ <b>${esc(step.agent || "?")}</b>`
       + `${step.real_call ? " <span class='badge'>REAL</span>" : " <span class='badge'>mock</span>"}`
       + ` — ${esc(step.output_summary || "")}</div>`).join("");
-    proposerBody.innerHTML = (trace ? `<div class="card plum"><h3>Sub-agent trace</h3>${trace}</div>` : "")
+    proposerBody.innerHTML = (trace ? `<div class="card plum"><h3>Sub-agent trace</h3>${trace}</div>`
+      : `<div class="card"><span class="muted">No builder trace for this run.</span></div>`)
       + attrs.map(([name, attr]) => `
       <div class="card info">
         <h3>${esc(name)} ${badge(attr.confidence)}</h3>
@@ -679,48 +923,41 @@
     renderGolden(payload);
   }
 
-  async function stewardAccept(id, suggested) {
-    const version = window.prompt("New taxonomy version:", "tax-product-2026-10-27-v2");
-    if (!version) return;
-    try {
-      const payload = await api(`/steward/${id}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: suggested, taxonomy_version: version }),
+  let lastStewardItems = [];
+
+  function stewardItemById(id) {
+    return lastStewardItems.find((s) => s.steward_id === id)
+      || ((lastFriendly && lastFriendly.steward_queue) || []).find((s) => s.steward_id === id)
+      || null;
+  }
+
+  function valuesForAttribute(attribute) {
+    const seen = new Map();
+    activeFragments()
+      .filter((f) => f.attribute === attribute)
+      .forEach((f) => {
+        if (!seen.has(f.value)) seen.set(f.value, f.source);
       });
-      setStatus(`Taxonomy ${version} created; re-derived. Golden: ${payload.golden ? "published" : "withheld"}.`);
-      feed(`Steward accepted taxonomy suggestion — new version ${version}; re-derived, no hand edit`);
-      dropFriendlySteward(id);
-    } catch (error) {
-      setStatus(`Accept failed (fail-closed): ${error.message}`);
-    }
+    return [...seen.entries()].map(([value, source]) => ({ value, source }));
   }
 
-  function dropFriendlySteward(id) {
-    if (lastFriendly && lastFriendly.steward_queue) {
-      lastFriendly.steward_queue = lastFriendly.steward_queue.filter((s) => s.steward_id !== id);
-      renderEscalatedCount(lastFriendly.steward_queue.length);
-      renderFriendly();
-    } else {
-      loadPending();
-    }
+  function ownerLinesHtml(item) {
+    return `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")}</div>`
+      + `<div class="f-steward-meta">Decide by: ${esc(item.deadline || "—")}</div>`
+      + `<div class="f-steward-meta">If no decision: ${esc(item.fallback || "do not use this value")}</div>`;
   }
 
-  async function stewardReject(id) {
-    await api(`/steward/${id}/reject`, { method: "POST" });
-    setStatus("Steward rejected the escalated attribute. No golden written.");
-    feed(`Steward rejected escalated attribute — golden unchanged, decision recorded`);
-    dropFriendlySteward(id);
+  function stewardQuestionHtml(item) {
+    const frag = fragmentForAttribute(item.attribute);
+    const what = frag
+      ? `"${frag.value}" for ${plainAttr(item.attribute)} came from ${plainSource(frag.source).toLowerCase()} and could not be proven.`
+      : `${plainAttr(item.attribute)} could not be proven.`;
+    return `<div class="f-steward-q">${esc(what)}</div>` + ownerLinesHtml(item);
   }
 
-  async function stewardApprove(id) {
-    const value = window.prompt("Approve with exact value:");
-    if (value == null) return;
-    const payload = await api(`/steward/${id}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value }),
-    });
+  const confirmStash = new Map();
+
+  function afterApprove(payload, id) {
     lastResolve = payload;
     setFriendlyFromResolve(payload);
     renderFriendly();
@@ -728,9 +965,177 @@
     renderSteward(payload.steward_queue || []);
     renderMosaic(payload);
     renderEscalatedCount((payload.steward_queue || []).length);
-    loadPending();
     setStatus(`Steward approved ${id}; re-derived as a new fact.`);
     feed(`Steward approved ${id} as a new fact — re-derived, Decision: ${payload.decision_id}`);
+  }
+
+  async function doApprove(id, value, errEl) {
+    try {
+      const payload = await api(`/steward/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      afterApprove(payload, id);
+    } catch (error) {
+      errEl.hidden = false;
+      errEl.textContent = `Approve failed (fail-closed): ${error.message}`;
+    }
+  }
+
+  function stewardApproveAsk(id, btn) {
+    const item = stewardItemById(id);
+    if (!item) {
+      setStatus(`Steward item ${id} not found.`);
+      return;
+    }
+    const vals = valuesForAttribute(item.attribute);
+    const options = vals.length
+      ? vals.map((v, i) =>
+          `<label class="check"><input type="radio" name="cf-${esc(id)}" value="${esc(v.value)}"${i === 0 ? " checked" : ""} /> ${esc(v.value)} — ${esc(plainSource(v.source))}</label>`).join("")
+      : `<label>Value to approve (no existing value found)<input data-cf-value style="width:100%" value="" /></label>`;
+    const card = `<div class="f-steward-q">Use this value for ${esc(plainAttr(item.attribute))}?</div>`
+      + ownerLinesHtml(item)
+      + `<div class="f-confirm-vals">${options}</div>`
+      + `<div class="steward-actions"><button data-cf-yes class="btn-approve" type="button">Use this value</button>`
+      + `<button data-cf-no type="button">Cancel</button></div>`
+      + `<div class="meta" data-cf-err hidden></div>`;
+    const friendly = btn && btn.closest("#f-answer");
+    if (friendly) {
+      const body = $("f-answer-body");
+      body.innerHTML = card;
+      wireApproveCard(body, id, vals.length > 0, true);
+      return;
+    }
+    const holder = btn ? btn.closest("[data-steward]") : null;
+    if (!holder) return;
+    if (!confirmStash.has(holder)) confirmStash.set(holder, holder.innerHTML);
+    holder.innerHTML = card;
+    wireApproveCard(holder, id, vals.length > 0, false);
+  }
+
+  function wireApproveCard(root, id, hasValues, friendly) {
+    const errEl = root.querySelector("[data-cf-err]");
+    root.querySelector("[data-cf-no]").addEventListener("click", () => {
+      if (friendly) {
+        renderFriendly();
+      } else {
+        const h = confirmStash.get(root);
+        confirmStash.delete(root);
+        if (h != null) {
+          root.innerHTML = h;
+          bindStewardActions(root);
+        }
+      }
+    });
+    root.querySelector("[data-cf-yes]").addEventListener("click", () => {
+      let value;
+      if (hasValues) {
+        const checked = root.querySelector(`input[name="cf-${CSS.escape(id)}"]:checked`);
+        value = checked ? checked.value : "";
+      } else {
+        value = root.querySelector("[data-cf-value]").value.trim();
+      }
+      if (!value) {
+        errEl.hidden = false;
+        errEl.textContent = "Pick a value first — nothing was sent.";
+        return;
+      }
+      doApprove(id, value, errEl);
+    });
+  }
+
+  function nextTaxonomyVersion(item) {
+    const bump = (v) => {
+      const m = /-v(\d+)$/.exec(v || "");
+      return m ? String(v).replace(/-v\d+$/, `-v${parseInt(m[1], 10) + 1}`) : null;
+    };
+    // Only reuse the known version when it belongs to the same entity family;
+    // a user taxonomy must never seed a product version (or vice versa).
+    const known = loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version) || "";
+    const sameFamily = known.indexOf(`tax-${item.entity_type}-`) === 0 ? known : "";
+    return bump(sameFamily)
+      || `tax-${item.entity_type}-${new Date().toISOString().slice(0, 10)}-v2`;
+  }
+
+  function taxonomyInForce(item) {
+    const known = loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version) || "";
+    return known.indexOf(`tax-${item.entity_type}-`) === 0 ? known : "unknown";
+  }
+
+  function stewardAcceptAsk(id, suggested, btn) {
+    const item = stewardItemById(id);
+    if (!item) {
+      setStatus(`Steward item ${id} not found.`);
+      return;
+    }
+    const prefill = nextTaxonomyVersion(item);
+    const inForce = taxonomyInForce(item);
+    const card = `<div class="f-steward-q">Accept this suggestion?</div>`
+      + `<div class="meta mono">Suggested: ${esc(suggested)}</div>`
+      + ownerLinesHtml(item)
+      + `<div class="meta">Taxonomy in force: <span class="mono">${esc(inForce)}</span></div>`
+      + `<label>New taxonomy version (letters, digits, <span class="mono">._-</span>)`
+      + `<input data-cf-version style="width:100%" value="${esc(prefill)}" /></label>`
+      + `<div class="steward-actions"><button data-cf-yes class="btn-accept" type="button">Accept this suggestion</button>`
+      + `<button data-cf-no type="button">Cancel</button></div>`
+      + `<div class="meta" data-cf-err hidden></div>`;
+    const friendly = btn && btn.closest("#f-answer");
+    const host = friendly ? $("f-answer-body") : (btn ? btn.closest("[data-steward]") : null);
+    if (!host) return;
+    if (!friendly && !confirmStash.has(host)) confirmStash.set(host, host.innerHTML);
+    host.innerHTML = card;
+    const errEl = host.querySelector("[data-cf-err]");
+    host.querySelector("[data-cf-no]").addEventListener("click", () => {
+      if (friendly) {
+        renderFriendly();
+      } else {
+        const h = confirmStash.get(host);
+        confirmStash.delete(host);
+        if (h != null) {
+          host.innerHTML = h;
+          bindStewardActions(host);
+        }
+      }
+    });
+    host.querySelector("[data-cf-yes]").addEventListener("click", () => {
+      const version = host.querySelector("[data-cf-version]").value.trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(version)) {
+        errEl.hidden = false;
+        errEl.textContent = "Version must look like tax-user-2026-10-28-v2: letters, digits, . _ - (must not start with . _ -).";
+        return;
+      }
+      doAccept(id, suggested, version, errEl);
+    });
+  }
+
+  async function doAccept(id, action, version, errEl) {
+    try {
+      const payload = await api(`/steward/${id}/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, taxonomy_version: version }),
+      });
+      setStatus(`Taxonomy ${version} created; re-derived. Golden: ${payload.golden ? "published" : "withheld"}.`);
+      feed(`Steward accepted taxonomy suggestion — new version ${version}; re-derived, no hand edit`);
+      dropFriendlySteward(id);
+      loadPending();
+    } catch (error) {
+      errEl.hidden = false;
+      errEl.textContent = `Accept failed (fail-closed): ${error.message}`;
+    }
+  }
+
+  function dropFriendlySteward(id) {
+    if (lastFriendly && lastFriendly.steward_queue) {
+      lastStewardItems = lastStewardItems.filter((s) => s.steward_id !== id);
+      lastFriendly.steward_queue = lastFriendly.steward_queue.filter((s) => s.steward_id !== id);
+      renderSteward(lastStewardItems.length ? lastStewardItems : lastFriendly.steward_queue);
+      renderEscalatedCount(lastFriendly.steward_queue.length);
+      renderFriendly();
+    } else {
+      loadPending();
+    }
   }
 
   async function stewardSplit(id) {
@@ -755,7 +1160,7 @@
         <div class="steward-actions">
           <button class="btn-approve" data-approve="${esc(item.steward_id)}">Approve w/ value…</button>
           <button class="btn-reject" data-reject="${esc(item.steward_id)}">Reject</button>
-          <button data-split="${esc(item.steward_id)}">Split to v1</button>
+          <button class="btn-split" data-split="${esc(item.steward_id)}">Split to v1</button>
           ${item.suggested_action ? `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept suggested</button>` : ""}
         </div>
       </div>`;
@@ -763,13 +1168,13 @@
 
   function bindStewardActions(root) {
     root.querySelectorAll("[data-accept]").forEach((btn) => {
-      btn.addEventListener("click", () => stewardAccept(btn.getAttribute("data-accept"), btn.getAttribute("data-action")));
+      btn.addEventListener("click", () => stewardAcceptAsk(btn.getAttribute("data-accept"), btn.getAttribute("data-action"), btn));
     });
     root.querySelectorAll("[data-reject]").forEach((btn) => {
       btn.addEventListener("click", () => stewardReject(btn.getAttribute("data-reject")));
     });
     root.querySelectorAll("[data-approve]").forEach((btn) => {
-      btn.addEventListener("click", () => stewardApprove(btn.getAttribute("data-approve")));
+      btn.addEventListener("click", () => stewardApproveAsk(btn.getAttribute("data-approve"), btn));
     });
     root.querySelectorAll("[data-split]").forEach((btn) => {
       btn.addEventListener("click", () => stewardSplit(btn.getAttribute("data-split")));
@@ -777,6 +1182,8 @@
   }
 
   function renderSteward(items) {
+    pendingAll = items;
+    lastStewardItems = items;
     renderEscalatedCount(items.length);
     if (!items.length) {
       stewardBody.innerHTML = `<div class="card"><span class="muted">Queue empty — nothing escalated.</span></div>`;
@@ -826,7 +1233,7 @@
         };
       });
     });
-    const color = { Fragment: "#38bdf8", Entity: "#a78bfa", Golden: "#34d399", Taxonomy: "#fbbf24", Steward: "#f472b6", Document: "#94a3b8" };
+    const color = { Fragment: "#38bdf8", Entity: "#a78bfa", Golden: "#34d399", Taxonomy: "#fbbf24", Steward: "#f472b6", Document: "#475569" };
     const edgeColor = { has_attribute: "#334155", proposed_link: "#a78bfa", verified_link: "#34d399", purchased: "#fbbf24", same_person: "#7dd3fc", link_miss: "#f87171", cluster_member: "#a78bfa" };
     const edgeDashed = { proposed_link: "5,4", cluster_member: "5,4" };
     let html = "";
@@ -865,6 +1272,11 @@
       const data = await api(`/graph/${entityType}/${entityId}`);
       lastGraph = { nodes: data.nodes || [], edges: data.edges || [] };
       renderGraph(data, null);
+      // Pathfinder F1–F5 only applies to the Hidden Connection entity.
+      const ids = (data.nodes || []).map((n) => n.node_id || "");
+      const hasChain = ["F1", "F2", "F3", "F4", "F5"].every((f) =>
+        ids.some((id) => id.includes(`-${f}-`) || id.endsWith(`-${f}`) || id.includes(`(${f})`)));
+      $("graph-path").hidden = !hasChain;
       setStatus(`Graph loaded: ${lastGraph.nodes.length} nodes, ${lastGraph.edges.length} edges.`);
     } catch (error) {
       setStatus(`Graph failed: ${error.message}`);
@@ -874,8 +1286,8 @@
   async function graphPath() {
     const { entityType, entityId } = currentEntity();
     try {
-      const from = window.prompt("Pathfinder from node id:", "nd-fragment-user-P-001-sf-001-phone");
-      const to = window.prompt("...to node id:", "nd-fragment-user-P-001-tck-001-phone");
+      const from = await inlinePrompt("Pathfinder from node id:", "nd-fragment-user-P-001-sf-001-phone");
+      const to = await inlinePrompt("...to node id:", "nd-fragment-user-P-001-tck-001-phone");
       if (!from || !to) return;
       const data = await api(`/graph/${entityType}/${entityId}?path_from=${encodeURIComponent(from)}&path_to=${encodeURIComponent(to)}`);
       lastGraph = { nodes: data.nodes || [], edges: data.edges || [] };
@@ -889,7 +1301,7 @@
   async function graphImpact() {
     const { entityType, entityId } = currentEntity();
     try {
-      const field = window.prompt("Blast radius for golden field:", "phone");
+      const field = await inlinePrompt("Blast radius for golden field:", "phone");
       if (!field) return;
       const data = await api(`/graph/${entityType}/${entityId}?impact=${encodeURIComponent(field)}`);
       lastGraph = { nodes: data.nodes || [], edges: data.edges || [] };
@@ -959,6 +1371,7 @@
       lastResolve = payload;
       setStatus(`Build ${payload.decision_id} — verdict: ${payload.verdict} (${payload.splink_status}).`);
       setFriendlyFromBuild(payload);
+      markRan();
       renderFriendly();
       await loadGraph();
       const first = (payload.goldens || []).find((g) => g.golden_id) || null;
@@ -1029,7 +1442,13 @@
       setStatus("Upload a file first.");
       return;
     }
+    // The answer below is about the uploaded pieces, so the Friendly View
+    // must describe those — not the fixture fragments for this entity.
+    fragments = list.slice();
+    tickets = [];
     fState.working = true;
+    renderFStakes();
+    renderFPieces();
     renderFStatus();
     try {
       const { entityId } = currentEntity();
@@ -1048,7 +1467,7 @@
       lastResolve = payload;
       if (payload.taxonomy_version) {
         loop.taxonomy = payload.taxonomy_version;
-        $("taxonomy-badge").textContent = `Taxonomy: ${loop.taxonomy}`;
+        renderTaxonomyBadge();
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
@@ -1069,6 +1488,7 @@
       }
       setStatus(`Upload resolved — decision ${payload.decision_id}, verdict ${payload.verdict}.`);
       setFriendlyFromResolve(payload);
+      markRan();
       renderFriendly();
     } catch (error) {
       setStatus(`Upload resolve failed (fail-closed): ${error.message}`);
@@ -1120,20 +1540,29 @@
     }
   }
 
-  async function explain(decisionId) {
+  async function explain(decisionId, field) {
     const data = await api(`/explain/${decisionId}`);
     $("explain-id").textContent = decisionId;
     const tree = (data.derivation_tree || []).join("\n");
     const trace = (data.subagent_trace || []).map((s) =>
       `▸ ${s.agent || "?"}${s.real_call ? " [REAL]" : " [mock]"} — ${s.output_summary || ""}`).join("\n");
     const wonder = data.wonder_note ? `Wonder: ${JSON.stringify(data.wonder_note)}\n\n` : "";
-    $("explain-body").textContent =
-      `RULE ${data.rule_fired} · POLICY ${data.policy_version} · TAXONOMY ${data.taxonomy_version || "—"}\n\n`
+    const head = field ? `Proof for: ${field}\n\n` : "";
+    const text = head
+      + `RULE ${data.rule_fired} · POLICY ${data.policy_version} · TAXONOMY ${data.taxonomy_version || "—"}\n\n`
       + `DERIVATION TREE\n${tree || "(empty)"}\n\n`
       + `SUBAGENT TRACE\n${trace || "(none)"}\n\n`
       + wonder
       + JSON.stringify(data, null, 1);
+    // Highlight the lineage row(s) for the requested field; the full proof
+    // stays visible (highlighting is in addition, not instead).
+    const key = field ? `"${field}"` : null;
+    $("explain-body").innerHTML = text.split("\n").map((line) =>
+      (key && line.includes(key) ? `<mark class="f-hit">${esc(line)}</mark>` : esc(line))
+    ).join("\n");
     dialog.showModal();
+    const hit = $("explain-body").querySelector("mark");
+    if (hit) hit.scrollIntoView({ block: "center" });
   }
 
   function renderMosaic(payload) {    mosaic.innerHTML = "";
@@ -1207,6 +1636,11 @@
   $("downstream-search").addEventListener("click", () => askDownstream("search"));
   $("pause-btn").addEventListener("click", toggleLoop);
   $("f-pause").addEventListener("click", toggleLoop);
+  $("f-loop-review").addEventListener("click", openDrawer);
+  $("f-try-answer").addEventListener("click", () => resolve(false));
+  $("f-upload-scroll").addEventListener("click", () => {
+    $("f-upload").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
   $("f-show-detail").addEventListener("click", () => showDetail(true));
   $("f-show-detail-2").addEventListener("click", () => showDetail(true));
   $("f-back").addEventListener("click", () => showDetail(false));
@@ -1250,6 +1684,7 @@
   });
 
   renderLoop();
+  applyPreRunState();
   renderFriendly();
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();

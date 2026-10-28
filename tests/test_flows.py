@@ -114,7 +114,7 @@ def test_flow_A_correct_merge_publishes(api_client):
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["verdict"] == "published"
-    assert payload["policy_version"] == "pol-2026-10-27-v1"
+    assert payload["policy_version"] == "pol-2026-10-28-v1"
 
     phone = payload["golden"]["attributes"]["phone"]
     assert phone["winner_fact_id"] == "P-001-sap-001-phone"

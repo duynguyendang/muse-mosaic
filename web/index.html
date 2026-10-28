@@ -13,7 +13,7 @@
         --line-strong: #CBD5E1;
         --text: #0F172A;
         --body: #334155;
-        --muted: #64748B;
+        --muted: #475569;
         --accent: #2563EB;
         --warm: #B45309;
         --warm-bg: #FFFBEB;
@@ -44,7 +44,7 @@
         font-size: 14px;
         line-height: 1.5;
       }
-      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      :focus-visible { outline: 3px solid #1D4ED8; outline-offset: 2px; }
       header {
         display: flex;
         flex-wrap: wrap;
@@ -111,7 +111,7 @@
         border-radius: 8px; padding: 8px 12px;
       }
       button { cursor: pointer; min-height: 44px; }
-      button.primary { background: #0F172A; border-color: #0F172A; color: #fff; font-weight: 600; }
+      button.primary { background: #1D4ED8; border-color: #1D4ED8; color: #fff; font-weight: 600; }
       button:disabled { opacity: 0.5; cursor: wait; }
       #pause-btn { border-color: #0F172A; font-weight: 600; }
       .check { display: inline-flex; gap: 7px; align-items: center; font-size: 13px; color: var(--body); }
@@ -229,7 +229,10 @@
       .gold-field .val { font-size: 13px; font-weight: 600; color: #0F172A; overflow-wrap: anywhere; }
       .gold-field .prov { font-size: 11.5px; color: #0F766E; }
       /* steward buttons */
-      .btn-approve { background: #0F172A !important; border-color: #0F172A !important; color: #fff !important; font-weight: 600; }
+      .btn-approve { background: #1D4ED8 !important; border-color: #1D4ED8 !important; color: #fff !important; font-weight: 600; }
+      .btn-split { border: 2px solid #0F172A !important; color: #0F172A !important; background: #fff !important; }
+      #friendly button:not(.primary):not(.btn-approve):not(.btn-reject):not(.btn-accept):not(.btn-split):not(#f-loop-more-btn) { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
+      header .f-only { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
       .btn-reject { border-color: var(--bad) !important; color: var(--bad) !important; background: #fff !important; font-weight: 600; }
       .btn-accept { border-color: var(--good) !important; color: var(--good) !important; background: #F0FDF4 !important; font-weight: 600; }
       /* loop strip mood */
@@ -252,70 +255,121 @@
       .tile { color: #fff; }
       .tile:hover { filter: brightness(1.08); }
       #downstream-pill { background: #F5F3FF; border-color: #C4B5FD; color: #5B21B6; font-weight: 600; }
-      /* ---- Friendly View (v2.2 default) ---- */
+      /* ---- Friendly View (v2.2 default, §9A palette) ---- */
       body.friendly .detail-only { display: none !important; }
       body.detail .f-only { display: none !important; }
       #detail-view[hidden] { display: none; }
+      body.detail #friendly { display: none !important; }
+      .f-stakes {
+        font-size: 14px; color: #334155; margin: 0 2px 10px;
+        padding: 10px 14px; border: 1px solid #CBD5E1; border-radius: 12px;
+        background: var(--panel);
+      }
+      .f-plan {
+        margin: 0 0 12px; padding: 10px 14px;
+        border: 1px solid #CBD5E1; border-radius: 12px; background: var(--panel);
+        font-size: 14px; color: #0F172A;
+      }
+      .f-plan summary { font-weight: 700; font-size: 15px; cursor: pointer; }
+      .f-plan .f-plan-line { margin: 6px 0; }
+      .f-plan-foot { font-size: 13px; color: #334155; margin-top: 8px; }
+      .f-conflict {
+        display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+        border: 1px solid #F59E0B; color: #92400E; background: #FEF3C7;
+        font-size: 11px; font-weight: 700;
+      }
+      .f-src-dot {
+        display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+        margin-right: 6px; vertical-align: baseline;
+      }
       .f-steps {
         display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
         margin: 0 0 16px; padding: 12px 18px;
-        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-        font-size: 14px; color: var(--muted);
+        border: 1px solid #CBD5E1; border-radius: 12px; background: var(--panel);
+        font-size: 14px; color: #475569;
       }
-      .f-steps .step { display: inline-flex; align-items: center; gap: 8px; }
+      .f-steps .step { display: inline-flex; align-items: center; gap: 8px; color: #475569; }
       .f-steps .step .n {
         display: inline-flex; align-items: center; justify-content: center;
         width: 24px; height: 24px; border-radius: 50%;
-        border: 1px solid var(--line-strong); font-size: 12px; font-weight: 700;
+        border: 1px solid #475569; font-size: 12px; font-weight: 700; color: #475569;
       }
-      .f-steps .step.active { color: var(--text); font-weight: 700; }
-      .f-steps .step.active .n { background: #0F172A; border-color: #0F172A; color: #fff; }
-      .f-steps .arrow { color: var(--line-strong); }
+      .f-steps .step.done { color: #1D4ED8; font-weight: 600; }
+      .f-steps .step.done .n { background: #1D4ED8; border-color: #1D4ED8; color: #fff; }
+      .f-steps .step.now { color: #0F172A; font-weight: 700; }
+      .f-steps .step.now .n { background: #0F172A; border-color: #0F172A; color: #fff; }
+      .f-steps .arrow { color: #475569; }
       .f-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; margin-bottom: 16px; }
-      .f-col-h { font-size: 13px; font-weight: 700; color: var(--muted); margin: 2px 2px 8px; text-transform: none; }
+      .f-col-h { font-size: 13px; font-weight: 700; color: #475569; margin: 2px 2px 8px; text-transform: none; }
       .f-piece {
-        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-        padding: 10px 14px; margin-bottom: 10px; font-size: 14px;
+        border: 1px solid #CBD5E1; border-radius: 12px; background: var(--panel);
+        padding: 10px 14px; margin-bottom: 10px; font-size: 14px; color: #0F172A;
       }
-      .f-piece .src { font-weight: 700; }
+      .f-piece .src { font-weight: 700; color: #0F172A; }
       .f-answer {
         border-radius: 12px; padding: 18px 20px; background: var(--panel);
-        border: 1px solid var(--line-strong);
+        border: 1px solid #CBD5E1; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
       }
-      .f-answer h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; line-height: 1.3; }
-      .f-answer .f-body { font-size: 16px; line-height: 1.55; }
-      .f-answer.ok { border: 2px solid var(--good); background: var(--good-bg); }
-      .f-answer.need { border: 2px solid var(--warm); background: var(--warm-bg); }
-      .f-answer.stop { border: 2px solid var(--bad); background: var(--bad-bg); }
-      .f-field { margin: 10px 0; }
+      .f-answer h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; line-height: 1.3; color: #0F172A; }
+      .f-state-pill {
+        display: inline-block; padding: 2px 10px; border-radius: 999px;
+        color: #fff; font-size: 13px; font-weight: 700; margin-right: 8px; vertical-align: middle;
+      }
+      .f-answer.ok .f-state-pill { background: #15803D; }
+      .f-answer.need .f-state-pill { background: #B45309; }
+      .f-answer.stop .f-state-pill { background: #B91C1C; }
+      .f-answer.idle .f-state-pill { background: #1D4ED8; }
+      .f-answer .f-body { font-size: 16px; line-height: 1.55; color: #0F172A; }
+      .f-answer.ok { border: 1px solid #CBD5E1; border-left: 4px solid #15803D; background: #F0FDF4; }
+      .f-answer.ok h2 { color: #14532D; }
+      .f-answer.need { border: 1px solid #F59E0B; border-left: 4px solid #B45309; background: #FFFBEB; }
+      .f-answer.need h2 { color: #78350F; }
+      .f-answer.stop { border: 1px solid #CBD5E1; border-left: 4px solid #B91C1C; background: #FEF2F2; }
+      .f-answer.stop h2 { color: #7F1D1D; }
+      .f-answer.idle { border: 1px solid #BFDBFE; border-left: 4px solid #1D4ED8; background: #EFF6FF; }
+      .f-answer.idle h2 { color: #1E3A8A; }
+      .f-state-pill {
+        display: inline-block; padding: 2px 10px; border-radius: 999px;
+        color: #fff; font-size: 13px; font-weight: 700; margin-right: 8px; vertical-align: middle;
+      }
+      .f-answer.ok .f-state-pill { background: #15803D; }
+      .f-answer.need .f-state-pill { background: #B45309; }
+      .f-answer.stop .f-state-pill { background: #B91C1C; }
+      .f-answer.idle .f-state-pill { background: #1D4ED8; }
+      .f-field { margin: 10px 0; color: #0F172A; }
       .f-field .f-val { font-size: 16px; }
-      .f-field .f-why { font-size: 13px; color: var(--body); }
+      .f-field .f-why { font-size: 14px; color: #334155; }
       .f-field button, .f-answer .f-act { margin-top: 6px; }
       .f-proof {
         display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
         margin-bottom: 16px; padding: 12px 18px;
-        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-        font-size: 14px;
+        border: 1px solid #CBD5E1; border-radius: 12px; background: #fff;
+        font-size: 14px; color: #0F172A;
       }
+      .f-proof .f-muse { color: #1D4ED8; font-weight: 700; }
+      .f-proof .f-eng { color: #0F766E; font-weight: 700; }
       .f-loop {
         margin-bottom: 16px; padding: 10px 18px;
-        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-        font-size: 14px;
+        border: 1px solid #BFDBFE; border-radius: 12px; background: #EFF4FF;
+        font-size: 14px; color: #0F172A;
       }
+      .f-loop b { color: #B45309; }
       .f-loop button { min-height: 0; padding: 4px 10px; font-size: 13px; }
-      #f-loop-more { margin: 8px 0 0; padding-left: 18px; color: var(--body); font-size: 13px; }
+      #f-loop-more { margin: 8px 0 0; padding-left: 18px; color: #334155; font-size: 13px; }
       .f-upload {
         margin-bottom: 16px; padding: 16px 18px; text-align: left;
-        border: 2px dashed var(--line-strong); border-radius: 12px; background: var(--panel);
+        border: 2px dashed #CBD5E1; border-radius: 12px; background: var(--panel);
+        color: #0F172A;
       }
       .f-upload p { margin: 0 0 10px; font-size: 15px; }
-      .f-status-ready { border-color: var(--good); color: var(--good); }
-      .f-status-working { border-color: var(--accent); color: var(--accent); }
-      .f-status-need { border-color: var(--warm); color: var(--warm); font-weight: 700; }
-      .f-status-down { border-color: var(--bad); color: var(--bad); font-weight: 700; }
-      .f-steward-q { font-size: 16px; margin: 10px 0; }
-      .f-steward-meta { font-size: 13px; color: var(--body); margin: 8px 0; }
+      .f-status-ready { border-color: #15803D; color: #15803D; }
+      .f-status-working { border-color: #1D4ED8; color: #1D4ED8; }
+      .f-status-need { border-color: #B45309; color: #B45309; font-weight: 700; }
+      .f-status-down { border-color: #B91C1C; color: #B91C1C; font-weight: 700; }
+      .f-steward-q { font-size: 16px; margin: 10px 0; color: #0F172A; }
+      .f-steward-meta { font-size: 13px; color: #334155; margin: 8px 0; }
       #f-back-top { margin-bottom: 16px; }
+      mark.f-hit { background: #FEF3C7; color: #0F172A; padding: 0 2px; }
       @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -348,11 +402,11 @@
     <main>
       <div id="friendly">
         <div class="f-steps" aria-label="Three steps">
-          <span class="step active" id="f-step-1"><span class="n">1</span> Messy pieces</span>
+          <span class="step active" id="f-step-1"><span class="n">1</span> <span class="lbl">Start with messy pieces</span></span>
           <span class="arrow">→</span>
-          <span class="step" id="f-step-2"><span class="n">2</span> Trusted picture</span>
+          <span class="step" id="f-step-2"><span class="n">2</span> <span class="lbl">Trusted picture</span></span>
           <span class="arrow">→</span>
-          <span class="step" id="f-step-3"><span class="n">3</span> What you can do (or why we stop)</span>
+          <span class="step" id="f-step-3"><span class="n">3</span> <span class="lbl">What you can do (or why we stop)</span></span>
         </div>
 
         <div class="f-cols">
@@ -362,9 +416,16 @@
           </div>
           <div>
             <div class="f-col-h">What you can safely use</div>
+            <details class="f-plan" id="f-plan" open>
+              <summary>How we will clean (plan in force)</summary>
+              <div id="f-plan-body"></div>
+              <div class="f-plan-foot">This is the approved plan in force. Approving a new plan is not yet available in this view.</div>
+            </details>
+            <div class="f-stakes" id="f-stakes"></div>
             <div class="f-answer" id="f-answer" role="status">
               <h2 id="f-answer-head">No answer yet</h2>
               <div class="f-body" id="f-answer-body">Run the picture to get one trusted answer — or an honest stop.</div>
+              <div class="f-act" id="f-answer-cta" hidden><button id="f-try-answer" class="primary" type="button">Try the messy example</button> <button id="f-upload-scroll" type="button">Upload your messy JSON</button></div>
             </div>
           </div>
         </div>
@@ -376,6 +437,7 @@
 
         <div class="f-loop" id="f-loop">
           <span id="f-loop-text">Mosaic is watching.</span>
+          <button id="f-loop-review" type="button" hidden>Review in Steward Queue</button>
           <button id="f-loop-more-btn" type="button">See what it did by itself</button>
           <ol id="f-loop-more" hidden></ol>
         </div>
@@ -391,6 +453,9 @@
 
       <div id="detail-view" hidden>
       <div><button id="f-back-top" type="button">Back to trusted picture</button></div>
+      <section class="panel" id="detail-empty" style="margin-bottom: 16px;">
+        <div class="panel-body"><div class="card">Nothing has run yet — run the picture in the Friendly View, or click Build Mosaic here.</div></div>
+      </section>
       <div id="engine-banner" role="alert"></div>
 
       <section id="loop-strip" aria-labelledby="loop-title">
@@ -413,7 +478,7 @@
           <div class="controls" style="margin:0;">
             <span class="muted">Drop JSON files here, or click to choose files. JSON only in v1.</span>
             <label class="check">Upload JSON <input type="file" id="upload-file" accept=".json,application/json" /></label>
-            <button id="upload-btn" type="button">Upload + propose links</button>
+            <button id="upload-btn" type="button">Upload + show the picture</button>
             <span class="muted">Synthetic or non-sensitive data only for the demo. Uploaded data is sent to the Muse builder via the Meta Model API in real mode, so do not upload real PII in the demo.</span>
             <span class="muted" id="loop-hint">Loop Running: choosing a file auto-runs the approved pipeline, no click needed.</span>
           </div>
@@ -430,14 +495,14 @@
         </div>
       </section>
 
-      <section class="panel tall accent-indigo" style="margin-bottom: 16px;" aria-labelledby="graph-title">
+      <section class="panel tall accent-indigo" id="sec-graph" style="margin-bottom: 16px;" aria-labelledby="graph-title">
         <div class="panel-head">
           <h2 id="graph-title">Data graph — canvas</h2>
           <span class="tag">queryable, persisted</span>
         </div>
         <div class="panel-body">
           <div class="controls" style="margin:0 0 10px 0;">
-            <button id="graph-load" type="button">Load graph</button>
+            <button id="graph-load" type="button">Load graph for this entity</button>
             <button id="graph-path" type="button">Pathfinder F1-F5</button>
             <button id="graph-impact" type="button">Blast radius: phone</button>
             <span class="muted" id="graph-info">Nodes and edges for the current entity.</span>
@@ -466,7 +531,7 @@
           </div>
         </section>
 
-        <section class="panel tall accent-green" aria-labelledby="engine-title">
+        <section class="panel tall accent-green" id="sec-engine" aria-labelledby="engine-title">
           <div class="panel-head">
             <h2 id="engine-title">Trust Engine — manglekit, Datalog</h2>
             <span class="tag">derives only · REAL · AUTO VERIFYING</span>
@@ -478,7 +543,7 @@
       </div>
 
       <div class="grid" style="margin-top: 16px;">
-        <section class="panel accent-plum" style="min-height: 0;" aria-labelledby="mosaic-title">
+        <section class="panel accent-plum" id="sec-mosaic" style="min-height: 0;" aria-labelledby="mosaic-title">
           <div class="panel-head">
             <h2 id="mosaic-title">Mosaic picture</h2>
             <span class="tag">click a tile for lineage</span>
@@ -508,7 +573,7 @@
       </div>
 
       <div class="grid" style="margin-top: 16px;">
-        <section class="panel accent-emerald" style="min-height: 0;" aria-labelledby="golden-title">
+        <section class="panel accent-emerald" id="sec-golden" style="min-height: 0;" aria-labelledby="golden-title">
           <div class="panel-head">
             <h2 id="golden-title">Golden Record</h2>
             <span class="tag">nested + validated</span>
@@ -517,7 +582,7 @@
             <div class="card mono" id="golden-body">No golden record yet. Click Build Mosaic.</div>
           </div>
         </section>
-        <section class="panel accent-rose" style="min-height: 0;" aria-labelledby="downstream-title">
+        <section class="panel accent-rose" id="sec-downstream" style="min-height: 0;" aria-labelledby="downstream-title">
           <div class="panel-head">
             <h2 id="downstream-title">Downstream agent</h2>
             <span class="tag">golden or stop</span>
@@ -554,6 +619,15 @@
       <h3 style="margin-top:0">Explain — <span class="mono" id="explain-id"></span></h3>
       <div class="mono" id="explain-body" style="white-space: pre-wrap;"></div>
       <form method="dialog"><button>Close</button></form>
+    </dialog>
+
+    <dialog id="prompt-dialog">
+      <h3 style="margin-top:0" id="prompt-title"></h3>
+      <div style="margin-bottom:10px"><input id="prompt-input" style="width:100%" /></div>
+      <div class="steward-actions">
+        <button id="prompt-ok" class="primary" type="button">OK</button>
+        <button id="prompt-cancel" type="button">Cancel</button>
+      </div>
     </dialog>
 
     <script src="./app.js"></script>
