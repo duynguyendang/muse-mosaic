@@ -31,5 +31,9 @@ trust-engine/trust-engine
 .agents/
 .stitch/
 .pytest_cache/
+# Kaggle test dataset (pulled on demand for e2e testing, never committed).
+# Regenerate locally with scripts/kaggle_customer360_sample.py. Staged
+# per-run policies under data/kaggle/ are likewise local-only artifacts.
+data/kaggle/
 # Internal (never published)
 /docs/internal/

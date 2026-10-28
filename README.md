@@ -2,14 +2,64 @@
 
 > Many fragments, one trusted picture, with proof for every piece.
 
-Working implementation of the [Conceptual Solution Design](docs/internal/muse-mosaic-csd-en.2.3.md) v2.3 (2026-10-27) — the single source for this build.
-The v1.1 CSD (`docs/internal/muse-mosaic-csd-en.md`) is superseded and kept for history only.
+Muse Mosaic is a **trusted source for agents that act on fragmented data**.
+The problem it solves is not matching — it is the decision *after* matching:
+given conflicting fragments about one person or product, may a downstream
+agent (OTP, refund, search) act on a merged value right now, on what proof,
+and if not, why is the proof missing? Every answer the system gives has
+exactly one of two forms, and no third form exists:
+
+1. a **golden** — one versioned record per entity, where every field carries
+   its winner, its rule, its policy version, its taxonomy version and its
+   full lineage; or
+2. **`No trusted value`** — the request escalates to a human steward with an
+   owner, a deadline and a fallback, and downstream is told to stop.
+
+No proposer ever publishes. Only a deterministic Datalog engine
+(`trust-engine`, Go + manglekit) derives; only the publisher writes, and only
+after the whole assembled document validates against the expected schema.
+Splink proposes candidate clusters at scale, five Muse sub-agents propose
+links, values and taxonomy mappings as claims, and a human steward decides
+*only* on escalations — approving a config or a value is never approving a
+golden. That separation is the whole product: matching at scale, proof per
+field, and a visible fail-closed boundary everywhere a guess could leak in.
+
+## Proven twice: synthetic suite + real dirty data
+
+**1. Synthetic correctness gate — 119 tests passing** (`python3 -m pytest -q`):
+G-01..G-20 user rules plus C1, P-01..P-06 product rules plus T1, H-01..H-03
+hidden-connection chain/trap, S-01..S-05 matching-engine tests against the
+*live* service (S-04 with the service down, S-05 with a malformed response),
+plus kill-service, idempotency-key (same key + new payload → 409),
+steward approve/reject/split/Accept, and whole-document structure gates.
+Every test runs through the real derive path (`mkit eval`), never a mock.
+
+**2. Real dirty data — Kaggle Customer 360, frozen 200-row sample**
+(generated locally via `scripts/`, git-ignored test data — pull with
+`kagglehub`, never committed; full write-up in
+`docs/internal/Kaggle-test-dataset.md`): 2,554 documents built from 200 CRM
+rows + 818 kept orders + 389 products, with a staged authority matrix
+(`crm/1, orders/1, catalog/1`) as a new policy version — the repo's SAP/CIAM
+ranks were *not* reused blindly. Measured, not claimed:
+170 Splink clusters from 7,781 candidate pairs; **163 goldens published**
+(phone/email/address unanimous-verified by R1, 20 name conflicts escalated
+via C1, 7 withheld for no email consensus); 7 goldens nest verified
+`purchased_products` with L1 lineage after a steward Accept created a new
+taxonomy term; downstream OTP acted on a golden phone and product search acted
+on the accepted CLOTHING golden, while user search correctly stopped
+(`FIELD_WITHHELD` — user goldens carry no top-level category, by design).
+Findings include real engine
+limits hit on the way in (event-time spread vs the mangle number bound) and
+three real bugs this run caught and fixed, all with regression tests.
+
+Working implementation of the [Conceptual Solution Design](docs/internal/muse-mosaic-csd-en.2.5.md) v2.5 (2026-10-28) — the single source for this build.
+The v2.3/v1.1 CSDs (`docs/internal/`) are superseded and kept for history only.
 
 ---
 
-## Status: v2.3 core pipeline working, fail-closed defaults intact
+## Status: v2.5 pipeline working (matching-engine split), fail-closed defaults intact
 
-CSD §12.1 steps 1–7 are implemented and proven by tests (step 8 Splink adapter
+CSD §12.1 steps 1–8 are implemented and proven by tests (step 8 Splink service
 done, checkpoint gate open; steps 9–11 remain). What the system does today:
 
 | Area | State | Behaviour |
@@ -19,15 +69,15 @@ done, checkpoint gate open; steps 9–11 remain). What the system does today:
 | Versioned user + product policies | Implemented | JSON twins + **runnable** `.mg` Datalog (R1–R4 + L1/C1/C2/T1/I1), matrix coherence tested |
 | Versioned taxonomies | Implemented | `data/mock/taxonomy/*.json`, engine-enforced membership (T1), steward-only Accept creates new versions |
 | Trust-engine derive (Go + manglekit subprocess) | Implemented | Real `mkit eval` over flattened JSON facts; unknown/rank-mismatched inputs, unknown taxonomy and bad links rejected; engine errors fail closed |
-| Splink matcher (DuckDB, proposer only) | Implemented | Deterministic exact-identifier blocking + connected components; EM weights attached best-effort as candidate signals only; `SPLINK_UNAVAILABLE` fallback never publishes alone |
+| Matching engine (Splink, proposer only) | Implemented | `matching-engine/` FastAPI + DuckDB: deterministic exact-identifier blocking + connected components; EM weights best-effort as candidate signals only; `SPLINK_UNAVAILABLE` fallback never publishes alone |
 | Five Muse sub-agents | Implemented | Scout/Linker/Cluster/Taxonomist/Critic, mock by default; real mode via strict JSON schemas, no invented outputs accepted |
 | Conditional Meta tooling | Stubbed honestly | Wonder adjudicates escalations only if a model id is pinned, else a labelled `not_available` stub; Prompt Guard falls back to Pydantic + claim logging, labelled as such (never simulated as real) |
 | Data Graph (SQLite) | Implemented | Source + Derived layers, proposed vs verified links, Pathfinder, blast radius, orphan/stale/duplicate analysers |
 | Publisher + ledger + nested golden + structure gate | Implemented | Gated writes, whole-document validation, nested `purchased_products` assembly, idempotent replay, steward approve/reject/split/Accept |
-| Mosaic UI | Implemented | Graph canvas, builder panel with sub-agent trace, engine panel with derivation tree, structured golden panel, Splink tiles, upload, downstream two-answer demo, steward actions incl. Accept |
-| 33-case parity (G + P + H + S) | **Passing** | G-01..G-20, P-01..P-06 + taxonomy T1, H-01..H-03 chain/trap, S-01..S-04 Splink — all through the real derive path, not a mock |
+| Mosaic UI | Implemented | Graph canvas, builder panel with sub-agent trace + Matching Engine status (version from /health, clusters/pairs/weights per build), engine panel with derivation tree, structured golden panel, upload, downstream two-answer demo, steward actions incl. Accept |
+| 35 assertions across 34 cases (G + P + H + S) + service | **Passing** | G-01..G-20, P-01..P-06 + taxonomy T1, H-01..H-03 chain/trap, S-01..S-05 matching-engine against the live service (S-04 with the service down, S-05 malformed response fail-closed) — all through the real derive path, not a mock |
 | Kill-service, idempotency, split/rollback, structure | **Passing** | Full-stack tests against a live trust-engine |
-| Single-container subprocess fallback | **Not implemented** | Only the two-container Compose topology exists; inside it, the Go service already shells out to the pinned mkit binary (same contract, documented adapter) |
+| Single-container subprocess fallback | **Partial: Splink in-process only** | `mosaic-api/splink_local.py` runs the verbatim matching logic in-process behind the same match interface when `MATCHING_ENGINE_URL` is empty (Liskov parity-tested). The Go service still shells out to the pinned mkit binary; a Python mkit-subprocess fallback for derive is not implemented, so the engine container is still required. |
 
 **No measured result is claimed.** No real CRM/ERP/CIAM integration, no real
 customer data and no accuracy number exists in this repository. All source
@@ -47,11 +97,11 @@ muse-mosaic/
 ├── .gitignore
 ├── .dockerignore
 ├── docs/
-│   ├── muse-mosaic-csd-en.md          # v1.1, superseded, history only
-│   ├── muse-mosaic-csd-en.2.3.md      # v2.3, the build source
+│   └── internal/             # unpublished: CSD v2.5 (build source) + v2.3/v1.1 history,
+│                             # UX 2.0/2.1, as-built context catalog, demo script
 ├── mosaic-api/
 │   ├── Dockerfile            # bundles policies + mock data + taxonomy
-│   ├── requirements.txt      # fastapi, pydantic, uvicorn, httpx, splink, jsonschema
+│   ├── requirements.txt      # fastapi, pydantic, uvicorn, httpx, jsonschema (no Splink: separate service)
 │   ├── requirements-dev.txt
 │   ├── schema.sql            # CSD 12.5 DDL + graph/audit tables
 │   ├── main.py               # /resolve /build /upload /graph /golden /explain
@@ -60,7 +110,7 @@ muse-mosaic/
 │   ├── schemas.py            # fact/golden/graph/taxonomy/build/upload contracts
 │   ├── ingest.py             # Documents, aliases, canonicalization, upload parsing
 │   ├── taxonomies.py         # versioned taxonomy store + exact synonym mapping
-│   ├── splink_adapter.py     # Splink DuckDB proposer + SPLINK_UNAVAILABLE fallback
+│   ├── splink_adapter.py     # Splink HTTP client (proposer only) + SPLINK_UNAVAILABLE fallback
 │   ├── subagents.py          # Scout/Linker/Cluster/Taxonomist/Critic (mock + real)
 │   ├── meta_tooling.py       # Wonder (conditional) + Prompt Guard fallback
 │   ├── meta_client.py        # strict json_schema caller, retry, breaker, usage
@@ -71,6 +121,11 @@ muse-mosaic/
 │   ├── publisher.py          # gated writes, structure gate, nested assembly
 │   ├── ledger.py             # SQLite schema + exact reads/writes
 │   ├── similar_search.py     # structured similar search (vector deferred)
+├── matching-engine/           # standalone matching engine (proposer only, internal)
+│   ├── Dockerfile            # python:3.12-slim image, no published port
+│   ├── requirements.txt      # fastapi, uvicorn, splink==5.0.0, duckdb==2.0.0, pydantic
+│   ├── main.py               # GET /health (versions) + POST /match (candidates only)
+│   └── README.md             # contract + local run
 ├── web/                      # separate frontend app (static, no build step)
 │   ├── README.md             # deploy: static host + MOSAIC_API_BASE
 │   ├── index.html            # loop strip, graph canvas, builder/engine, golden, steward drawer
@@ -85,18 +140,25 @@ muse-mosaic/
 │   │   ├── user/pol-2026-10-27-v1.{json,mg}        # R1-R4 + L1/C1/C2/T1/I1
 │   │   └── product/pol-product-2026-10-27-v1.{json,mg}
 │   └── taxonomy -> ../../data/mock/taxonomy (copied into the image)
+├── scripts/                    # Kaggle e2e harness (frozen sample + run script)
+│   ├── kaggle_customer360_sample.py  # deterministic 200-row sampler -> data/kaggle/
+│   └── kaggle_e2e.py               # composes scratch env, runs 3 services, records results
 ├── data/mock/
 │   ├── users.json  products.json  tickets.json
 │   ├── hidden/{f1,f2,f3,f4,f5,f6_trap}.json   # hidden-connection scene
 │   ├── taxonomy/tax-{user,product}-2026-10-27-v1.json
 │   └── templates/{user_profile,purchased_product,expected_*_golden}.json
+├── data/kaggle/                # LOCAL-ONLY, git-ignored (regenerate via scripts/)
+│   ├── customer360_sample_200.json  # 2,554 docs (generated, not committed)
+│   └── policies/user|product/pol-kaggle-2026-10-28-v1.{json,mg}  # (generated) crm/orders/catalog ranks
 └── tests/
     ├── conftest.py        # mkit build, trust-engine + API fixtures
     ├── test_contract.py   # contracts, DDL, mg<->json, fail-closed API
     ├── test_rules_user.py # G-01..G-20 (+C1 unit) through live mkit
     ├── test_rules_product.py # P-01..P-06 + T1 through live mkit
     ├── test_hidden.py     # H-01..H-03 chain/trap through live mkit
-    ├── test_splink.py     # S-01..S-04 (fallback needs no Splink server)
+    ├── test_splink.py     # S-01..S-05 vs live/stub service (S-04 down, S-05 malformed) + mismatch + Liskov
+    ├── test_matching_engine.py # service contract: pins, blocking/comparison/policy validation
     ├── test_subagents.py  # five agents: claims only, never publish
     ├── test_meta_tooling.py # conditional tools stubbed, never simulated
     ├── test_taxonomy.py   # exact synonyms only; fuzzy stays unmapped
@@ -110,7 +172,7 @@ muse-mosaic/
     └── test_split.py      # approve new phone, split restores v1
 ```
 
-Service names are exactly `mosaic-api` and `trust-engine`, as required by CSD 12.2.
+Service names are exactly `mosaic-api`, `trust-engine` and `matching-engine`, as required by CSD 12.2.
 
 ---
 
@@ -127,7 +189,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r mosaic-api/requirements-dev.txt
 
-# Full suite: 33-case parity + graph + Splink + sub-agents + taxonomy +
+# Full suite: 34-case parity + graph + matching-engine + sub-agents + taxonomy +
 # structure + flows + idempotency + kill-service + split (builds mkit + engine)
 python3 -m pytest -q
 
@@ -141,10 +203,10 @@ USE_MOCK_MUSE=true uvicorn main:app --reload
 ```
 
 Open <http://127.0.0.1:8000>: graph canvas on top, builder (sub-agent trace +
-Splink) left, engine (derivation tree) right, structured golden below,
+Matching Engine status) left, engine (derivation tree) right, structured golden below,
 steward queue with approve/reject/split/Accept, downstream OTP/search demo.
 
-### Docker Compose (two containers)
+### Docker Compose (three containers: mosaic-api, trust-engine, matching-engine)
 
 ```bash
 cp .env.example .env       # keep USE_MOCK_MUSE=true for mock runs
@@ -200,7 +262,7 @@ Wonder only on escalations — never on page load, never in tests.
 ## What is real in the current API
 
 ```text
-GET  /health                                  -> mosaic_api, trust_engine, splink, policy versions
+GET  /health                                  -> mosaic_api, trust_engine, splink (+ versions), policy versions
 POST /build {dataset, expected_structure?}    -> full canonical flow per cluster; golden(s) or escalate
 POST /upload (multipart JSON)                 -> fragments + type detection + link proposals; never publishes
 GET  /graph/{type}/{id}[?path_from&path_to]  -> nodes/edges + optional pathfinder/impact
@@ -293,7 +355,7 @@ P-04; unknown terms escalate via T1).
 Current run:
 
 ```text
-111 passed
+119 passed
 ```
 
 - `test_contract.py` — fact/golden/graph contracts, policy + taxonomy coherence
@@ -305,8 +367,9 @@ Current run:
 - `test_rules_product.py` — P-01..P-06 + T1 unknown-term escalation.
 - `test_hidden.py` — H-01..H-03: chain publishes with verified links, broken
   hop escalates explicitly (C2), trap not merged (C1 on the phone tie).
-- `test_splink.py` — S-01..S-04: hidden cluster found, F6 separate, Muse-only
-  semantic link, unavailable fallback with no silent publish.
+- `test_splink.py` — S-01..S-05 against the live matching-engine: hidden cluster found, F6 separate, Muse-only
+  semantic link, S-04 with the real service down and S-05 with a malformed response (both unavailable fallback with no silent publish), plus version-mismatch and service-vs-fallback Liskov parity.
+- `test_matching_engine.py` — service contract: /health pins + enabled flag, /match candidates with blocking evidence, work_id/policy echo, 422 on unknown blocking/comparisons/policy.
 - `test_subagents.py` / `test_meta_tooling.py` — five agents emit claims only;
   Wonder/Prompt Guard are labelled stubs, never simulated as real.
 - `test_taxonomy.py` / `test_taxonomy_accept.py` — exact synonym mapping only;
@@ -315,7 +378,7 @@ Current run:
 - `test_flows.py` — Flow A publish, Flow B injection escalation + phone
   withdrawal, product gate, steward reject, fragments labelling, similar
   evidence.
-- `test_build.py` — /build end-to-end (cluster, graph, upload, downstream).
+- `test_build.py` — /build end-to-end (cluster, graph, upload, downstream), incl. nested purchased-golden verification and rebuild-over-nested-golden regression.
 - `test_proposer_real.py` — fail-fast + strict validation (no network).
 - `test_idempotency.py`, `test_kill_service.py`, `test_split.py` — full-stack
   against a live trust-engine, incl. kill scene and same-decision retry.
@@ -342,7 +405,7 @@ option and records the question instead of inventing an answer.
 1. **Blocking — A-11: application theme/track/idea match.** The project must be
    checked against what was submitted on 26 October 2026 before final
    submission (A-18: do not write submitted track/theme/idea as fact).
-2. **Splink at scale.** S-01..S-04 prove the adapter contract on synthetic
+2. **Splink at scale.** S-01..S-05 prove the service contract on synthetic
    data with deterministic exact linkage + best-effort EM weights. No
    Splink-beating accuracy and no end-to-end massive-scale golden benchmark
    are claimed (CSD guardrail). If Splink integration slips, ship the core
@@ -369,9 +432,7 @@ option and records the question instead of inventing an answer.
    (untouched) but defines no home for per-attribute conflict reasons or
    subagent traces. The new tables store derive-output and proposer audit
    rows so replay never re-derives and never re-calls Muse.
-9. **Single-container subprocess fallback.** CSD 4.4 wants it in the repo.
-   Only the two-container topology exists; inside it, the Go service already
-   shells out to the pinned mkit binary (same contract, documented adapter).
+9. **Single-container subprocess fallback.** Partially in the repo: unset `MATCHING_ENGINE_URL` runs the verbatim in-process matcher (`mosaic-api/splink_local.py`, parity-tested vs the service). A Python mkit-subprocess fallback for derive is still missing, so the trust-engine container is still required. The Go service already shells out to the pinned mkit binary (same contract, documented adapter).
 10. **TTL policy keys.** `detector-like`/`inventory-like` windows from the CSD
     are carried in policy JSON but not mapped to attributes; per-fact
     `ttl_seconds` drives R3. Confirm the intended mapping before using the
@@ -392,7 +453,7 @@ option and records the question instead of inventing an answer.
 - [x] 5. Trust-engine adapter + policies (R1-R4 + L1/C1/C2/T1) + parity tests
 - [x] 6. Publisher, ledger + graph writes, Explain/replay, steward queue, similar search
 - [x] 7. Mosaic UI (canvas, builder/engine panels, structured golden, tiles, upload, downstream)
-- [x] 8. Splink adapter (after 29 non-Splink cases passed) + S tests
+- [x] 8. Splink service (after 29 non-Splink cases passed) + S tests against the live service
 - [x] 9. Meta tooling integration (conditional Wonder/Prompt Guard, or labelled stubs)
 - [ ] 10. Demo video recording (~2 min, hidden connection 80s + Splink + kill-engine) + README claims traced to decision/test ids
 - [ ] 11. Submission checklist, early submission on 4 November
