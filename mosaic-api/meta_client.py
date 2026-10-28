@@ -244,10 +244,14 @@ def _usage_of(body: dict[str, Any]) -> dict[str, Any]:
     raw = body.get("usage", {}) if isinstance(body, dict) else {}
     details = raw.get("prompt_tokens_details", {}) or {}
     completion_details = raw.get("completion_tokens_details", {}) or {}
+    call_id = body.get("id") if isinstance(body, dict) else None
     return {
         "prompt_tokens": raw.get("prompt_tokens", 0),
         "completion_tokens": raw.get("completion_tokens", 0),
         "total_tokens": raw.get("total_tokens", 0),
         "cached_tokens": details.get("cached_tokens", 0),
         "reasoning_tokens": completion_details.get("reasoning_tokens", 0),
+        # Meta call id for the sub-agent trace (CSD 12.4: each real trace row
+        # carries its call id; mock rows have none).
+        "call_id": call_id if isinstance(call_id, str) else None,
     }

@@ -54,6 +54,8 @@ def plan_graph(
     policy_version: str,
     taxonomy_version: str | None,
     created_at: str,
+    clusters: list[dict[str, Any]] | None = None,
+    fact_documents: dict[str, str] | None = None,
 ) -> tuple[list[GraphNode], list[GraphEdge]]:
     """Pure graph planning (no writes): nodes + edges with provenance."""
     nodes: list[GraphNode] = []
@@ -115,6 +117,38 @@ def plan_graph(
         entity_type=entity_type, entity_id=entity_id,
         source=None, created_at=created_at, decision_id=decision_id,
     ))
+
+    # Splink cluster proposal: one Entity node per cluster (proposer Splink),
+    # with cluster_member edges to each member fact's value node. Graph-only:
+    # ignored by pathfinder (exact-proof hops only) and by the derivation
+    # tree. fact_documents maps fact_id -> document_id; cluster member_ids
+    # are document ids.
+    for cluster in clusters or []:
+        cluster_id = str(cluster.get("cluster_id", ""))
+        members = [str(m) for m in cluster.get("member_ids", [])]
+        if not cluster_id or not members or not fact_documents:
+            continue
+        cluster_node = node_id("entity", entity_type, cluster_id)
+        nodes.append(GraphNode(
+            node_id=cluster_node, node_type="Entity",
+            entity_type=entity_type, entity_id=entity_id,
+            source="Splink", created_at=created_at, decision_id=decision_id,
+        ))
+        for fact in facts:
+            if fact_documents.get(fact.fact_id) not in members:
+                continue
+            value_node = fact_nodes.get(fact.fact_id)
+            if not value_node:
+                continue
+            edges.append(GraphEdge(
+                edge_id=edge_id("cluster_member", cluster_node, value_node),
+                edge_type="cluster_member",
+                from_node_id=cluster_node, to_node_id=value_node,
+                proof="cluster_membership", proposer="Splink",
+                rule_fired=None, policy_version=policy_version,
+                taxonomy_version=taxonomy_version, decision_id=decision_id,
+            ))
+
     if golden_version is not None:
         golden_node = node_id("golden", entity_type, entity_id, str(golden_version))
         nodes.append(GraphNode(
@@ -346,6 +380,8 @@ def derive_purchased_edges(
     policy_version: str,
     taxonomy_version: str | None,
     created_at: str,
+    entity_type: str = "user",
+    entity_id: str = "",
 ) -> tuple[list[GraphEdge], list[GraphNode]]:
     """Verify purchased edges (graph analyser, not engine derivation).
 
@@ -372,7 +408,12 @@ def derive_purchased_edges(
         if not product_id or not order_value:
             continue
         shared = [doc for doc in order_docs.get(str(order_value), []) if doc != document["document_id"]]
-        from_node = node_id("fragment", document.get("entity_type", "user"), document.get("entity_id", ""), document["document_id"])
+        # Anchor on real graph nodes (same id scheme as plan_graph: the order
+        # fact's value node -> the product golden node). A dangling endpoint
+        # would be silently dropped from every /graph read.
+        doc_entity_id = entity_id or document.get("entity_id", "")
+        order_fact_id = f"{doc_entity_id}-{document['document_id']}-order_id"
+        from_node = node_id("value", entity_type, doc_entity_id, order_fact_id)
         golden = product_goldens.get(str(product_id))
         if shared and golden is not None:
             to_node = node_id("golden", "product", str(product_id), str(golden.get("version", 1)))

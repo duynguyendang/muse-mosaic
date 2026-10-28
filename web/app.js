@@ -36,6 +36,7 @@
     lastAutoRunAt: null,
     engineDown: false,
     taxonomy: null,
+    splink: { status: "unknown", splink_version: null, duckdb_version: null },
   };
 
   function clockNow() {
@@ -145,8 +146,19 @@
       $("engine-status").textContent =
         "trust-engine: " + (engOk ? "Engine OK" : "Engine DOWN — Fail-closed");
       const splinkOk = data.splink === "ok";
+      loop.splink = {
+        status: data.splink || "unknown",
+        splink_version: data.splink_version || null,
+        duckdb_version: data.duckdb_version || null,
+      };
       $("splink-dot").className = "dot " + (splinkOk ? "ok" : "down");
-      $("splink-status").textContent = "splink: " + (data.splink || "unknown");
+      if (splinkOk) {
+        const ver = [["Splink", data.splink_version], ["DuckDB", data.duckdb_version]]
+          .filter(([, v]) => v).map(([n, v]) => `${n} ${v}`).join(" · ");
+        $("splink-status").textContent = "Matching Engine: ok" + (ver ? ` (${ver})` : "");
+      } else {
+        $("splink-status").textContent = "Matching Engine: DOWN — fallback to Muse + fuzzy";
+      }
       $("policy-badge").textContent =
         `Policy: ${data.policy_version_user || "?"} / ${data.policy_version_product || "?"}`;
       if (loop.taxonomy) {
@@ -480,21 +492,22 @@
       });
     });
     const color = { Fragment: "#38bdf8", Entity: "#a78bfa", Golden: "#34d399", Taxonomy: "#fbbf24", Steward: "#f472b6", Document: "#94a3b8" };
-    const edgeColor = { has_attribute: "#334155", proposed_link: "#a78bfa", verified_link: "#34d399", purchased: "#fbbf24", same_person: "#7dd3fc", link_miss: "#f87171" };
+    const edgeColor = { has_attribute: "#334155", proposed_link: "#a78bfa", verified_link: "#34d399", purchased: "#fbbf24", same_person: "#7dd3fc", link_miss: "#f87171", cluster_member: "#a78bfa" };
+    const edgeDashed = { proposed_link: "5,4", cluster_member: "5,4" };
     let html = "";
     edges.forEach((e) => {
       const a = pos[e.from_node_id];
       const b = pos[e.to_node_id];
       if (!a || !b) return;
       const hl = highlight && (highlight.includes(e.from_node_id) || highlight.includes(e.to_node_id));
-      html += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${edgeColor[e.edge_type] || "#475569"}" stroke-width="${hl ? 3 : 1.2}" stroke-dasharray="${e.edge_type === "proposed_link" ? "5,4" : "none"}" opacity="${hl ? 1 : 0.7}"><title>${esc(e.edge_type)}${e.proof ? ": " + esc(e.proof) : ""} (${esc(e.proposer || "?")})</title></line>`;
+      html += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${edgeColor[e.edge_type] || "#475569"}" stroke-width="${hl ? 3 : 1.2}" stroke-dasharray="${edgeDashed[e.edge_type] || "none"}" opacity="${hl ? 1 : 0.7}"><title>${esc(e.edge_type)}${e.proof ? ": " + esc(e.proof) : ""} (${esc(e.proposer || "?")})</title></line>`;
     });
     nodes.forEach((n) => {
       const p = pos[n.node_id];
       if (!p) return;
       const label = (n.node_id.split("-").slice(-2).join("/") || n.node_type).slice(-18);
       html += `<g data-node="${esc(n.node_id)}" style="cursor:pointer">`
-        + `<circle cx="${p.x}" cy="${p.y}" r="9" fill="${color[n.node_type] || "#64748b"}" stroke="#0b1020" stroke-width="2"><title>${esc(n.node_id)} [${esc(n.node_type)}]</title></circle>`
+        + `<circle cx="${p.x}" cy="${p.y}" r="9" fill="${color[n.node_type] || "#64748b"}" stroke="#0b1020" stroke-width="2"><title>${esc(n.node_id)} [${esc(n.node_type)}]${n.source ? " · " + esc(n.source) : ""}</title></circle>`
         + `<text x="${p.x + 12}" y="${p.y + 4}" font-size="10" fill="#93a0c2">${esc(label)}</text></g>`;
     });
     svg.innerHTML = html;
@@ -552,6 +565,33 @@
     }
   }
 
+  function renderMatchingEngine(splink) {
+    const info = splink || {};
+    const status = info.status || "unavailable";
+    const ok = status === "ok";
+    const ver = [["Splink", loop.splink.splink_version || info.splink_version],
+                 ["DuckDB", loop.splink.duckdb_version || info.duckdb_version]]
+      .filter(([, v]) => v).map(([n, v]) => `${n} ${v}`).join(" · ");
+    const clusters = info.clusters || [];
+    const pairs = info.pairs || [];
+    const clusterHtml = clusters.map((c) => `
+      <div class="meta mono">${esc(c.cluster_id)} — ${(c.member_ids || []).length} fragments: ${(c.member_ids || []).map(esc).join(", ")}</div>`).join("");
+    const pairHtml = pairs.map((p) => `
+      <div class="meta mono">${esc(p.left)} ↔ ${esc(p.right)} · weight ${esc(p.match_weight ?? "?")} · prob ${esc(p.match_probability ?? "?")} · via ${esc(p.blocking_rule || "?")} (${esc(p.proposer || "Splink")})</div>`).join("");
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <h3>Matching Engine ${ok
+        ? badge("published")
+        : `<span class="badge escalated">DOWN</span>`}
+        <span class="muted mono">${esc(ver || "versions from /health")}</span></h3>
+      ${ok
+        ? `<div class="meta">${clusters.length} clusters, ${pairs.length} pairs — candidates only, never a golden.</div>${clusterHtml}${pairHtml}`
+        : `<div class="meta">SPLINK_UNAVAILABLE — fallback to Muse + fuzzy. No publish on fallback alone.</div>`}
+      ${info.detail ? `<div class="meta">${esc(info.detail)}</div>` : ""}`;
+    proposerBody.prepend(card);
+  }
+
   async function buildMosaic(auto) {
     const { entityType } = currentEntity();
     const docsBySource = {};
@@ -591,6 +631,14 @@
       }
       renderSteward(payload.steward_queue || []);
       renderEscalatedCount((payload.steward_queue || []).length);
+      renderMatchingEngine(payload.splink);
+      if (payload.splink && payload.splink.status === "ok") {
+        const nPairs = (payload.splink.pairs || []).length;
+        const nClusters = (payload.splink.clusters || []).length;
+        feed(`Matching engine matched: ${nClusters} clusters, ${nPairs} pairs — candidates only, engine still verifies`);
+      } else {
+        feed(`Matching engine unavailable — fallback to Muse + fuzzy (SPLINK_UNAVAILABLE), nothing published on fallback alone`);
+      }
       const verdictCap = String(payload.verdict || "").charAt(0).toUpperCase() + String(payload.verdict || "").slice(1);
       if (auto) {
         noteAutoRun({ ...payload, golden: first, verified_links: payload.verified_links || [] });
@@ -755,7 +803,7 @@
       tiles.push({ kind: "rule", label: `${value.rule_fired} fired for ${name}`, wide: false, detail: value });
     }
     for (const link of (payload.splink_links || [])) {
-      tiles.push({ kind: "agent", label: `Splink candidate: ${link.proof}`, wide: false, detail: link });
+      tiles.push({ kind: "agent", label: `Matching engine candidate: ${link.proof}`, wide: false, detail: link });
     }
     for (const item of payload.steward_queue || []) {
       tiles.push({ kind: "rule", label: `steward: ${item.attribute}`, wide: true, detail: item });

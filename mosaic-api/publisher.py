@@ -870,6 +870,8 @@ def _verified_purchased_nested(
         documents, product_goldens,
         decision_id=decision_id, policy_version=policy_version,
         taxonomy_version=taxonomy_version, created_at=created_at,
+        entity_type=getattr(request, "entity_type", None) or "user",
+        entity_id=getattr(request, "entity_id", None) or "",
     )
     items: list[dict[str, Any]] = []
     edge_dicts: list[dict[str, Any]] = []
@@ -881,7 +883,9 @@ def _verified_purchased_nested(
         if edge.edge_type != "purchased":
             continue
         for product_id, golden in product_goldens.items():
-            if f"product/{product_id}/" in edge.to_node_id or edge.to_node_id.endswith(f"/{product_id}"):
+            # to_node_id is nd-golden-product-{product_id}-{version} (see
+            # derive_purchased_edges); match on that exact prefix.
+            if edge.to_node_id.startswith(f"nd-golden-product-{product_id}-"):
                 attributes = golden.get("attributes", {})
                 category = (attributes.get("category") or {}).get("value")
                 if category is None and isinstance(attributes.get("category"), str):
@@ -985,6 +989,8 @@ def persist_decision(
     publish_golden: bool = True,
     purchased_edges: list | None = None,
     nested_products: list[dict[str, Any]] | None = None,
+    clusters: list[dict[str, Any]] | None = None,
+    fact_documents: dict[str, str] | None = None,
 ) -> ResolveResponse:
     """Write one decision atomically: facts, decision, golden (if validated),
     tombstones, conflicts, stewards, graph, agent traces.
@@ -1078,7 +1084,13 @@ def persist_decision(
                     }
                 if nested_products:
                     merged["purchased_products"] = nested_products
+                else:
+                    # No verified purchase this run: drop any stale nesting
+                    # rather than carrying forward an unproven link.
+                    merged.pop("purchased_products", None)
                 for attr in withdrawn:
+                    if attr == "purchased_products":
+                        continue  # handled above; nested data is not a loser fact
                     merged.pop(attr, None)
 
                 connection.execute(
@@ -1120,8 +1132,10 @@ def persist_decision(
                                 "R1-superseded",
                             ),
                         )
-                    prev_winner = (previous_attrs.get(fact.attribute) or {}).get(
-                        "winner_fact_id"
+                    prev_value = previous_attrs.get(fact.attribute) or {}
+                    prev_winner = (
+                        prev_value.get("winner_fact_id")
+                        if isinstance(prev_value, dict) else None
                     )
                     if (
                         prev_winner
@@ -1146,7 +1160,15 @@ def persist_decision(
                 for attr in [
                     attr_ for attr_ in previous_attrs if attr_ not in published_names
                 ]:
-                    prev_winner = (previous_attrs.get(attr) or {}).get("winner_fact_id")
+                    # Nested assembled products have no single winner to tombstone:
+                    # their history lives in golden versions, not loser facts.
+                    # Guard against non-dict values (e.g. the purchased_products
+                    # list) so a withdrawn nested field can never crash the write.
+                    prev_value = previous_attrs.get(attr)
+                    prev_winner = (
+                        prev_value.get("winner_fact_id")
+                        if isinstance(prev_value, dict) else None
+                    )
                     if prev_winner:
                         connection.execute(
                             """
@@ -1226,6 +1248,7 @@ def persist_decision(
                     golden_version=new_version, decision_id=decision_id,
                     policy_version=policy_version, taxonomy_version=taxonomy_version,
                     created_at=created_at,
+                    clusters=clusters, fact_documents=fact_documents,
                 )
                 for purchased_edge in purchased_edges or []:
                     if isinstance(purchased_edge, dict):

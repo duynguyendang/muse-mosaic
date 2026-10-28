@@ -11,6 +11,16 @@ import pytest
 pytestmark = pytest.mark.usefixtures("te_url")
 
 
+@pytest.fixture()
+def api_client(te_url, matching_engine, tmp_path):
+    """API client wired to the live trust-engine AND the live matching-engine,
+    so /build exercises the real Match stage end to end."""
+    from conftest import make_api_client
+
+    with make_api_client(te_url, tmp_path, matching_service_url=matching_engine) as client:
+        yield client
+
+
 def hidden_documents():
     import json
     from pathlib import Path
@@ -65,6 +75,81 @@ def test_build_is_idempotent(api_client):
     second = build(api_client, hidden_documents(), "build-idem")
     assert second.status_code == 200, second.text
     assert second.json()["decision_id"] == first.json()["decision_id"]
+
+
+def test_build_nests_verified_purchase_and_survives_rebuild(api_client):
+    """Nested purchased_products end-to-end on synthetic fixtures only.
+
+    A verified purchase (exact order_id shared by two docs + published product
+    golden) nests into the user golden with L1 lineage; rebuilding over a
+    golden that already contains nested products must not crash the
+    tombstone path (list-valued previous attributes have no single winner).
+    """
+    ts = "2026-10-27T09:00:00+07:00"
+
+    def frag(source, sid, attribute, value, rank=1, verified=True):
+        return {
+            "source": source, "source_id": sid, "attribute": attribute,
+            "value": value, "authority_rank": rank, "event_time": ts,
+            "verified": verified, "ttl_seconds": 3600,
+        }
+
+    def doc_field(value, rank=1, verified=True):
+        return {
+            "value": value, "authority_rank": rank, "event_time": ts,
+            "verified": verified, "ttl_seconds": 3600,
+        }
+
+    resolve = api_client.post("/resolve", json={
+        "work_id": "work-nest-prod", "idempotency_key": "nest-prod",
+        "entity_type": "product", "entity_id": "prod-nest-1",
+        "fragments": [frag("pim-like", "nest-cat", "category", "Smartphone")],
+    })
+    assert resolve.status_code == 200, resolve.text
+    assert resolve.json()["verdict"] == "published", resolve.json()
+
+    order = "ORD-NEST-1"
+    docs = [
+        {"document_id": "nest-b", "entity_type": "user", "source": "crm",
+         "synthetic": True,
+         "fields": {
+             "email": doc_field("nest@example.com"),
+             "phone": doc_field("0900000001"),
+             "order_id": doc_field(order),
+         }},
+        {"document_id": "nest-o", "entity_type": "user", "source": "orders",
+         "synthetic": True,
+         "fields": {
+             "order_id": doc_field(order),
+             "product_ref": doc_field("prod-nest-1"),
+         }},
+    ]
+    first = build(api_client, docs, "build-nest-1")
+    assert first.status_code == 200, first.text
+    goldens = [g for g in first.json()["goldens"] if g.get("golden_id")]
+    assert len(goldens) == 1, first.json()
+    purchased = goldens[0]["attributes"].get("purchased_products")
+    assert purchased, "verified purchase must nest into the golden"
+    assert purchased[0]["name"] == "prod-nest-1"
+    assert purchased[0]["category"] == "Smartphone"
+    assert purchased[0]["_lineage"]["proof"] == "exact_order"
+    assert purchased[0]["_lineage"]["rule_fired"] == "L1"
+
+    # Rebuild over the nested golden (new key): must not crash on the
+    # list-valued previous attribute, must keep the nested purchase, and must
+    # persist the verified purchased edge in the Data Graph (not only JSON).
+    second = build(api_client, docs, "build-nest-2")
+    assert second.status_code == 200, second.text
+    goldens2 = [g for g in second.json()["goldens"] if g.get("golden_id")]
+    assert len(goldens2) == 1, second.json()
+    assert goldens2[0]["attributes"].get("purchased_products"), second.json()
+    assert goldens2[0]["version"] == 2, second.json()
+    graph = api_client.get("/graph/user/cluster-1")
+    assert graph.status_code == 200, graph.text
+    purchased = [e for e in graph.json()["edges"] if e["edge_type"] == "purchased"]
+    assert len(purchased) == 1, graph.json()
+    assert purchased[0]["proof"] == "exact_order", purchased
+    assert purchased[0]["proposer"] == "graph-analyser", purchased
 
 
 def test_upload_template_and_csv_rejected(api_client):

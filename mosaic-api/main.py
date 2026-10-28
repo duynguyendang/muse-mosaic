@@ -17,6 +17,7 @@ Implemented (fail-closed where noted):
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -54,6 +55,21 @@ from schemas import (
 
 
 ENTITY_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# Last observed matching-engine failure (S-05). /health reports splink
+# unavailable while this is set — even if a probe succeeds — until a later
+# /match succeeds and clears it. Process-local last-known state: a recorded
+# match failure is never hidden by a passing probe.
+_SPLINK_LAST_ERROR: str | None = None
+
+
+def _note_splink_result(out: dict[str, Any]) -> None:
+    """Record or clear the sticky matching-engine failure."""
+    global _SPLINK_LAST_ERROR
+    if out.get("status") == "ok":
+        _SPLINK_LAST_ERROR = None
+    else:
+        _SPLINK_LAST_ERROR = str(out.get("detail", "unavailable"))
 
 
 @asynccontextmanager
@@ -104,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health(request: Request) -> HealthResponse:
         current: Settings = request.app.state.settings
         trust_engine = await _trust_engine_health(current.health_url())
+        splink_status, splink_versions = await _matching_engine_health(current)
         policies = request.app.state.policies
         user_version = policies["user"].policy_version
         product_version = policies["product"].policy_version
@@ -115,7 +132,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthResponse(
             mosaic_api="ok",
             trust_engine="ok" if trust_engine is not None else "down",
-            splink=_splink_status(current),
+            splink=splink_status,
+            splink_version=splink_versions.get("splink_version"),
+            duckdb_version=splink_versions.get("duckdb_version"),
             policy_version_user=user_version,
             policy_version_product=product_version,
         )
@@ -445,12 +464,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         splink_cfg = getattr(first_policy, "splink", None) if first_policy else None
         threshold = float(getattr(splink_cfg, "threshold", 0.9) or 0.9)
         blocking = list(getattr(splink_cfg, "blocking", None) or ["email", "phone", "order_id"])
-        splink_out = run_splink(
+        # Splink runs in its own process; await it without blocking the loop.
+        splink_out = await asyncio.to_thread(
+            run_splink,
             splink_rows,
             enabled=bool(getattr(current, "splink_enabled", True)),
             threshold=threshold,
             blocking=blocking,
+            service_url=current.matching_service_url,
+            policy_version=getattr(first_policy, "policy_version", "unknown") if first_policy else "unknown",
+            work_id=build_request.work_id,
+            known_policy_versions=sorted({policy.policy_version for policy in policies.values()}),
         )
+        _note_splink_result(splink_out)
         splink_status = splink_out["status"]
         if splink_status != "ok":
             splink_status = f"unavailable ({splink_out.get('detail', '')})"
@@ -635,6 +661,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                       "taxonomy_claims": [], "usage": proposal.usage,
                                       "mode": proposal.mode, "model": proposal.model}},
                 publish_golden=struct_ok,
+                nested_products=_nested,
+                purchased_edges=_purchased,
+                clusters=splink_out.get("clusters"),
+                fact_documents=fact_documents,
             )
             payload = response.model_dump(mode="json")
             goldens.append(payload.get("golden") or {"decision_id": cluster_decision_id,
@@ -656,6 +686,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "policy_version_user": policies["user"].policy_version,
             "taxonomy_version": taxonomy_version,
             "splink_status": splink_status,
+            "splink": {
+                "status": splink_out.get("status", "unavailable"),
+                "clusters": splink_out.get("clusters", []),
+                "pairs": splink_out.get("pairs", []),
+                "detail": splink_out.get("detail", ""),
+                "splink_version": splink_out.get("splink_version"),
+                "duckdb_version": splink_out.get("duckdb_version"),
+            },
         }
 
     @app.post("/upload")
@@ -951,7 +989,8 @@ def _shared_exact_proof(    facts: list, fact_documents: dict[str, str], left_do
 
 
 def _splink_status(settings: Settings) -> str:
-    """Splink availability for /health (CSD: ok or unavailable, never assumed)."""
+    """Legacy import-probe status (kept for reference; /health uses the
+    live service probe below and never assumes)."""
     if not settings.splink_enabled:
         return "unavailable"
     try:
@@ -960,6 +999,46 @@ def _splink_status(settings: Settings) -> str:
         return "ok"
     except ImportError:
         return "unavailable"
+
+
+async def _matching_engine_health(
+    settings: Settings,
+) -> tuple[str, dict[str, str | None]]:
+    """Probe the standalone matching-engine: (status, versions).
+
+    Never raises and never blocks the API: unreachable/slow/invalid means
+    "unavailable" with no versions. A recorded match failure (S-05) keeps
+    reporting unavailable until a later /match succeeds, even if a probe
+    succeeds in the meantime — the fallback is never hidden. The UI renders
+    this as "Matching Engine: DOWN — fallback to Muse + fuzzy".
+    """
+    if not settings.splink_enabled:
+        return "unavailable", {"splink_version": None, "duckdb_version": None}
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            response = await client.get(settings.matching_health_url())
+        if response.status_code != 200:
+            return "unavailable", {"splink_version": None, "duckdb_version": None}
+        payload = response.json()
+    except Exception:
+        return "unavailable", {"splink_version": None, "duckdb_version": None}
+    if not isinstance(payload, dict) or payload.get("splink_service") != "ok":
+        return "unavailable", {"splink_version": None, "duckdb_version": None}
+    if payload.get("splink_enabled") is False:
+        return "unavailable", {"splink_version": None, "duckdb_version": None}
+    versions = {
+        key: (payload.get(key) if isinstance(payload.get(key), str) else None)
+        for key in ("splink_version", "duckdb_version")
+    }
+    from splink_adapter import EXPECTED_DUCKDB_VERSION, EXPECTED_SPLINK_VERSION
+
+    if (versions["splink_version"], versions["duckdb_version"]) != (
+        EXPECTED_SPLINK_VERSION, EXPECTED_DUCKDB_VERSION,
+    ):
+        return "unavailable", versions
+    if _SPLINK_LAST_ERROR is not None:
+        return "unavailable", versions
+    return "ok", versions
 
 
 def _load_expected_structures() -> dict[str, dict[str, Any]]:

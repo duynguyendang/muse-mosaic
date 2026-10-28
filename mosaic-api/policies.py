@@ -9,6 +9,7 @@ is only version selection + attribute allow-listing.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from schemas import Policy
@@ -19,7 +20,19 @@ class PolicyError(RuntimeError):
 
 
 def policies_dir() -> Path:
-    """Locate the bundled trust-engine policies directory."""
+    """Locate the bundled trust-engine policies directory.
+
+    POLICY_DIR (env) wins so test/demo runs can point at a composed policy
+    tree (e.g. repo policies plus a staged new version) without touching the
+    baked-in directory. Otherwise: mosaic-api/policies, then
+    trust-engine/policies.
+    """
+    override = os.environ.get("POLICY_DIR", "").strip()
+    if override:
+        candidate = Path(override)
+        if candidate.is_dir():
+            return candidate
+        raise PolicyError(f"POLICY_DIR {override!r} is not a directory")
     here = Path(__file__).resolve().parent
     candidates = [
         here / "policies",
