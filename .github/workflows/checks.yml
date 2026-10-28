@@ -1,0 +1,22 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev tools
+        run: pip install -r mosaic-api/requirements-dev.txt
+      - name: Ruff (lint)
+        run: ruff check mosaic-api matching-engine scripts tests shared
+      - name: Black (format check)
+        run: black --check mosaic-api matching-engine scripts tests shared
+      - name: Full test suite (live trust-engine + matching-engine)
+        run: python -m pytest -q
