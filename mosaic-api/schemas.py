@@ -14,7 +14,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-
 ENTITY_TYPE_PATTERN = r"^[a-z][a-z0-9_]*$"
 ATTRIBUTE_PATTERN = r"^[a-z][a-z0-9_]*$"
 
@@ -89,7 +88,7 @@ class GoldenFact(StrictModel):
     lineage: str = Field(min_length=1)
 
     @model_validator(mode="after")
-    def winner_is_not_a_loser(self) -> "GoldenFact":
+    def winner_is_not_a_loser(self) -> GoldenFact:
         if self.winner_fact_id in self.loser_fact_ids:
             raise ValueError("winner_fact_id cannot also appear in loser_fact_ids")
         return self
@@ -184,17 +183,13 @@ class DeriveRequest(StrictModel):
     links: list[ProposedLink] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def facts_match_envelope(self) -> "DeriveRequest":
+    def facts_match_envelope(self) -> DeriveRequest:
         fact_ids: set[str] = set()
         for fact in self.candidate_facts:
             if fact.entity_type != self.entity_type:
-                raise ValueError(
-                    f"fact {fact.fact_id!r} entity_type does not match the envelope"
-                )
+                raise ValueError(f"fact {fact.fact_id!r} entity_type does not match the envelope")
             if fact.entity_id != self.entity_id:
-                raise ValueError(
-                    f"fact {fact.fact_id!r} entity_id does not match the envelope"
-                )
+                raise ValueError(f"fact {fact.fact_id!r} entity_id does not match the envelope")
             if fact.fact_id in fact_ids:
                 raise ValueError(f"duplicate fact_id {fact.fact_id!r}")
             fact_ids.add(fact.fact_id)
@@ -364,6 +359,20 @@ class FragmentsResponse(StrictModel):
     tickets: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class EntityRef(StrictModel):
+    """One definable synthetic entity (from data/mock fixtures)."""
+
+    entity_type: str = Field(pattern=ENTITY_TYPE_PATTERN)
+    entity_id: str = Field(min_length=1)
+    fragments: int = Field(ge=0)
+
+
+class EntitiesResponse(StrictModel):
+    synthetic: bool
+    notice: str = Field(min_length=1)
+    entities: list[EntityRef] = Field(default_factory=list)
+
+
 class SplinkSettings(StrictModel):
     """Per-type Splink candidate settings. Demo parameters, versioned in policy."""
 
@@ -392,31 +401,23 @@ class Policy(StrictModel):
     splink: SplinkSettings = Field(default_factory=SplinkSettings)
 
     @model_validator(mode="after")
-    def policy_is_coherent(self) -> "Policy":
+    def policy_is_coherent(self) -> Policy:
         if len(set(self.allowed_attributes)) != len(self.allowed_attributes):
             raise ValueError("allowed_attributes contains duplicates")
         allowed = set(self.allowed_attributes)
         for attribute, sources in self.authority_matrix.items():
             if attribute not in allowed:
-                raise ValueError(
-                    f"authority_matrix attribute {attribute!r} is not allowed"
-                )
+                raise ValueError(f"authority_matrix attribute {attribute!r} is not allowed")
             for source, rank in sources.items():
                 if not source:
                     raise ValueError("authority_matrix source names cannot be empty")
                 if rank < 1:
-                    raise ValueError(
-                        f"authority rank for {attribute!r}/{source!r} must be >= 1"
-                    )
+                    raise ValueError(f"authority rank for {attribute!r}/{source!r} must be >= 1")
         for attribute in self.critical_attributes:
             if attribute not in allowed:
-                raise ValueError(
-                    f"critical attribute {attribute!r} is not in allowed_attributes"
-                )
+                raise ValueError(f"critical attribute {attribute!r} is not in allowed_attributes")
         if not set(self.golden_attributes or list(allowed)) <= allowed:
-            raise ValueError(
-                "golden_attributes must be a subset of allowed_attributes"
-            )
+            raise ValueError("golden_attributes must be a subset of allowed_attributes")
         for window, seconds in self.ttls_seconds.items():
             if seconds <= 0:
                 raise ValueError(f"ttl_seconds for {window!r} must be > 0")

@@ -28,17 +28,22 @@ def test_wonder_unverified_returns_labelled_stub():
 
     from meta_tooling import wonder_adjudicate
 
-    out = asyncio.run(wonder_adjudicate(
-        settings(), attribute="phone", entity_type="user", entity_id="P-001",
-        evidence={"winner": "B"}, wonder_model_id=None,
-    ))
+    out = asyncio.run(
+        wonder_adjudicate(
+            settings(),
+            attribute="phone",
+            entity_type="user",
+            entity_id="P-001",
+            evidence={"winner": "B"},
+            wonder_model_id=None,
+        )
+    )
     assert out["status"] == "not_available"
     assert "not available" in out["note"]
     assert out["attribute"] == "phone"
 
 
 def test_wonder_never_proposes_or_publishes():
-    import asyncio
     import inspect
 
     from meta_tooling import wonder_adjudicate
@@ -73,12 +78,19 @@ def test_meta_client_never_called_in_tests(monkeypatch):
 
     monkeypatch.setattr(meta_client, "chat_json", fail)
     # The stub paths below must not touch the network at all.
-    from meta_tooling import wonder_adjudicate
     import asyncio
 
-    out = asyncio.run(wonder_adjudicate(
-        settings(), attribute="phone", entity_type="user", entity_id="P-001",
-        evidence={}, wonder_model_id=None,
-    ))
+    from meta_tooling import wonder_adjudicate
+
+    out = asyncio.run(
+        wonder_adjudicate(
+            settings(),
+            attribute="phone",
+            entity_type="user",
+            entity_id="P-001",
+            evidence={},
+            wonder_model_id=None,
+        )
+    )
     assert out["status"] == "not_available"
     assert calls == []

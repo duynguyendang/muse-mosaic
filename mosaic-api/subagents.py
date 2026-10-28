@@ -18,7 +18,6 @@ from typing import Any
 from config import Settings
 from ingest import is_injection_bearing
 from meta_client import chat_json
-from proposer import ProposerError
 from schemas import (
     CandidateFact,
     Document,
@@ -229,7 +228,7 @@ def mock_linker(
                 by_doc.setdefault(document_id, []).append(fact_id)
         for ids in by_doc.values():
             ordered = sorted(ids)
-            for first, second in zip(ordered, ordered[1:]):
+            for first, second in zip(ordered, ordered[1:], strict=False):
                 add(first, second, "same_fragment", proposer="Scout")
 
     # Exact identifier proofs (sole).
@@ -240,11 +239,11 @@ def mock_linker(
         for fact in facts:
             if fact.attribute == attribute:
                 groups.setdefault(fact.value, []).append(fact.fact_id)
-        for value, ids in groups.items():
+        for _value, ids in groups.items():
             if len(ids) < 2:
                 continue
             ordered = sorted(ids)
-            for first, second in zip(ordered, ordered[1:]):
+            for first, second in zip(ordered, ordered[1:], strict=False):
                 add(first, second, proof)
 
     # Same non-empty address: medium proof (escalates, never publishes alone).
@@ -255,7 +254,7 @@ def mock_linker(
             by_address.setdefault(fact.value, []).append(fact.fact_id)
     for value in sorted(by_address):
         ordered = sorted(by_address[value])
-        for first, second in zip(ordered, ordered[1:]):
+        for first, second in zip(ordered, ordered[1:], strict=False):
             add(first, second, "exact_address", "Muse")
 
     # Fuzzy name match across documents (medium, escalates, never publishes).
@@ -358,9 +357,6 @@ def mock_cluster(
         for index, members in enumerate(sorted(groups.values()))
     ]
     # Chains: ordered hop lists per cluster (sorted order, weakest proof last).
-    strength = {"exact_email": 0, "exact_phone": 0, "exact_order": 0,
-                "same_fragment": 1, "exact_address": 2, "fuzzy_name_address": 3,
-                "vector_only": 4}
     chains = []
     for cluster in clusters:
         members = set(cluster["member_fact_ids"])
@@ -407,7 +403,6 @@ def mock_taxonomist(
         return mappings, new_terms, step
     from taxonomies import canonical_term
 
-    categorical = {term.term for term in taxonomy.terms}
     for fact in facts:
         if fact.attribute != "category":
             continue
@@ -452,7 +447,7 @@ def mock_critic(
                 phones_first = {f.value for f in by_attribute.get("phone", [])}
                 phones_second = set(phones_first)
                 if phones_first and any(
-                    len(a) == len(b) and sum(1 for x, y in zip(a, b) if x != y) == 1
+                    len(a) == len(b) and sum(1 for x, y in zip(a, b, strict=True) if x != y) == 1
                     for a in phones_first for b in phones_second
                 ):
                     critiques.append({

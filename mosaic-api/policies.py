@@ -54,9 +54,7 @@ def load_policies(policy_dir: Path | None = None) -> dict[str, Policy]:
             raise PolicyError(f"no policy directory for {entity_type}")
         versions: list[Policy] = []
         for path in sorted(entity_dir.glob("*.json")):
-            versions.append(
-                Policy.model_validate_json(path.read_text(encoding="utf-8"))
-            )
+            versions.append(Policy.model_validate_json(path.read_text(encoding="utf-8")))
         if not versions:
             raise PolicyError(f"no policy JSON for {entity_type}")
         versions.sort(key=lambda policy: policy.policy_version)

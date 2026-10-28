@@ -104,7 +104,7 @@ def wonder_status() -> dict[str, Any]:
         "tool": "Muse Wonder",
         "status": "stubbed",
         "detail": "Wonder adjudication is conditional on a verified model id; "
-                  "not verified in this run, never simulated as real.",
+        "not verified in this run, never simulated as real.",
     }
 
 

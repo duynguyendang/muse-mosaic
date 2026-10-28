@@ -64,59 +64,93 @@ def plan_graph(
     for fact in facts:
         fragment_node = node_id("fragment", entity_type, entity_id, fact.source_id)
         value_node = node_id("value", entity_type, entity_id, fact.fact_id)
-        nodes.append(GraphNode(
-            node_id=fragment_node, node_type="Fragment",
-            entity_type=entity_type, entity_id=entity_id,
-            source=fact.source, created_at=created_at, decision_id=decision_id,
-        ))
-        nodes.append(GraphNode(
-            node_id=value_node, node_type="Fragment",
-            entity_type=entity_type, entity_id=entity_id,
-            source=fact.source, created_at=created_at, decision_id=decision_id,
-        ))
-        edges.append(GraphEdge(
-            edge_id=edge_id("has_attribute", fragment_node, value_node, fact.attribute),
-            edge_type="has_attribute",
-            from_node_id=fragment_node, to_node_id=value_node,
-            proof=fact.attribute, proposer=fact.source,
-            rule_fired=None, policy_version=policy_version,
-            taxonomy_version=taxonomy_version, decision_id=decision_id,
-        ))
+        nodes.append(
+            GraphNode(
+                node_id=fragment_node,
+                node_type="Fragment",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                source=fact.source,
+                created_at=created_at,
+                decision_id=decision_id,
+            )
+        )
+        nodes.append(
+            GraphNode(
+                node_id=value_node,
+                node_type="Fragment",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                source=fact.source,
+                created_at=created_at,
+                decision_id=decision_id,
+            )
+        )
+        edges.append(
+            GraphEdge(
+                edge_id=edge_id("has_attribute", fragment_node, value_node, fact.attribute),
+                edge_type="has_attribute",
+                from_node_id=fragment_node,
+                to_node_id=value_node,
+                proof=fact.attribute,
+                proposer=fact.source,
+                rule_fired=None,
+                policy_version=policy_version,
+                taxonomy_version=taxonomy_version,
+                decision_id=decision_id,
+            )
+        )
 
-    fact_nodes = {fact.fact_id: node_id("value", entity_type, entity_id, fact.fact_id)
-                  for fact in facts}
+    fact_nodes = {
+        fact.fact_id: node_id("value", entity_type, entity_id, fact.fact_id) for fact in facts
+    }
     for link in proposed_links:
         if link.from_fact_id not in fact_nodes or link.to_fact_id not in fact_nodes:
             continue
-        edges.append(GraphEdge(
-            edge_id=edge_id("proposed_link", link.from_fact_id, link.to_fact_id, link.proof),
-            edge_type="proposed_link",
-            from_node_id=fact_nodes[link.from_fact_id],
-            to_node_id=fact_nodes[link.to_fact_id],
-            proof=link.proof, proposer=link.proposer,
-            rule_fired=None, policy_version=policy_version,
-            taxonomy_version=taxonomy_version, decision_id=decision_id,
-        ))
+        edges.append(
+            GraphEdge(
+                edge_id=edge_id("proposed_link", link.from_fact_id, link.to_fact_id, link.proof),
+                edge_type="proposed_link",
+                from_node_id=fact_nodes[link.from_fact_id],
+                to_node_id=fact_nodes[link.to_fact_id],
+                proof=link.proof,
+                proposer=link.proposer,
+                rule_fired=None,
+                policy_version=policy_version,
+                taxonomy_version=taxonomy_version,
+                decision_id=decision_id,
+            )
+        )
     for link in verified_links:
         if link.from_fact_id not in fact_nodes or link.to_fact_id not in fact_nodes:
             continue
-        edges.append(GraphEdge(
-            edge_id=edge_id("verified_link", link.from_fact_id, link.to_fact_id, link.proof),
-            edge_type="verified_link",
-            from_node_id=fact_nodes[link.from_fact_id],
-            to_node_id=fact_nodes[link.to_fact_id],
-            proof=link.proof, proposer="manglekit",
-            rule_fired=link.rule_fired, policy_version=link.policy_version,
-            taxonomy_version=link.taxonomy_version or taxonomy_version,
-            decision_id=decision_id,
-        ))
+        edges.append(
+            GraphEdge(
+                edge_id=edge_id("verified_link", link.from_fact_id, link.to_fact_id, link.proof),
+                edge_type="verified_link",
+                from_node_id=fact_nodes[link.from_fact_id],
+                to_node_id=fact_nodes[link.to_fact_id],
+                proof=link.proof,
+                proposer="manglekit",
+                rule_fired=link.rule_fired,
+                policy_version=link.policy_version,
+                taxonomy_version=link.taxonomy_version or taxonomy_version,
+                decision_id=decision_id,
+            )
+        )
 
     entity_node = node_id("entity", entity_type, entity_id)
-    nodes.append(GraphNode(
-        node_id=entity_node, node_type="Entity",
-        entity_type=entity_type, entity_id=entity_id,
-        source=None, created_at=created_at, decision_id=decision_id,
-    ))
+    nodes.append(
+        GraphNode(
+            node_id=entity_node,
+            node_type="Entity",
+            entity_type=entity_type,
+            entity_id=entity_id,
+            source=None,
+            created_at=created_at,
+            decision_id=decision_id,
+        )
+    )
 
     # Splink cluster proposal: one Entity node per cluster (proposer Splink),
     # with cluster_member edges to each member fact's value node. Graph-only:
@@ -129,33 +163,51 @@ def plan_graph(
         if not cluster_id or not members or not fact_documents:
             continue
         cluster_node = node_id("entity", entity_type, cluster_id)
-        nodes.append(GraphNode(
-            node_id=cluster_node, node_type="Entity",
-            entity_type=entity_type, entity_id=entity_id,
-            source="Splink", created_at=created_at, decision_id=decision_id,
-        ))
+        nodes.append(
+            GraphNode(
+                node_id=cluster_node,
+                node_type="Entity",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                source="Splink",
+                created_at=created_at,
+                decision_id=decision_id,
+            )
+        )
         for fact in facts:
             if fact_documents.get(fact.fact_id) not in members:
                 continue
             value_node = fact_nodes.get(fact.fact_id)
             if not value_node:
                 continue
-            edges.append(GraphEdge(
-                edge_id=edge_id("cluster_member", cluster_node, value_node),
-                edge_type="cluster_member",
-                from_node_id=cluster_node, to_node_id=value_node,
-                proof="cluster_membership", proposer="Splink",
-                rule_fired=None, policy_version=policy_version,
-                taxonomy_version=taxonomy_version, decision_id=decision_id,
-            ))
+            edges.append(
+                GraphEdge(
+                    edge_id=edge_id("cluster_member", cluster_node, value_node),
+                    edge_type="cluster_member",
+                    from_node_id=cluster_node,
+                    to_node_id=value_node,
+                    proof="cluster_membership",
+                    proposer="Splink",
+                    rule_fired=None,
+                    policy_version=policy_version,
+                    taxonomy_version=taxonomy_version,
+                    decision_id=decision_id,
+                )
+            )
 
     if golden_version is not None:
         golden_node = node_id("golden", entity_type, entity_id, str(golden_version))
-        nodes.append(GraphNode(
-            node_id=golden_node, node_type="Golden",
-            entity_type=entity_type, entity_id=entity_id,
-            source=None, created_at=created_at, decision_id=decision_id,
-        ))
+        nodes.append(
+            GraphNode(
+                node_id=golden_node,
+                node_type="Golden",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                source=None,
+                created_at=created_at,
+                decision_id=decision_id,
+            )
+        )
 
     return nodes, edges
 
@@ -198,8 +250,15 @@ def _insert_rows(connection, nodes, edges, decision_id) -> None:
                    created_at, decision_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (node.node_id, node.node_type, node.entity_type,
-                 node.entity_id, node.source, node.created_at, node.decision_id),
+                (
+                    node.node_id,
+                    node.node_type,
+                    node.entity_type,
+                    node.entity_id,
+                    node.source,
+                    node.created_at,
+                    node.decision_id,
+                ),
             )
         else:
             connection.execute(
@@ -209,8 +268,15 @@ def _insert_rows(connection, nodes, edges, decision_id) -> None:
                    created_at, decision_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (node.node_id, node.node_type, node.entity_type,
-                 node.entity_id, node.source, node.created_at, node.decision_id),
+                (
+                    node.node_id,
+                    node.node_type,
+                    node.entity_type,
+                    node.entity_id,
+                    node.source,
+                    node.created_at,
+                    node.decision_id,
+                ),
             )
     # Derived edges are wiped and re-derived per decision; source
     # has_attribute rows persist (proposer provenance is history).
@@ -221,27 +287,34 @@ def _insert_rows(connection, nodes, edges, decision_id) -> None:
     for edge in edges:
         if edge.edge_type == "has_attribute":
             connection.execute(
-                "INSERT OR IGNORE INTO graph_edges VALUES "
-                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO graph_edges VALUES " "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 _edge_row(edge),
             )
         else:
             connection.execute(
-                "INSERT OR REPLACE INTO graph_edges VALUES "
-                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO graph_edges VALUES " "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 _edge_row(edge),
             )
 
 
 def _edge_row(edge: GraphEdge) -> tuple:
     return (
-        edge.edge_id, edge.edge_type, edge.from_node_id, edge.to_node_id,
-        edge.proof, edge.proposer, edge.rule_fired, edge.policy_version,
-        edge.taxonomy_version, edge.decision_id,
+        edge.edge_id,
+        edge.edge_type,
+        edge.from_node_id,
+        edge.to_node_id,
+        edge.proof,
+        edge.proposer,
+        edge.rule_fired,
+        edge.policy_version,
+        edge.taxonomy_version,
+        edge.decision_id,
     )
 
 
-def fetch_graph(database_path: str, entity_type: str, entity_id: str) -> tuple[list[dict], list[dict]]:
+def fetch_graph(
+    database_path: str, entity_type: str, entity_id: str
+) -> tuple[list[dict], list[dict]]:
     """Read graph rows for one entity (canvas + Explain render this)."""
     connection = ledger.connect(database_path)
     try:
@@ -261,8 +334,10 @@ def fetch_graph(database_path: str, entity_type: str, entity_id: str) -> tuple[l
 
 
 def pathfinder(
-    nodes: list[dict[str, Any]], edges: list[dict[str, Any]],
-    from_fact_value: str, to_fact_value: str,
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    from_fact_value: str,
+    to_fact_value: str,
 ) -> list[str]:
     """Shortest proof chain between two fact nodes (Dijkstra by proof weight).
 
@@ -276,9 +351,11 @@ def pathfinder(
             continue
         weight = EDGE_WEIGHT.get(edge.get("proof") or "", 9)
         adjacency.setdefault(edge["from_node_id"], []).append(
-            (edge["to_node_id"], weight, edge["edge_id"]))
+            (edge["to_node_id"], weight, edge["edge_id"])
+        )
         adjacency.setdefault(edge["to_node_id"], []).append(
-            (edge["from_node_id"], weight, edge["edge_id"]))
+            (edge["from_node_id"], weight, edge["edge_id"])
+        )
     import heapq
 
     frontier: list[tuple[int, str, list[str]]] = [(0, from_fact_value, [from_fact_value])]
@@ -393,7 +470,7 @@ def derive_purchased_edges(
     """
     order_docs: dict[str, list[str]] = {}
     for document in documents:
-        order_id = (document.get("fields", {}).get("order_id") or {})
+        order_id = document.get("fields", {}).get("order_id") or {}
         order_value = order_id.get("value") if isinstance(order_id, dict) else order_id
         if order_value:
             order_docs.setdefault(str(order_value), []).append(document["document_id"])
@@ -407,7 +484,9 @@ def derive_purchased_edges(
         order_value = order_field.get("value") if isinstance(order_field, dict) else order_field
         if not product_id or not order_value:
             continue
-        shared = [doc for doc in order_docs.get(str(order_value), []) if doc != document["document_id"]]
+        shared = [
+            doc for doc in order_docs.get(str(order_value), []) if doc != document["document_id"]
+        ]
         # Anchor on real graph nodes (same id scheme as plan_graph: the order
         # fact's value node -> the product golden node). A dangling endpoint
         # would be silently dropped from every /graph read.
@@ -417,35 +496,45 @@ def derive_purchased_edges(
         golden = product_goldens.get(str(product_id))
         if shared and golden is not None:
             to_node = node_id("golden", "product", str(product_id), str(golden.get("version", 1)))
-            edges.append(GraphEdge(
-                edge_id=edge_id("purchased", from_node, to_node, "exact_order"),
-                edge_type="purchased",
-                from_node_id=from_node,
-                to_node_id=to_node,
-                proof="exact_order",
-                proposer="graph-analyser",
-                rule_fired="L1",
-                policy_version=policy_version,
-                taxonomy_version=taxonomy_version,
-                decision_id=decision_id,
-            ))
+            edges.append(
+                GraphEdge(
+                    edge_id=edge_id("purchased", from_node, to_node, "exact_order"),
+                    edge_type="purchased",
+                    from_node_id=from_node,
+                    to_node_id=to_node,
+                    proof="exact_order",
+                    proposer="graph-analyser",
+                    rule_fired="L1",
+                    policy_version=policy_version,
+                    taxonomy_version=taxonomy_version,
+                    decision_id=decision_id,
+                )
+            )
         else:
             to_node = node_id("entity", "product", str(product_id))
-            edges.append(GraphEdge(
-                edge_id=edge_id("proposed_link", from_node, to_node, "order_only"),
-                edge_type="proposed_link",
-                from_node_id=from_node,
-                to_node_id=to_node,
-                proof="order_only",
-                proposer="graph-analyser",
-                rule_fired=None,
-                policy_version=policy_version,
-                taxonomy_version=taxonomy_version,
-                decision_id=decision_id,
-            ))
-            nodes.append(GraphNode(
-                node_id=to_node, node_type="Entity",
-                entity_type="product", entity_id=str(product_id),
-                source=None, created_at=created_at, decision_id=decision_id,
-            ))
+            edges.append(
+                GraphEdge(
+                    edge_id=edge_id("proposed_link", from_node, to_node, "order_only"),
+                    edge_type="proposed_link",
+                    from_node_id=from_node,
+                    to_node_id=to_node,
+                    proof="order_only",
+                    proposer="graph-analyser",
+                    rule_fired=None,
+                    policy_version=policy_version,
+                    taxonomy_version=taxonomy_version,
+                    decision_id=decision_id,
+                )
+            )
+            nodes.append(
+                GraphNode(
+                    node_id=to_node,
+                    node_type="Entity",
+                    entity_type="product",
+                    entity_id=str(product_id),
+                    source=None,
+                    created_at=created_at,
+                    decision_id=decision_id,
+                )
+            )
     return edges, nodes

@@ -61,9 +61,7 @@ def _fixture_files(mock_data_dir: Path) -> dict[str, Path]:
     }
 
 
-def load_mock_fragments(
-    mock_data_dir: Path, entity_type: str, entity_id: str
-) -> list[Fragment]:
+def load_mock_fragments(mock_data_dir: Path, entity_type: str, entity_id: str) -> list[Fragment]:
     """Load synthetic fragments for one entity from data/mock/*.json."""
     path = _fixture_files(Path(mock_data_dir)).get(entity_type)
     if path is None or not path.exists():
@@ -75,9 +73,7 @@ def load_mock_fragments(
     raise FileNotFoundError(f"no synthetic fixture for {entity_type}/{entity_id}")
 
 
-def load_mock_tickets(
-    mock_data_dir: Path, entity_type: str, entity_id: str
-) -> list[dict]:
+def load_mock_tickets(mock_data_dir: Path, entity_type: str, entity_id: str) -> list[dict]:
     """Load synthetic ticket fixtures scoped to one entity."""
     path = Path(mock_data_dir) / "tickets.json"
     if not path.exists():
@@ -86,15 +82,43 @@ def load_mock_tickets(
     return [
         ticket
         for ticket in data.get("tickets", [])
-        if ticket.get("entity_type") == entity_type
-        and ticket.get("entity_id") == entity_id
+        if ticket.get("entity_type") == entity_type and ticket.get("entity_id") == entity_id
     ]
+
+
+def list_mock_entities(mock_data_dir: Path) -> list[dict]:
+    """List definable synthetic entities from data/mock fixtures.
+
+    One entry per entity in users.json / products.json: the entity dropdown
+    is populated from here, so defining a new entity is adding it to a
+    fixture file — no UI or code change needed.
+    """
+    found: list[dict] = []
+    for entity_type, filename in (("user", "users.json"), ("product", "products.json")):
+        path = Path(mock_data_dir) / filename
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        for entity in data.get("entities", []):
+            entity_id = entity.get("entity_id")
+            if not entity_id:
+                continue
+            found.append(
+                {
+                    "entity_type": entity.get("entity_type", entity_type),
+                    "entity_id": entity_id,
+                    "fragments": len(entity.get("fragments", [])),
+                }
+            )
+    return found
 
 
 def document_hash(document: dict) -> str:
     """Content hash for upload dedup (CSD 3.2: Document, hash, dedup)."""
-    canonical = json.dumps(document, sort_keys=True, ensure_ascii=False,
-                           separators=(",", ":"))
+    canonical = json.dumps(document, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -105,8 +129,7 @@ def load_hidden_documents(mock_data_dir: Path) -> list[Document]:
     for path in sorted(hidden.glob("*.json")):
         raw = json.loads(path.read_text(encoding="utf-8"))
         fields = {
-            name: DocumentField.model_validate(item)
-            for name, item in raw.get("fields", {}).items()
+            name: DocumentField.model_validate(item) for name, item in raw.get("fields", {}).items()
         }
         documents.append(
             Document(
@@ -116,8 +139,7 @@ def load_hidden_documents(mock_data_dir: Path) -> list[Document]:
                 synthetic=bool(raw.get("synthetic", True)),
                 trap=bool(raw.get("trap", False)),
                 fields=fields,
-                product_ref=(fields["product_ref"].value
-                             if "product_ref" in fields else None),
+                product_ref=(fields["product_ref"].value if "product_ref" in fields else None),
                 content_hash=document_hash(raw),
             )
         )
@@ -145,27 +167,33 @@ def document_to_fragments(
         if taxonomy is not None:
             attribute, aliased = canonical_attribute(taxonomy, raw_name)
         if aliased:
-            claims.append({
-                "kind": "alias_exact",
-                "raw": raw_name,
-                "canonical": attribute,
-            })
+            claims.append(
+                {
+                    "kind": "alias_exact",
+                    "raw": raw_name,
+                    "canonical": attribute,
+                }
+            )
         if allowed_attributes is not None and attribute not in allowed_attributes:
-            claims.append({
-                "kind": "graph_only",
-                "raw": raw_name,
-                "reason": f"{attribute!r} is not a derive attribute; graph evidence only",
-            })
+            claims.append(
+                {
+                    "kind": "graph_only",
+                    "raw": raw_name,
+                    "reason": f"{attribute!r} is not a derive attribute; graph evidence only",
+                }
+            )
             continue
         value, mapping = field.value, "unmapped"
         if taxonomy is not None:
             value, mapping = canonical_term(taxonomy, attribute, field.value)
             if mapping != "unmapped":
-                claims.append({
-                    "kind": mapping,
-                    "raw": field.value,
-                    "canonical": value,
-                })
+                claims.append(
+                    {
+                        "kind": mapping,
+                        "raw": field.value,
+                        "canonical": value,
+                    }
+                )
         try:
             fragments.append(
                 Fragment(
@@ -180,11 +208,13 @@ def document_to_fragments(
                 )
             )
         except ValueError as exc:
-            claims.append({
-                "kind": "rejected",
-                "raw": raw_name,
-                "reason": str(exc),
-            })
+            claims.append(
+                {
+                    "kind": "rejected",
+                    "raw": raw_name,
+                    "reason": str(exc),
+                }
+            )
     return fragments, claims
 
 
@@ -203,8 +233,17 @@ def detect_entity_type(raw: dict) -> tuple[str, str]:
                     keys.add(str(item["attribute"]))
         else:
             keys = {str(key).lower() for key in raw.keys()}
-    user_keys = {"phone", "email", "address", "display_name", "customer_phone",
-                 "customer_email", "mobile", "dien_thoai", "sdt"}
+    user_keys = {
+        "phone",
+        "email",
+        "address",
+        "display_name",
+        "customer_phone",
+        "customer_email",
+        "mobile",
+        "dien_thoai",
+        "sdt",
+    }
     product_keys = {"category", "product_category", "cat"}
     order_keys = {"order_id", "order", "product_ref"}
     if keys & product_keys and not keys & user_keys:
@@ -241,7 +280,9 @@ def parse_upload(filename: str, raw_text: str) -> tuple[list[dict], list[dict]]:
     elif isinstance(data, dict):
         items = [data]
     else:
-        raise ValueError(f"Upload {filename!r} must be one object, an array of objects, or {{fragments: [...]}}.")
+        raise ValueError(
+            f"Upload {filename!r} must be one object, an array of objects, or {{fragments: [...]}}."
+        )
     fragments: list[dict] = []
     rejected: list[dict] = []
     for index, item in enumerate(items):
@@ -251,7 +292,13 @@ def parse_upload(filename: str, raw_text: str) -> tuple[list[dict], list[dict]]:
         try:
             fragments.append(Fragment.model_validate(item).model_dump(mode="json"))
         except ValueError as exc:
-            rejected.append({"index": index, "reason": str(exc), "item": {k: str(v)[:120] for k, v in item.items()}})
+            rejected.append(
+                {
+                    "index": index,
+                    "reason": str(exc),
+                    "item": {k: str(v)[:120] for k, v in item.items()},
+                }
+            )
     return fragments, rejected
 
 

@@ -32,12 +32,19 @@ def _match(matching_engine, **overrides):
 
     payload = {
         "fragments": [
-            {"fragment_id": "F1", "entity_type": "user",
-             "email": "an.van@example.com", "phone": "0901234567"},
-            {"fragment_id": "F2", "entity_type": "user",
-             "email": "an.van@example.com", "phone": "0901234567"},
-            {"fragment_id": "F9", "entity_type": "user",
-             "email": "other@example.com"},
+            {
+                "fragment_id": "F1",
+                "entity_type": "user",
+                "email": "an.van@example.com",
+                "phone": "0901234567",
+            },
+            {
+                "fragment_id": "F2",
+                "entity_type": "user",
+                "email": "an.van@example.com",
+                "phone": "0901234567",
+            },
+            {"fragment_id": "F9", "entity_type": "user", "email": "other@example.com"},
         ],
         "policy_version": "pol-2026-10-27-v1",
         "blocking": ["email", "phone", "order_id"],

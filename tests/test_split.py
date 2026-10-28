@@ -7,7 +7,6 @@ must be resolved as split, and the superseded winner must be tombstoned.
 
 from __future__ import annotations
 
-
 BASE = [
     {
         "source": "sap-like",
@@ -76,28 +75,20 @@ def test_split_restores_prior_identity_from_history(api_client):
     assert escalate.json()["verdict"] == "escalated"
     steward_id = escalate.json()["steward_queue"][0]["steward_id"]
 
-    approved = api_client.post(
-        f"/steward/{steward_id}/approve", json={"value": "+84 900 000 999"}
-    )
+    approved = api_client.post(f"/steward/{steward_id}/approve", json={"value": "+84 900 000 999"})
     assert approved.status_code == 200, approved.text
     approved_json = approved.json()
-    assert approved_json["golden"]["attributes"]["phone"]["value"] == (
-        "+84900000999"
-    )
+    assert approved_json["golden"]["attributes"]["phone"]["value"] == ("+84900000999")
     assert approved_json["golden"]["version"] == 3
 
-    split = api_client.post(
-        f"/steward/{steward_id}/split", json={"restore_version": 1}
-    )
+    split = api_client.post(f"/steward/{steward_id}/split", json={"restore_version": 1})
     assert split.status_code == 200, split.text
     assert split.json()["restored_version"] == 1
 
     golden = api_client.get("/golden/user/P-001").json()
     assert golden["version"] == 4
     assert golden["attributes"]["phone"]["value"] == "+84900000001"
-    assert golden["attributes"]["phone"]["lineage"].startswith(
-        "split restore v1"
-    )
+    assert golden["attributes"]["phone"]["lineage"].startswith("split restore v1")
 
     pending = api_client.get("/steward/pending").json()["pending"]
     assert all(item["steward_id"] != steward_id for item in pending)

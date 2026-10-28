@@ -36,8 +36,8 @@ Every test runs through the real derive path (`mkit eval`), never a mock.
 
 **2. Real dirty data — Kaggle Customer 360, frozen 200-row sample**
 (generated locally via `scripts/`, git-ignored test data — pull with
-`kagglehub`, never committed; full write-up in
-`docs/internal/Kaggle-test-dataset.md`): 2,554 documents built from 200 CRM
+`kagglehub`, never committed; full write-up in the local-only
+`docs/internal/Kaggle-test-dataset.md`, not published): 2,554 documents built from 200 CRM
 rows + 818 kept orders + 389 products, with a staged authority matrix
 (`crm/1, orders/1, catalog/1`) as a new policy version — the repo's SAP/CIAM
 ranks were *not* reused blindly. Measured, not claimed:
@@ -52,8 +52,10 @@ Findings include real engine
 limits hit on the way in (event-time spread vs the mangle number bound) and
 three real bugs this run caught and fixed, all with regression tests.
 
-Working implementation of the [Conceptual Solution Design](docs/internal/muse-mosaic-csd-en.2.5.md) v2.5 (2026-10-28) — the single source for this build.
-The v2.3/v1.1 CSDs (`docs/internal/`) are superseded and kept for history only.
+Working implementation of the Conceptual Solution Design v2.5 (2026-10-28).
+The CSD lives in `docs/internal/` (local-only working documents, not published);
+the committed design record is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The v2.3/v1.1 CSDs are superseded and kept for history only.
 
 ---
 

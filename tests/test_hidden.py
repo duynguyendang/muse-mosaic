@@ -18,7 +18,6 @@ H-03: trap F6 merged in (simulated over-merge) -> exact rank-1 verified
 from __future__ import annotations
 
 import httpx
-import pytest
 
 USER_POLICY = "pol-2026-10-27-v1"
 USER_TAXONOMY = "tax-user-2026-10-27-v1"
@@ -63,19 +62,21 @@ def to_candidate_facts(fact_dicts):
 
     out = []
     for item in fact_dicts:
-        out.append(CandidateFact(
-            fact_id=item["fact_id"],
-            entity_type=item["entity_type"],
-            entity_id=item["entity_id"],
-            attribute=item["attribute"],
-            value=item["value"],
-            source=item["source"],
-            source_id=item["source_id"],
-            authority_rank=item["authority_rank"],
-            event_time=datetime.fromisoformat(item["event_time"]),
-            verified=item["verified"],
-            ttl_seconds=item["ttl_seconds"],
-        ))
+        out.append(
+            CandidateFact(
+                fact_id=item["fact_id"],
+                entity_type=item["entity_type"],
+                entity_id=item["entity_id"],
+                attribute=item["attribute"],
+                value=item["value"],
+                source=item["source"],
+                source_id=item["source_id"],
+                authority_rank=item["authority_rank"],
+                event_time=datetime.fromisoformat(item["event_time"]),
+                verified=item["verified"],
+                ttl_seconds=item["ttl_seconds"],
+            )
+        )
     return out
 
 
@@ -87,13 +88,15 @@ def linker_links(fact_dicts):
     facts = to_candidate_facts(fact_dicts)
     # Document id = fact id minus the trailing attribute segment
     # ("P-HIDDEN-F1-display_name" -> "P-HIDDEN-F1").
-    doc_of = {
-        fact.fact_id: "-".join(fact.fact_id.split("-")[:-1]) for fact in facts
-    }
+    doc_of = {fact.fact_id: "-".join(fact.fact_id.split("-")[:-1]) for fact in facts}
     links, _trace = mock_linker(facts, doc_of)
     return [
-        {"from_fact_id": link.from_fact_id, "to_fact_id": link.to_fact_id,
-         "proof": link.proof, "proposer": link.proposer}
+        {
+            "from_fact_id": link.from_fact_id,
+            "to_fact_id": link.to_fact_id,
+            "proof": link.proof,
+            "proposer": link.proposer,
+        }
         for link in links
     ]
 
@@ -185,10 +188,15 @@ def test_H01_chain_publishes_with_verified_hops(te_url):
 def test_H02_broken_hop_escalates_explicitly(te_url):
     links = linker_links(base_facts())
     # Remove the F2-F3 phone-exact hop: F3/F4 cut off from the anchor.
-    links = [link for link in links
-             if not (link["from_fact_id"] == f"{ENTITY}-F2-phone"
-                     and link["to_fact_id"] == f"{ENTITY}-F3-phone"
-                     and link["proof"] == "exact_phone")]
+    links = [
+        link
+        for link in links
+        if not (
+            link["from_fact_id"] == f"{ENTITY}-F2-phone"
+            and link["to_fact_id"] == f"{ENTITY}-F3-phone"
+            and link["proof"] == "exact_phone"
+        )
+    ]
     assert len(links) < len(linker_links(base_facts()))
     status, out = derive(te_url, base_facts(), links, key="h02")
     assert status == 200, out

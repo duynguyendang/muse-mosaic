@@ -8,7 +8,6 @@ escalate, never publish and never retry blindly in a loop.
 from __future__ import annotations
 
 import httpx
-
 from config import Settings
 from schemas import DeriveRequest, DeriveResponse
 
@@ -30,13 +29,9 @@ async def derive(
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(settings.trust_engine_url, json=payload)
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        raise TrustEngineError(
-            "unreachable", f"trust-engine unreachable: {exc}"
-        ) from exc
+        raise TrustEngineError("unreachable", f"trust-engine unreachable: {exc}") from exc
     except httpx.HTTPError as exc:
-        raise TrustEngineError(
-            "transport", f"trust-engine transport error: {exc}"
-        ) from exc
+        raise TrustEngineError("transport", f"trust-engine transport error: {exc}") from exc
 
     if response.status_code != 200:
         raise TrustEngineError(

@@ -8,16 +8,30 @@ is missing, startup fails rather than guessing.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Mapping
 from urllib.parse import urlsplit, urlunsplit
-
 
 API_DIR = Path(__file__).resolve().parent
 REPO_ROOT = API_DIR.parent
-STATIC_DIR = REPO_ROOT / "web"
+
+
+def _default_static_dir() -> Path:
+    """Locate the static UI in either layout.
+
+    Repository checkout: <repo>/web (API_DIR.parent).
+    Docker image: mosaic-api/ is flattened into /app, so the UI lives at
+    API_DIR/web. Prefer the checkout layout when it exists.
+    """
+    checkout = REPO_ROOT / "web"
+    if checkout.is_dir():
+        return checkout
+    return API_DIR / "web"
+
+
+STATIC_DIR = _default_static_dir()
 
 
 def _default_mock_data_dir() -> Path:
@@ -86,7 +100,7 @@ class Settings:
     static_dir: Path = STATIC_DIR
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
+    def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
         source = os.environ if env is None else env
 
         def get(name: str) -> str:
@@ -96,8 +110,7 @@ class Settings:
         parts = urlsplit(trust_engine_url)
         if parts.scheme not in {"http", "https"} or not parts.netloc:
             raise ConfigurationError(
-                "TRUST_ENGINE_URL must be an absolute http(s) URL, "
-                f"got {trust_engine_url!r}"
+                "TRUST_ENGINE_URL must be an absolute http(s) URL, " f"got {trust_engine_url!r}"
             )
 
         muse_base_url = get("META_MODEL_API_BASE_URL") or "https://api.meta.ai/v1"
@@ -121,9 +134,7 @@ class Settings:
     @property
     def embedding_configured(self) -> bool:
         return bool(
-            self.embedding_model
-            and self.embedding_version
-            and self.embedding_dim is not None
+            self.embedding_model and self.embedding_version and self.embedding_dim is not None
         )
 
     def health_url(self) -> str:
@@ -200,9 +211,7 @@ class Settings:
             if not value
         ]
         if missing:
-            raise ConfigurationError(
-                "Real Muse mode requires " + ", ".join(missing)
-            )
+            raise ConfigurationError("Real Muse mode requires " + ", ".join(missing))
 
 
 @lru_cache(maxsize=1)

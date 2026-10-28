@@ -54,9 +54,7 @@ def load_taxonomies(taxonomy_dir: str | Path | None = None) -> dict[str, Taxonom
     for path in sorted(base.glob("*.json")):
         taxonomy = Taxonomy.model_validate_json(path.read_text(encoding="utf-8"))
         if taxonomy.taxonomy_version in loaded:
-            raise TaxonomyError(
-                f"duplicate taxonomy version {taxonomy.taxonomy_version}"
-            )
+            raise TaxonomyError(f"duplicate taxonomy version {taxonomy.taxonomy_version}")
         loaded[taxonomy.taxonomy_version] = taxonomy
     if not loaded:
         raise TaxonomyError(f"no taxonomy JSON under {base}")
@@ -66,9 +64,7 @@ def load_taxonomies(taxonomy_dir: str | Path | None = None) -> dict[str, Taxonom
 def default_version(taxonomies: dict[str, Taxonomy], entity_type: str) -> str:
     """Latest taxonomy version for an entity type (demo default input)."""
     versions = sorted(
-        version
-        for version, taxonomy in taxonomies.items()
-        if taxonomy.entity_type == entity_type
+        version for version, taxonomy in taxonomies.items() if taxonomy.entity_type == entity_type
     )
     if not versions:
         raise TaxonomyError(f"no taxonomy for entity_type {entity_type!r}")
@@ -78,17 +74,13 @@ def default_version(taxonomies: dict[str, Taxonomy], entity_type: str) -> str:
 def normalize_text(value: str) -> str:
     """Lowercase, strip accents and spaces for exact synonym matching."""
     folded = unicodedata.normalize("NFKD", value.casefold())
-    stripped = "".join(
-        character for character in folded if not unicodedata.combining(character)
-    )
+    stripped = "".join(character for character in folded if not unicodedata.combining(character))
     # Đ/đ (U+0110/U+0111) have no NFKD decomposition; map them explicitly.
     stripped = stripped.replace("đ", "d")
     return "".join(stripped.split())
 
 
-def canonical_attribute(
-    taxonomy: Taxonomy, raw_attribute: str
-) -> tuple[str, bool]:
+def canonical_attribute(taxonomy: Taxonomy, raw_attribute: str) -> tuple[str, bool]:
     """Map a raw field name to its canonical attribute via aliases.
 
     Returns (canonical, mapped). Unmapped names return unchanged with False.
@@ -100,9 +92,7 @@ def canonical_attribute(
     return raw_attribute, False
 
 
-def canonical_term(
-    taxonomy: Taxonomy, attribute: str, value: str
-) -> tuple[str, str]:
+def canonical_term(taxonomy: Taxonomy, attribute: str, value: str) -> tuple[str, str]:
     """Map a raw categorical value to its canonical term via exact synonyms.
 
     Returns (canonical_value, mapping_kind) where mapping_kind is one of

@@ -195,6 +195,63 @@
         margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
         color: var(--muted); font-size: 11.5px; line-height: 1.6;
       }
+      /* ---- Colorful theme (original dashboard-v2-light language) ---- */
+      header { position: sticky; }
+      header::after {
+        content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+        background: linear-gradient(90deg, #2563EB, #7C3AED, #DB2777, #EA580C, #0F766E, #15803D);
+      }
+      .brand h1 {
+        background: linear-gradient(90deg, #1D4ED8, #7C3AED 55%, #DB2777);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      #policy-badge { background: #FFFBEB; border-color: #F59E0B; color: #92400E; }
+      #taxonomy-badge { background: #EFF6FF; border-color: #93C5FD; color: #1E40AF; }
+      /* per-section accent bars */
+      .panel.accent-blue { border-top: 3px solid #2563EB; }
+      .panel.accent-green { border-top: 3px solid #0F766E; }
+      .panel.accent-emerald { border-top: 3px solid #15803D; }
+      .panel.accent-amber { border-top: 3px solid #D97706; }
+      .panel.accent-plum { border-top: 3px solid #7C3AED; }
+      .panel.accent-indigo { border-top: 3px solid #4F46E5; }
+      .panel.accent-rose { border-top: 3px solid #DB2777; }
+      .panel.accent-cyan { border-top: 3px solid #0891B2; }
+      /* status-tinted cards */
+      .card.ok { border-color: #16A34A; border-left-width: 5px; background: linear-gradient(180deg, #F0FDF4, #FFFFFF 70%); }
+      .card.warn { border-color: #D97706; border-left-width: 5px; background: linear-gradient(180deg, #FFFBEB, #FFFFFF 70%); }
+      .card.info { border-color: #2563EB; border-left-width: 5px; background: linear-gradient(180deg, #EFF6FF, #FFFFFF 70%); }
+      .card.plum { border-color: #7C3AED; border-left-width: 5px; background: linear-gradient(180deg, #F5F3FF, #FFFFFF 70%); }
+      .card.stop { border-color: #B91C1C; border-left-width: 5px; background: linear-gradient(180deg, #FEF2F2, #FFFFFF 70%); }
+      /* golden field cards */
+      .gold-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+      .gold-field { background: #EFF4FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 10px 12px; }
+      .gold-field .fld { font-size: 10.5px; letter-spacing: 0.05em; color: #475569; font-weight: 700; }
+      .gold-field .val { font-size: 13px; font-weight: 600; color: #0F172A; overflow-wrap: anywhere; }
+      .gold-field .prov { font-size: 11.5px; color: #0F766E; }
+      /* steward buttons */
+      .btn-approve { background: #0F172A !important; border-color: #0F172A !important; color: #fff !important; font-weight: 600; }
+      .btn-reject { border-color: var(--bad) !important; color: var(--bad) !important; background: #fff !important; font-weight: 600; }
+      .btn-accept { border-color: var(--good) !important; color: var(--good) !important; background: #F0FDF4 !important; font-weight: 600; }
+      /* loop strip mood */
+      #loop-strip:has(.running) { background: #F0FDF4; border-color: #86EFAC; }
+      #loop-strip:has(.paused) { background: #FFFBEB; border-color: #FCD34D; }
+      /* upload dropzone */
+      .panel.drop .controls { border: 2px dashed #818CF8 !important; background: #EEF2FF !important; }
+      /* graph canvas */
+      #graph-canvas {
+        background-color: #FBFDFF; border: 1px solid var(--line); border-radius: 8px;
+        background-image: radial-gradient(#D7E3F4 1px, transparent 1px);
+        background-size: 18px 18px;
+      }
+      /* mosaic tiles: vivid gradients */
+      .tile.user { background: linear-gradient(135deg, #38BDF8, #2563EB); }
+      .tile.agent { background: linear-gradient(135deg, #C4B5FD, #7C3AED); }
+      .tile.rule { background: linear-gradient(135deg, #FCD34D, #D97706); }
+      .tile.gold { grid-column: span 2; background: linear-gradient(135deg, #34D399, #0F766E); }
+      .tile.wide { grid-column: span 3; background: linear-gradient(135deg, #FCD34D, #B45309); }
+      .tile { color: #fff; }
+      .tile:hover { filter: brightness(1.08); }
+      #downstream-pill { background: #F5F3FF; border-color: #C4B5FD; color: #5B21B6; font-weight: 600; }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     </style>
   </head>
@@ -233,7 +290,7 @@
 
       <div id="config-summary" role="note">Config in force — Policy: checking… · Taxonomy: checking… (from /health; no config proposed yet)</div>
 
-      <section class="panel" style="margin-bottom: 16px;" aria-labelledby="upload-title">
+      <section class="panel drop accent-cyan" style="margin-bottom: 16px;" aria-labelledby="upload-title">
         <div class="panel-head">
           <h2 id="upload-title">Upload data</h2>
           <button id="feed-toggle-inline" class="tag" type="button" style="cursor:pointer" title="Show or hide the activity feed">Activity feed: shown below</button>
@@ -259,7 +316,7 @@
         </div>
       </section>
 
-      <section class="panel tall" style="margin-bottom: 16px;" aria-labelledby="graph-title">
+      <section class="panel tall accent-indigo" style="margin-bottom: 16px;" aria-labelledby="graph-title">
         <div class="panel-head">
           <h2 id="graph-title">Data graph — canvas</h2>
           <span class="tag">queryable, persisted</span>
@@ -285,7 +342,7 @@
       </div>
 
       <div class="grid">
-        <section class="panel tall" aria-labelledby="proposer-title">
+        <section class="panel tall accent-blue" aria-labelledby="proposer-title">
           <div class="panel-head">
             <h2 id="proposer-title">Muse Spark — Builder</h2>
             <span class="tag">proposes only · REAL · AUTO REASONING</span>
@@ -295,7 +352,7 @@
           </div>
         </section>
 
-        <section class="panel tall" aria-labelledby="engine-title">
+        <section class="panel tall accent-green" aria-labelledby="engine-title">
           <div class="panel-head">
             <h2 id="engine-title">Trust Engine — manglekit, Datalog</h2>
             <span class="tag">derives only · REAL · AUTO VERIFYING</span>
@@ -307,7 +364,7 @@
       </div>
 
       <div class="grid" style="margin-top: 16px;">
-        <section class="panel" style="min-height: 0;" aria-labelledby="mosaic-title">
+        <section class="panel accent-plum" style="min-height: 0;" aria-labelledby="mosaic-title">
           <div class="panel-head">
             <h2 id="mosaic-title">Mosaic picture</h2>
             <span class="tag">click a tile for lineage</span>
@@ -325,7 +382,7 @@
           </div>
         </section>
 
-        <section class="panel" style="min-height: 0;" aria-labelledby="steward-title">
+        <section class="panel accent-amber" style="min-height: 0;" aria-labelledby="steward-title">
           <div class="panel-head">
             <h2 id="steward-title">Steward Queue — exceptions only</h2>
             <span class="tag">human only on escalate</span>
@@ -337,7 +394,7 @@
       </div>
 
       <div class="grid" style="margin-top: 16px;">
-        <section class="panel" style="min-height: 0;" aria-labelledby="golden-title">
+        <section class="panel accent-emerald" style="min-height: 0;" aria-labelledby="golden-title">
           <div class="panel-head">
             <h2 id="golden-title">Golden Record</h2>
             <span class="tag">nested + validated</span>
@@ -346,7 +403,7 @@
             <div class="card mono" id="golden-body">No golden record yet. Click Build Mosaic.</div>
           </div>
         </section>
-        <section class="panel" style="min-height: 0;" aria-labelledby="downstream-title">
+        <section class="panel accent-rose" style="min-height: 0;" aria-labelledby="downstream-title">
           <div class="panel-head">
             <h2 id="downstream-title">Downstream agent</h2>
             <span class="tag">golden or stop</span>

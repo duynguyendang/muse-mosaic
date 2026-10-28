@@ -6,8 +6,6 @@ marketplace rank 3, and frequency never beats authority.
 
 from __future__ import annotations
 
-import pytest
-
 PRODUCT_POLICY = "pol-product-2026-10-27-v1"
 
 T_PIM = "2026-10-27T09:00:00+07:00"
@@ -16,7 +14,13 @@ T_MP = "2026-10-27T10:00:00+07:00"
 
 
 def fact(
-    fact_id, value, source, rank, event_time, verified, ttl=3600,
+    fact_id,
+    value,
+    source,
+    rank,
+    event_time,
+    verified,
+    ttl=3600,
     entity_id="prod-001",
 ):
     return {
@@ -37,8 +41,9 @@ def fact(
 PRODUCT_TAXONOMY = "tax-product-2026-10-27-v1"
 
 
-def derive(te_url, facts, key, policy=PRODUCT_POLICY, entity_id="prod-001",
-           taxonomy=PRODUCT_TAXONOMY):
+def derive(
+    te_url, facts, key, policy=PRODUCT_POLICY, entity_id="prod-001", taxonomy=PRODUCT_TAXONOMY
+):
     import httpx
 
     response = httpx.post(
@@ -104,8 +109,19 @@ def test_P03_clean_product_publishes(te_url):
         te_url,
         [
             fact("fPIM", "Wireless Earbuds", "pim-like", 1, T_PIM, True, entity_id="prod-002"),
-            fact("fERP", "Wireless Earbuds", "erp-like", 2, T_ERP, True, ttl=10800, entity_id="prod-002"),
-            fact("fMP", "Wireless Earbuds", "marketplace-like", 3, T_MP, True, entity_id="prod-002"),
+            fact(
+                "fERP",
+                "Wireless Earbuds",
+                "erp-like",
+                2,
+                T_ERP,
+                True,
+                ttl=10800,
+                entity_id="prod-002",
+            ),
+            fact(
+                "fMP", "Wireless Earbuds", "marketplace-like", 3, T_MP, True, entity_id="prod-002"
+            ),
         ],
         key="p03",
         entity_id="prod-002",

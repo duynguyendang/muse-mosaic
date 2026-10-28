@@ -13,7 +13,9 @@ def _structure(name="expected_user_golden.json"):
     from pathlib import Path
 
     return json.loads(
-        (Path(__file__).resolve().parents[1] / "data" / "mock" / "templates" / name).read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "data" / "mock" / "templates" / name).read_text(
+            encoding="utf-8"
+        )
     )
 
 
@@ -32,30 +34,50 @@ def test_structure_missing_required_field_blocks_golden():
     from schemas import ResolveRequest
 
     request = ResolveRequest(
-        work_id="w", entity_type="user", entity_id="P-001",
-        idempotency_key="k", fragments=[{
-            "source": "sap-like", "source_id": "s", "attribute": "email",
-            "value": "e@x.invalid", "authority_rank": 1,
-            "event_time": "2026-10-27T08:30:00+07:00",
-            "verified": True, "ttl_seconds": 3600,
-        }],
+        work_id="w",
+        entity_type="user",
+        entity_id="P-001",
+        idempotency_key="k",
+        fragments=[
+            {
+                "source": "sap-like",
+                "source_id": "s",
+                "attribute": "email",
+                "value": "e@x.invalid",
+                "authority_rank": 1,
+                "event_time": "2026-10-27T08:30:00+07:00",
+                "verified": True,
+                "ttl_seconds": 3600,
+            }
+        ],
     )
     import schemas
 
     golden = [
         schemas.GoldenFact(
-            entity_type="user", entity_id="P-001", attribute="phone",
-            value="B", winner_fact_id="f", loser_fact_ids=[],
-            rule_fired="R1", policy_version="pol", taxonomy_version="tax",
+            entity_type="user",
+            entity_id="P-001",
+            attribute="phone",
+            value="B",
+            winner_fact_id="f",
+            loser_fact_ids=[],
+            rule_fired="R1",
+            policy_version="pol",
+            taxonomy_version="tax",
             lineage="x",
         )
     ]
     assembled, _purchased, _edges, conflicts, stewards, ok = assemble_and_validate(
-        request=request, facts=[], golden=golden,
-        policy_version="pol", taxonomy_version="tax",
+        request=request,
+        facts=[],
+        golden=golden,
+        policy_version="pol",
+        taxonomy_version="tax",
         golden_attrs={"phone"},
         expected_structure=_structure(),
-        documents=[], decision_id="dec", created_at=utcnow_iso(),
+        documents=[],
+        decision_id="dec",
+        created_at=utcnow_iso(),
         database_path=":memory:",
     )
     assert ok is False
@@ -69,30 +91,50 @@ def test_structure_nested_failure_escalates_element_only():
     from schemas import ResolveRequest
 
     request = ResolveRequest(
-        work_id="w", entity_type="user", entity_id="P-001",
-        idempotency_key="k", fragments=[{
-            "source": "sap-like", "source_id": "s", "attribute": "email",
-            "value": "e@x.invalid", "authority_rank": 1,
-            "event_time": "2026-10-27T08:30:00+07:00",
-            "verified": True, "ttl_seconds": 3600,
-        }],
+        work_id="w",
+        entity_type="user",
+        entity_id="P-001",
+        idempotency_key="k",
+        fragments=[
+            {
+                "source": "sap-like",
+                "source_id": "s",
+                "attribute": "email",
+                "value": "e@x.invalid",
+                "authority_rank": 1,
+                "event_time": "2026-10-27T08:30:00+07:00",
+                "verified": True,
+                "ttl_seconds": 3600,
+            }
+        ],
     )
     import schemas
 
     golden = [
         schemas.GoldenFact(
-            entity_type="user", entity_id="P-001", attribute="email",
-            value="e@x.invalid", winner_fact_id="f", loser_fact_ids=[],
-            rule_fired="R1", policy_version="pol", taxonomy_version="tax",
+            entity_type="user",
+            entity_id="P-001",
+            attribute="email",
+            value="e@x.invalid",
+            winner_fact_id="f",
+            loser_fact_ids=[],
+            rule_fired="R1",
+            policy_version="pol",
+            taxonomy_version="tax",
             lineage="x",
         )
     ]
     assembled, purchased, _edges, conflicts, stewards, ok = assemble_and_validate(
-        request=request, facts=[], golden=golden,
-        policy_version="pol", taxonomy_version="tax",
+        request=request,
+        facts=[],
+        golden=golden,
+        policy_version="pol",
+        taxonomy_version="tax",
         golden_attrs={"email"},
         expected_structure=_structure(),
-        documents=[], decision_id="dec", created_at=utcnow_iso(),
+        documents=[],
+        decision_id="dec",
+        created_at=utcnow_iso(),
         database_path=":memory:",
         purchased_override=[{"name": "prod-001"}],
     )

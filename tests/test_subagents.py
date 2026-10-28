@@ -6,7 +6,7 @@ transport/parsing tests; no test ever spends credit.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from schemas import CandidateFact, ProposedLink
 
@@ -16,7 +16,7 @@ def _fact(fid, attr, value, source="sap-like", rank=1, verified=True):
         fact_id=fid, entity_type="user", entity_id="P-001",
         attribute=attr, value=value, source=source, source_id=f"{fid}-s",
         authority_rank=rank,
-        event_time=datetime(2026, 10, 27, 9, 0, tzinfo=timezone.utc),
+        event_time=datetime(2026, 10, 27, 9, 0, tzinfo=UTC),
         verified=verified, ttl_seconds=3600,
     )
 
@@ -50,15 +50,15 @@ def test_linker_exact_links_carry_sole_proofs():
 
 
 def test_linker_fuzzy_and_conflict_links_never_publishable():
-    from subagents import mock_linker
     from schemas import SOLE_LINK_PROOFS
+    from subagents import mock_linker
 
     facts = [
         _fact("F1-display_name", "display_name", "Nguyen Van An"),
         _fact("F3-display_name", "display_name", "An Nguyen"),
     ]
     links, _ = mock_linker(
-        facts, {fact.fact_id: doc for fact, doc in zip(facts, ["F1", "F3"])}
+        facts, {fact.fact_id: doc for fact, doc in zip(facts, ["F1", "F3"], strict=True)}
     )
     fuzzy = [link for link in links if link.proof == "fuzzy_name_address"]
     assert fuzzy, "expected a semantic name-order link"

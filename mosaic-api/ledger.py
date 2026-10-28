@@ -12,7 +12,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -66,9 +65,7 @@ def fetch_latest_golden(
     return record
 
 
-def fetch_decision(
-    database_path: str | Path, decision_id: str
-) -> dict[str, Any] | None:
+def fetch_decision(database_path: str | Path, decision_id: str) -> dict[str, Any] | None:
     """Return a decision row by exact decision id (never by vector search)."""
     connection = connect(database_path)
     try:
@@ -80,9 +77,7 @@ def fetch_decision(
     return dict(row) if row is not None else None
 
 
-def fetch_decision_by_key(
-    database_path: str | Path, idempotency_key: str
-) -> dict[str, Any] | None:
+def fetch_decision_by_key(database_path: str | Path, idempotency_key: str) -> dict[str, Any] | None:
     """Return a decision row by exact idempotency key, or None."""
     connection = connect(database_path)
     try:
@@ -95,9 +90,7 @@ def fetch_decision_by_key(
     return dict(row) if row is not None else None
 
 
-def fetch_goldens_by_decision(
-    database_path: str | Path, decision_id: str
-) -> list[dict[str, Any]]:
+def fetch_goldens_by_decision(database_path: str | Path, decision_id: str) -> list[dict[str, Any]]:
     """Return all golden records written under one decision id."""
     connection = connect(database_path)
     try:
@@ -120,9 +113,7 @@ def fetch_goldens_by_decision(
     return records
 
 
-def fetch_stewards_by_decision(
-    database_path: str | Path, decision_id: str
-) -> list[dict[str, Any]]:
+def fetch_stewards_by_decision(database_path: str | Path, decision_id: str) -> list[dict[str, Any]]:
     connection = connect(database_path)
     try:
         rows = connection.execute(
@@ -201,9 +192,7 @@ def fetch_pending_stewards(
     return [dict(row) for row in rows]
 
 
-def update_steward_status(
-    database_path: str | Path, steward_id: str, status: str
-) -> bool:
+def update_steward_status(database_path: str | Path, steward_id: str, status: str) -> bool:
     """Transition one steward item. Returns False when the id is unknown."""
     connection = connect(database_path)
     try:
@@ -217,9 +206,7 @@ def update_steward_status(
         connection.close()
 
 
-def fetch_steward(
-    database_path: str | Path, steward_id: str
-) -> dict[str, Any] | None:
+def fetch_steward(database_path: str | Path, steward_id: str) -> dict[str, Any] | None:
     connection = connect(database_path)
     try:
         row = connection.execute(
@@ -246,8 +233,9 @@ def store_agent_trace(
         connection.close()
 
 
-def insert_agent_trace(connection, decision_id: str, kind: str,
-                       payload: dict[str, Any], created_at: str) -> None:
+def insert_agent_trace(
+    connection, decision_id: str, kind: str, payload: dict[str, Any], created_at: str
+) -> None:
     """Insert one agent trace row on an already-open connection (no commit)."""
     connection.execute(
         """
@@ -259,9 +247,25 @@ def insert_agent_trace(connection, decision_id: str, kind: str,
     )
 
 
-def fetch_agent_traces(
-    database_path: str | Path, decision_id: str
-) -> list[dict[str, Any]]:
+def insert_tombstone(
+    connection, tombstone_id: str, loser_id: str, golden_id: str, decision_id: str, reason: str
+) -> None:
+    """Tombstone one loser fact on an already-open connection (no commit).
+
+    Losers are tombstoned, never deleted: the golden keeps its history.
+    """
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO tombstones
+          (tombstone_id, loser_fact_id, survivor_golden_id,
+           decision_id, reason)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (tombstone_id, loser_id, golden_id, decision_id, reason),
+    )
+
+
+def fetch_agent_traces(database_path: str | Path, decision_id: str) -> list[dict[str, Any]]:
     """Return stored agent traces for one decision (Explain replay)."""
     connection = connect(database_path)
     try:
@@ -277,5 +281,3 @@ def fetch_agent_traces(
         record["payload"] = json.loads(record["payload"])
         traces.append(record)
     return traces
-
-

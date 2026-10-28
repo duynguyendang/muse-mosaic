@@ -8,7 +8,6 @@ Steward reject: pending item rejected without side effects.
 
 from __future__ import annotations
 
-
 USER_FRAGMENTS = [
     {
         "source": "salesforce-like",
@@ -123,10 +122,7 @@ def test_flow_A_correct_merge_publishes(api_client):
     assert phone["rule_fired"] == "R1"
 
     # The mock proposer proposed recency; the engine overruled it.
-    assert (
-        payload["proposal"]["attributes"]["phone"]["proposed_value"]
-        == "+84900000002"
-    )
+    assert payload["proposal"]["attributes"]["phone"]["proposed_value"] == "+84900000002"
     assert payload["golden"]["attributes"]["phone"]["value"] == "+84900000001"
 
 
@@ -134,18 +130,14 @@ def test_flow_B_injection_claim_escalates_critical_phone(api_client):
     first = resolve(api_client, USER_FRAGMENTS, "flow-b-1")
     assert first.status_code == 200, first.text
 
-    response = resolve(
-        api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-b-2"
-    )
+    response = resolve(api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-b-2")
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["verdict"] == "escalated"
 
     # The unverified ticket value is never published.
     assert "phone" not in payload["golden"]["attributes"]
-    values = [
-        value["value"] for value in payload["golden"]["attributes"].values()
-    ]
+    values = [value["value"] for value in payload["golden"]["attributes"].values()]
     assert "+84900000999" not in values
 
     # Other attributes still publish.
@@ -155,13 +147,8 @@ def test_flow_B_injection_claim_escalates_critical_phone(api_client):
     steward = payload["steward_queue"][0]
     assert steward["attribute"] == "phone"
     assert steward["owner"] == "steward-001"
-    assert steward["fallback"] == (
-        "do not use the new phone for OTP or payment notification"
-    )
-    reasons = {
-        conflict["attribute"]: conflict["reason_code"]
-        for conflict in payload["conflicts"]
-    }
+    assert steward["fallback"] == ("do not use the new phone for OTP or payment notification")
+    reasons = {conflict["attribute"]: conflict["reason_code"] for conflict in payload["conflicts"]}
     assert reasons["phone"] == "UNVERIFIED_CRITICAL_CLAIM"
 
     # The ledger golden for phone is withdrawn: no trusted value downstream.
@@ -171,8 +158,11 @@ def test_flow_B_injection_claim_escalates_critical_phone(api_client):
 
 def test_product_generic_gate_pim_wins(api_client):
     response = resolve(
-        api_client, PRODUCT_FRAGMENTS, "flow-p",
-        entity_type="product", entity_id="prod-001",
+        api_client,
+        PRODUCT_FRAGMENTS,
+        "flow-p",
+        entity_type="product",
+        entity_id="prod-001",
     )
     assert response.status_code == 200, response.text
     payload = response.json()
@@ -193,9 +183,7 @@ def test_steward_reject_leaves_golden_untouched(api_client):
     assert first.status_code == 200, first.text
     version_before = first.json()["golden"]["version"]
 
-    escalated = resolve(
-        api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-r-2"
-    )
+    escalated = resolve(api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-r-2")
     steward_id = escalated.json()["steward_queue"][0]["steward_id"]
 
     rejected = api_client.post(f"/steward/{steward_id}/reject")
@@ -221,22 +209,22 @@ def test_fragments_endpoint_labels_synthetic_data(api_client):
 
 def test_similar_returns_structured_evidence_without_vectors(api_client):
     resolve(
-        api_client, PRODUCT_FRAGMENTS, "flow-s-1",
-        entity_type="product", entity_id="prod-001",
+        api_client,
+        PRODUCT_FRAGMENTS,
+        "flow-s-1",
+        entity_type="product",
+        entity_id="prod-001",
     )
     resolve(
         api_client,
         [
-            dict(PRODUCT_FRAGMENTS[0], source_id="pim-002-category",
-                 value="Wireless Earbuds"),
+            dict(PRODUCT_FRAGMENTS[0], source_id="pim-002-category", value="Wireless Earbuds"),
         ],
         "flow-s-2",
         entity_type="product",
         entity_id="prod-002",
     )
-    response = api_client.get(
-        "/similar?entity_type=product&entity_id=prod-001"
-    )
+    response = api_client.get("/similar?entity_type=product&entity_id=prod-001")
     assert response.status_code == 200
     payload = response.json()
     assert payload["vector_recall"].startswith("skipped")

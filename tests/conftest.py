@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import os
-import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -18,6 +16,8 @@ API_DIR = ROOT / "mosaic-api"
 TE_DIR = ROOT / "trust-engine"
 if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 # Contract tests must never require a real model. Respect an explicit
 # USE_MOCK_MUSE=false only if the caller set it deliberately.
@@ -54,20 +54,26 @@ def mkit_bin(tmp_path_factory) -> Path:
         return cached
     workdir = tmp_path_factory.mktemp("mkitbuild")
     subprocess.run(
-        ["go", "mod", "init", "tmpmkit"], cwd=workdir, check=True,
+        ["go", "mod", "init", "tmpmkit"],
+        cwd=workdir,
+        check=True,
         capture_output=True,
     )
     subprocess.run(
-        ["go", "mod", "edit",
-         f"-require=github.com/duynguyendang/manglekit@{MANGLEKIT_VERSION}"],
-        cwd=workdir, check=True, capture_output=True,
+        ["go", "mod", "edit", f"-require=github.com/duynguyendang/manglekit@{MANGLEKIT_VERSION}"],
+        cwd=workdir,
+        check=True,
+        capture_output=True,
     )
     env = dict(os.environ, GOPROXY="off", GOFLAGS="-mod=mod")
     binary = workdir / "mkit"
     result = subprocess.run(
-        ["go", "build", "-o", str(binary),
-         "github.com/duynguyendang/manglekit/cmd/mkit"],
-        cwd=workdir, capture_output=True, text=True, env=env, timeout=600,
+        ["go", "build", "-o", str(binary), "github.com/duynguyendang/manglekit/cmd/mkit"],
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=600,
     )
     if result.returncode != 0 or not binary.exists():
         pytest.skip(f"manglekit binary unavailable: {result.stderr[-500:]}")
@@ -80,7 +86,10 @@ def trust_engine_binary(tmp_path_factory) -> Path:
     binary = tmp_path_factory.mktemp("te") / "trust-engine"
     result = subprocess.run(
         ["go", "build", "-o", str(binary), "."],
-        cwd=TE_DIR, capture_output=True, text=True, timeout=300,
+        cwd=TE_DIR,
+        capture_output=True,
+        text=True,
+        timeout=300,
     )
     assert result.returncode == 0, result.stderr[-2000:]
     return binary
@@ -99,7 +108,7 @@ class TrustEngine:
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}/derive"
 
-    def start(self) -> "TrustEngine":
+    def start(self) -> TrustEngine:
         env = dict(
             os.environ,
             MANGLEKIT_BIN=str(self.mkit),
@@ -108,8 +117,10 @@ class TrustEngine:
         )
         env.setdefault("TAXONOMY_DIR", str(ROOT / "data" / "mock" / "taxonomy"))
         self.process = subprocess.Popen(
-            [str(self.binary)], env=env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [str(self.binary)],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         _wait_for_port(self.port)
         return self
@@ -123,7 +134,7 @@ class TrustEngine:
                 self.process.kill()
             self.process = None
 
-    def __enter__(self) -> "TrustEngine":
+    def __enter__(self) -> TrustEngine:
         return self.start()
 
     def __exit__(self, *exc) -> None:
@@ -141,12 +152,21 @@ class MatchingEngine:
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
-    def start(self) -> "MatchingEngine":
+    def start(self) -> MatchingEngine:
         self.process = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "main:app",
-             "--host", "127.0.0.1", "--port", str(self.port)],
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(self.port),
+            ],
             cwd=ROOT / "matching-engine",
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         _wait_for_http_health(f"{self.url}/health")
         return self
@@ -160,7 +180,7 @@ class MatchingEngine:
                 self.process.kill()
             self.process = None
 
-    def __enter__(self) -> "MatchingEngine":
+    def __enter__(self) -> MatchingEngine:
         return self.start()
 
     def __exit__(self, *exc) -> None:
@@ -211,9 +231,8 @@ def make_api_client(te_derive_url: str, tmp_path, matching_service_url: str | No
     """Build a TestClient against any trust-engine URL (kill-test helper)."""
     import dataclasses
 
-    from fastapi.testclient import TestClient
-
     from config import Settings
+    from fastapi.testclient import TestClient
     from main import create_app
 
     settings = Settings(

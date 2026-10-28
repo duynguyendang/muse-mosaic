@@ -253,7 +253,7 @@ Event times are timezone-aware ISO-8601, canonicalized to whole minutes
 since 2026-01-01T00:00+07:00; TTLs are whole minutes; times outside the
 mangle number bound (±1e6) are rejected, not wrapped. A real Kaggle import
 hit exactly this bound (2013–2018 dates) and now documents the batch-timestamp
-adaptation (`docs/internal/Kaggle-test-dataset.md`, finding F1).
+adaptation (local-only `docs/internal/Kaggle-test-dataset.md`, finding F1).
 
 ---
 
@@ -290,7 +290,7 @@ adaptation (`docs/internal/Kaggle-test-dataset.md`, finding F1).
   split restore, structure gate, steward Accept.
 - **Real-dirt complement** (`scripts/kaggle_e2e.py`, manual run, not CI):
   frozen 200-row Kaggle Customer 360 sample through all three live services —
-  measured outcomes in `docs/internal/Kaggle-test-dataset.md`. Not a
+  measured outcomes in the local-only `docs/internal/Kaggle-test-dataset.md`. Not a
   benchmark (no ground-truth labels); complements, never replaces, the suite.
 
 ---

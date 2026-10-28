@@ -7,7 +7,6 @@ are never made here; mock mode carries the demo test suite.
 from __future__ import annotations
 
 import pytest
-
 from config import ConfigurationError, Settings
 from proposer import (
     ProposerError,

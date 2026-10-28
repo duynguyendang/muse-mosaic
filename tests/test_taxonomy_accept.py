@@ -7,7 +7,6 @@ which creates the version and triggers an explicit re-derive that publishes.
 
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 
@@ -47,24 +46,25 @@ def test_taxonomy_accept_creates_version_and_republishes(
     engine = TrustEngine(trust_engine_binary, mkit_bin).start()
     try:
         with make_api_client(engine.url, tmp_path) as client:
-            build = client.post("/build", json={
-                "work_id": "work-tax",
-                "idempotency_key": "tax-1",
-                "dataset": {"documents": [product_doc("Gaming Chair")]},
-            })
+            build = client.post(
+                "/build",
+                json={
+                    "work_id": "work-tax",
+                    "idempotency_key": "tax-1",
+                    "dataset": {"documents": [product_doc("Gaming Chair")]},
+                },
+            )
             assert build.status_code == 200, build.text
             payload = build.json()
             assert payload["verdict"] == "escalated"
-            stewards = [s for s in payload["steward_queue"]
-                        if s.get("suggested_action")]
+            stewards = [s for s in payload["steward_queue"] if s.get("suggested_action")]
             assert stewards, "expected a taxonomy new-term steward item"
             item = next(s for s in stewards if "Gaming Chair" in (s.get("suggested_action") or ""))
             suggested = item["suggested_action"]
 
             accept = client.post(
                 f"/steward/{item['steward_id']}/accept",
-                json={"action": suggested,
-                      "taxonomy_version": "tax-product-2026-10-27-v2"},
+                json={"action": suggested, "taxonomy_version": "tax-product-2026-10-27-v2"},
             )
             assert accept.status_code == 200, accept.text
             accepted = accept.json()
@@ -84,8 +84,13 @@ def test_taxonomy_accept_creates_version_and_republishes(
 def test_taxonomy_accept_rejects_wrong_action(api_client):
     from test_flows import PRODUCT_FRAGMENTS, resolve
 
-    response = resolve(api_client, PRODUCT_FRAGMENTS, "flow-accept-x",
-                       entity_type="product", entity_id="prod-accept")
+    response = resolve(
+        api_client,
+        PRODUCT_FRAGMENTS,
+        "flow-accept-x",
+        entity_type="product",
+        entity_id="prod-accept",
+    )
     assert response.status_code == 200
     items = [s for s in response.json()["steward_queue"] if s.get("suggested_action")]
     if not items:
@@ -93,7 +98,9 @@ def test_taxonomy_accept_rejects_wrong_action(api_client):
     item = items[0]
     bad = api_client.post(
         f"/steward/{item['steward_id']}/accept",
-        json={"action": "Create something else entirely",
-              "taxonomy_version": "tax-product-2026-10-27-v2"},
+        json={
+            "action": "Create something else entirely",
+            "taxonomy_version": "tax-product-2026-10-27-v2",
+        },
     )
     assert bad.status_code == 422

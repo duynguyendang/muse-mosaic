@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from conftest import TrustEngine, make_api_client
 
-
 PHONE_FRAGMENTS = [
     {
         "source": "sap-like",
@@ -35,9 +34,7 @@ def body(fragments, key):
     }
 
 
-def test_no_golden_published_while_trust_engine_is_stopped(
-    trust_engine_binary, mkit_bin, tmp_path
-):
+def test_no_golden_published_while_trust_engine_is_stopped(trust_engine_binary, mkit_bin, tmp_path):
     engine = TrustEngine(trust_engine_binary, mkit_bin).start()
     try:
         with make_api_client(engine.url, tmp_path) as client:
@@ -46,9 +43,7 @@ def test_no_golden_published_while_trust_engine_is_stopped(
             assert api_version(client) == 1
 
             engine.stop()
-            down = client.post(
-                "/resolve", json=body(PHONE_FRAGMENTS, "idem-down")
-            )
+            down = client.post("/resolve", json=body(PHONE_FRAGMENTS, "idem-down"))
             assert down.status_code == 503
             detail = down.json()["detail"]
             assert detail["verdict"] == "escalated"
@@ -59,14 +54,10 @@ def test_no_golden_published_while_trust_engine_is_stopped(
             assert api_version(client) == 1
             # The escalation is recorded in the steward queue.
             pending = client.get("/steward/pending").json()["pending"]
-            assert any(
-                item["decision_id"] == detail["decision_id"] for item in pending
-            )
+            assert any(item["decision_id"] == detail["decision_id"] for item in pending)
 
             engine.start()
-            retry = client.post(
-                "/resolve", json=body(PHONE_FRAGMENTS, "idem-down")
-            )
+            retry = client.post("/resolve", json=body(PHONE_FRAGMENTS, "idem-down"))
             assert retry.status_code == 200, retry.text
             retried = retry.json()
             assert retried["decision_id"] == detail["decision_id"]

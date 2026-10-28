@@ -19,17 +19,18 @@ import os
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-
 from splink_engine import (
     BLOCKING_COLUMNS,
-    STATUS_OK,
     STATUS_UNAVAILABLE,
     SUPPORTED_COMPARISONS,
     run_match,
 )
 
 SPLINK_ENABLED = os.environ.get("SPLINK_ENABLED", "true").strip().lower() in (
-    "1", "true", "yes", "on",
+    "1",
+    "true",
+    "yes",
+    "on",
 )
 
 try:
@@ -160,7 +161,9 @@ def match(request: MatchRequest) -> MatchResponse:
         )
     if SPLINK_VERSION == "unknown" or DUCKDB_VERSION == "unknown":
         return MatchResponse(
-            status=STATUS_UNAVAILABLE, clusters=[], pairs=[],
+            status=STATUS_UNAVAILABLE,
+            clusters=[],
+            pairs=[],
             detail="SPLINK_UNAVAILABLE — Splink/DuckDB not installed; fallback to Muse + fuzzy",
             comparisons_applied=[],
         )

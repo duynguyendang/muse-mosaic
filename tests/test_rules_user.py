@@ -9,8 +9,6 @@ are the spec.
 from __future__ import annotations
 
 import httpx
-import pytest
-
 
 USER_POLICY = "pol-2026-10-27-v1"
 USER_TAXONOMY = "tax-user-2026-10-27-v1"
@@ -22,7 +20,14 @@ T_NEW = "2026-10-27T10:00:00+07:00"
 
 
 def fact(
-    fact_id, attribute, value, source, rank, event_time, verified, ttl=3600,
+    fact_id,
+    attribute,
+    value,
+    source,
+    rank,
+    event_time,
+    verified,
+    ttl=3600,
     entity_id="P-001",
 ):
     return {
@@ -40,8 +45,7 @@ def fact(
     }
 
 
-def derive(te_url, facts, key="k", policy=USER_POLICY, entity_id="P-001",
-           taxonomy=USER_TAXONOMY):
+def derive(te_url, facts, key="k", policy=USER_POLICY, entity_id="P-001", taxonomy=USER_TAXONOMY):
     response = httpx.post(
         te_url,
         json={
@@ -167,9 +171,7 @@ def test_G07_all_expired_relative_to_newer_evidence(te_url):
         key="g07",
     )
     assert status == 200
-    assert out["golden_facts"] and all(
-        row["attribute"] == "email" for row in out["golden_facts"]
-    )
+    assert out["golden_facts"] and all(row["attribute"] == "email" for row in out["golden_facts"])
     conflict = by_attribute(out, "conflicts")["phone"]
     assert conflict["reason_code"] == "MISSING_OR_EXPIRED"
     assert conflict["rule_fired"] == "R3"
@@ -184,9 +186,7 @@ def test_G08_unverified_only_critical_escalates(te_url):
     assert status == 200
     assert out["verdict"] == "escalated"
     assert out["golden_facts"] == []
-    assert by_attribute(out, "conflicts")["phone"]["reason_code"] == (
-        "CRITICAL_LOW_CONFIDENCE"
-    )
+    assert by_attribute(out, "conflicts")["phone"]["reason_code"] == ("CRITICAL_LOW_CONFIDENCE")
 
 
 def test_G09_critical_conflict_winner_unverified_escalates(te_url):

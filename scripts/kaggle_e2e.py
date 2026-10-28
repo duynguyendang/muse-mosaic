@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -28,6 +28,24 @@ ROOT = Path(__file__).resolve().parents[1]
 API_DIR = ROOT / "mosaic-api"
 TE_DIR = ROOT / "trust-engine"
 ME_DIR = ROOT / "matching-engine"
+
+
+def find_mkit() -> Path:
+    """Locate the pinned mkit binary: env, PATH, then known build outputs."""
+    env = os.environ.get("MANGLEKIT_BIN", "").strip()
+    candidates = ([Path(env)] if env else []) + [
+        Path(shutil.which("mkit") or ""),
+        ROOT.parent / "mkitbuild" / "mkit",
+        Path("/tmp/mkitbuild/mkit"),
+    ]
+    for path in candidates:
+        if path and path.is_file():
+            return path
+    tried = ", ".join(str(p) for p in candidates if p)
+    raise SystemExit(
+        "mkit binary not found. Set MANGLEKIT_BIN, put mkit on PATH, or "
+        f"build it first. Tried: {tried or '(nothing)'}"
+    )
 
 
 def free_port() -> int:
@@ -83,44 +101,82 @@ def main() -> int:
     product_docs = [d for d in sample["documents"] if d["entity_type"] == "product"]
     print(f"sample: {len(user_docs)} user docs, {len(product_docs)} product docs", flush=True)
 
-    mkit = Path("/tmp/mkitbuild/mkit")
-    if not mkit.exists():
-        raise SystemExit("mkit binary missing at /tmp/mkitbuild/mkit")
+    mkit = find_mkit()
+    print(f"mkit: {mkit}", flush=True)
     te_bin = workdir / "trust-engine"
     print("building trust-engine...", flush=True)
-    subprocess.run(["go", "build", "-o", str(te_bin), "."], cwd=TE_DIR,
-                   check=True, capture_output=True, text=True, timeout=300)
+    subprocess.run(
+        ["go", "build", "-o", str(te_bin), "."],
+        cwd=TE_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
 
     te_port, me_port, api_port = free_port(), free_port(), free_port()
     procs = []
     try:
-        import os as _os
-
-        te_env = dict(_os.environ, MANGLEKIT_BIN=str(mkit), PORT=str(te_port),
-                      POLICY_DIR=str(pol_dir), TAXONOMY_DIR=str(tax_dir))
-        procs.append(subprocess.Popen(
-            [str(te_bin)], env=te_env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        me_env = dict(_os.environ, PORT=str(me_port))
-        procs.append(subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "main:app",
-             "--host", "127.0.0.1", "--port", str(me_port)],
-            cwd=ME_DIR, env=me_env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        te_env = dict(
+            os.environ,
+            MANGLEKIT_BIN=str(mkit),
+            PORT=str(te_port),
+            POLICY_DIR=str(pol_dir),
+            TAXONOMY_DIR=str(tax_dir),
+        )
+        procs.append(
+            subprocess.Popen(
+                [str(te_bin)], env=te_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        )
+        me_env = dict(os.environ, PORT=str(me_port))
+        procs.append(
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
+                    "main:app",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(me_port),
+                ],
+                cwd=ME_DIR,
+                env=me_env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        )
         api_env = dict(
-            _os.environ, USE_MOCK_MUSE="true",
-            DATABASE_PATH=str(ledger), TAXONOMY_DIR=str(tax_dir),
+            os.environ,
+            USE_MOCK_MUSE="true",
+            DATABASE_PATH=str(ledger),
+            TAXONOMY_DIR=str(tax_dir),
             TRUST_ENGINE_URL=f"http://127.0.0.1:{te_port}/derive",
             MATCHING_ENGINE_URL=f"http://127.0.0.1:{me_port}",
             POLICY_DIR=str(pol_dir),
         )
         # NOTE: POLICY_DIR is read by mosaic-api at startup (policies_dir()).
         api_env["POLICY_DIR"] = str(pol_dir)
-        procs.append(subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "main:app",
-             "--host", "127.0.0.1", "--port", str(api_port)],
-            cwd=API_DIR, env=api_env,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        procs.append(
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
+                    "main:app",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(api_port),
+                ],
+                cwd=API_DIR,
+                env=api_env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        )
         api = f"http://127.0.0.1:{api_port}"
         print("waiting for services...", flush=True)
         wait_http(f"http://127.0.0.1:{te_port}/health")
@@ -130,28 +186,41 @@ def main() -> int:
         health = httpx.get(f"{api}/health", timeout=10).json()
         print("health:", json.dumps(health), flush=True)
 
-        summary: dict = {"health": health, "products": None, "users": None,
-                         "downstream": [], "meta": sample.get("meta", {})}
+        summary: dict = {
+            "health": health,
+            "products": None,
+            "users": None,
+            "downstream": [],
+            "meta": sample.get("meta", {}),
+        }
 
         print("building products...", flush=True)
         t0 = time.time()
         response = httpx.post(
             f"{api}/build",
-            json={"work_id": "kag-products", "idempotency_key": "kag-products",
-                  "dataset": {"documents": product_docs}},
+            json={
+                "work_id": "kag-products",
+                "idempotency_key": "kag-products",
+                "dataset": {"documents": product_docs},
+            },
             timeout=600,
         )
         response.raise_for_status()
         products = response.json()
         summary["products"] = _summarize_build(products, "products")
-        print(f"products done in {time.time()-t0:.0f}s:", json.dumps(summary["products"]), flush=True)
+        print(
+            f"products done in {time.time()-t0:.0f}s:", json.dumps(summary["products"]), flush=True
+        )
 
         print("building users...", flush=True)
         t0 = time.time()
         response = httpx.post(
             f"{api}/build",
-            json={"work_id": "kag-users", "idempotency_key": "kag-users",
-                  "dataset": {"documents": user_docs}},
+            json={
+                "work_id": "kag-users",
+                "idempotency_key": "kag-users",
+                "dataset": {"documents": user_docs},
+            },
             timeout=600,
         )
         response.raise_for_status()
@@ -159,19 +228,30 @@ def main() -> int:
         summary["users"] = _summarize_build(users, "users")
         print(f"users done in {time.time()-t0:.0f}s:", json.dumps(summary["users"]), flush=True)
 
-        goldens = [g for g in users.get("goldens", []) if g.get("golden_id")]
-        if goldens:
-            first = goldens[0]
-            for agent, field in (("otp", "phone"), ("search", "category")):
-                try:
-                    downstream = httpx.get(
-                        f"{api}/downstream/{agent}?entity_type={first['entity_type']}"
-                        f"&entity_id={first['entity_id']}&field={field}",
-                        timeout=30).json()
-                    summary["downstream"].append(downstream)
-                    print(f"downstream {agent}: {downstream.get('answer')}", flush=True)
-                except Exception as exc:  # noqa: BLE001
-                    print(f"downstream {agent} failed: {exc}", flush=True)
+        user_goldens = [g for g in users.get("goldens", []) if g.get("golden_id")]
+        product_goldens = [g for g in products.get("goldens", []) if g.get("golden_id")]
+        # Pair each downstream agent with the entity type it reads: OTP acts
+        # on a user golden's phone; product search reads a product golden's
+        # category. Querying search/category against a user golden is a
+        # category error, not a downstream verdict.
+        checks = []
+        if user_goldens:
+            first = user_goldens[0]
+            checks.append(("otp", first["entity_type"], first["entity_id"], "phone"))
+        if product_goldens:
+            first = product_goldens[0]
+            checks.append(("search", first["entity_type"], first["entity_id"], "category"))
+        for agent, entity_type, entity_id, field in checks:
+            try:
+                downstream = httpx.get(
+                    f"{api}/downstream/{agent}?entity_type={entity_type}"
+                    f"&entity_id={entity_id}&field={field}",
+                    timeout=30,
+                ).json()
+                summary["downstream"].append(downstream)
+                print(f"downstream {agent}: {downstream.get('answer')}", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"downstream {agent} failed: {type(exc).__name__}: {exc}", flush=True)
 
         Path(args.out).write_text(json.dumps(summary, indent=1) + "\n")
         print(f"wrote {args.out}", flush=True)
@@ -194,7 +274,7 @@ def _summarize_build(payload: dict, label: str) -> dict:
             fields[name] = fields.get(name, 0) + 1
     stewards = payload.get("steward_queue", [])
     reasons: dict[str, int] = {}
-    for item in payload.get("conflicts", []) if "conflicts" in payload else []:
+    for item in payload.get("conflicts", []) or []:
         reasons[item.get("reason_code", "?")] = reasons.get(item.get("reason_code", "?"), 0) + 1
     return {
         "verdict": payload.get("verdict"),

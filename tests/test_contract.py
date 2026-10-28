@@ -10,13 +10,12 @@ import json
 import sqlite3
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
-
 import ledger
+import pytest
 from config import Settings
+from fastapi.testclient import TestClient
 from main import create_app
+from pydantic import ValidationError
 from schemas import (
     CandidateFact,
     DeriveRequest,
@@ -25,7 +24,6 @@ from schemas import (
     Policy,
     ResolveRequest,
 )
-
 
 ROOT = Path(__file__).resolve().parents[1]
 MOCK_DIR = ROOT / "data" / "mock"
@@ -128,9 +126,7 @@ def test_golden_fact_accepts_complete_proof():
     assert fact.policy_version == "pol-2026-10-27-v1"
 
 
-@pytest.mark.parametrize(
-    "missing", ["winner_fact_id", "rule_fired", "policy_version", "lineage"]
-)
+@pytest.mark.parametrize("missing", ["winner_fact_id", "rule_fired", "policy_version", "lineage"])
 def test_golden_fact_rejects_missing_proof(missing):
     data = golden_data()
     data.pop(missing)
@@ -272,9 +268,7 @@ def test_user_policy_matches_csd_v1_matrix():
 
 
 def test_product_policy_matches_csd_v1_matrix():
-    policy = Policy.model_validate_json(
-        PRODUCT_POLICY_PATH.read_text(encoding="utf-8")
-    )
+    policy = Policy.model_validate_json(PRODUCT_POLICY_PATH.read_text(encoding="utf-8"))
     assert policy.policy_version == "pol-product-2026-10-27-v1"
     assert policy.entity_type == "product"
     assert policy.allowed_attributes == ["category"]
@@ -330,9 +324,7 @@ def test_user_mock_fixture_is_labelled_and_contains_required_conflict():
     emails = {fragment.value for fragment in fragments if fragment.attribute == "email"}
     assert len(emails) == 1
 
-    addresses = {
-        fragment.value for fragment in fragments if fragment.attribute == "address"
-    }
+    addresses = {fragment.value for fragment in fragments if fragment.attribute == "address"}
     assert len(addresses) > 1
 
 
@@ -390,9 +382,7 @@ def test_ddl_creates_tables_and_gate_columns(tmp_path):
     with sqlite3.connect(database) as connection:
         tables = {
             row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
         assert {
             "golden_records",
@@ -406,9 +396,7 @@ def test_ddl_creates_tables_and_gate_columns(tmp_path):
             "agent_traces",
         } <= tables
 
-        golden_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(golden_records)")
-        }
+        golden_columns = {row[1] for row in connection.execute("PRAGMA table_info(golden_records)")}
         assert {
             "golden_id",
             "entity_type",
@@ -447,21 +435,22 @@ def test_ddl_creates_tables_and_gate_columns(tmp_path):
             "splink_match_probability",
         } <= candidate_columns
 
-        node_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(graph_nodes)")
-        }
+        node_columns = {row[1] for row in connection.execute("PRAGMA table_info(graph_nodes)")}
         assert {"node_id", "node_type", "entity_type", "entity_id", "decision_id"} <= node_columns
-        edge_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(graph_edges)")
-        }
-        assert {"edge_id", "edge_type", "from_node_id", "to_node_id", "proof", "proposer", "rule_fired", "taxonomy_version"} <= edge_columns
-        steward_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(steward_queue)")
-        }
+        edge_columns = {row[1] for row in connection.execute("PRAGMA table_info(graph_edges)")}
+        assert {
+            "edge_id",
+            "edge_type",
+            "from_node_id",
+            "to_node_id",
+            "proof",
+            "proposer",
+            "rule_fired",
+            "taxonomy_version",
+        } <= edge_columns
+        steward_columns = {row[1] for row in connection.execute("PRAGMA table_info(steward_queue)")}
         assert "suggested_action" in steward_columns
-        decision_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(decisions)")
-        }
+        decision_columns = {row[1] for row in connection.execute("PRAGMA table_info(decisions)")}
         assert "taxonomy_version" in decision_columns
 
 
@@ -630,24 +619,18 @@ def test_api_rejects_disallowed_attribute_before_derive(tmp_path):
 def test_policy_mg_matrix_matches_policy_json():
     import re
 
-    for entity_type, policy_path in (
+    for _entity_type, policy_path in (
         ("user", USER_POLICY_PATH),
         ("product", PRODUCT_POLICY_PATH),
     ):
-        policy = Policy.model_validate_json(
-            policy_path.read_text(encoding="utf-8")
-        )
+        policy = Policy.model_validate_json(policy_path.read_text(encoding="utf-8"))
         mg_path = policy_path.with_suffix(".mg")
         assert mg_path.exists(), f"missing runnable policy {mg_path}"
         mg = mg_path.read_text(encoding="utf-8")
         assert 'json_link("input", "facts", L)' in mg
         mg_ranks: dict[str, dict[str, int]] = {}
-        for match in re.finditer(
-            r'auth_rank\("([^"]+)", "([^"]+)", (\d+)\)\.', mg
-        ):
-            mg_ranks.setdefault(match.group(1), {})[match.group(2)] = int(
-                match.group(3)
-            )
+        for match in re.finditer(r'auth_rank\("([^"]+)", "([^"]+)", (\d+)\)\.', mg):
+            mg_ranks.setdefault(match.group(1), {})[match.group(2)] = int(match.group(3))
         assert mg_ranks == policy.authority_matrix
         for critical in policy.critical_attributes:
             assert f'critical("{critical}").' in mg

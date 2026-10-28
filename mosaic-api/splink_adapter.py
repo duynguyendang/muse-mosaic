@@ -10,7 +10,8 @@ not on Splink's Python API):
 - disabled (SPLINK_ENABLED=false) -> unavailable, no matching at all;
 - service_url set (three-container topology) -> HTTP POST /match;
 - service_url empty (single-container topology) -> in-process fallback behind
-  the same match interface (mosaic-api/splink_local.py, verbatim mirror).
+  the same match interface (mosaic-api/splink_local.py, re-export of
+  shared/splink_core.py — one implementation, two transports).
 
 Fallback (S-04/S-05): service disabled, unreachable, slow, refusing, version
 mismatch, or malformed output -> return status "unavailable" with an empty
@@ -35,6 +36,15 @@ EXPECTED_SPLINK_VERSION = "5.0.0"
 EXPECTED_DUCKDB_VERSION = "2.0.0"
 
 
+def _field_value(fields: dict[str, Any], *names: str) -> Any:
+    """First non-empty field value across candidate names (None if absent)."""
+    for name in names:
+        field = fields.get(name)
+        if isinstance(field, dict) and field.get("value") not in (None, ""):
+            return field["value"]
+    return None
+
+
 def flatten_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Flatten documents to the fragment rows the matcher consumes.
 
@@ -45,22 +55,18 @@ def flatten_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for document in documents:
         fields = document.get("fields", {})
-        def value(*names: str) -> Any:
-            for name in names:
-                field = fields.get(name)
-                if isinstance(field, dict) and field.get("value") not in (None, ""):
-                    return field["value"]
-            return None
-        rows.append({
-            "fragment_id": document.get("document_id", ""),
-            "entity_type": document.get("entity_type", "user"),
-            "name": value("display_name", "name", "full_name", "reviewer"),
-            "email": value("email", "customer_email"),
-            "phone": value("phone", "customer_phone", "mobile"),
-            "address": value("address",),
-            "order_id": value("order_id", "order"),
-            "category": value("category",),
-        })
+        rows.append(
+            {
+                "fragment_id": document.get("document_id", ""),
+                "entity_type": document.get("entity_type", "user"),
+                "name": _field_value(fields, "display_name", "name", "full_name", "reviewer"),
+                "email": _field_value(fields, "email", "customer_email"),
+                "phone": _field_value(fields, "phone", "customer_phone", "mobile"),
+                "address": _field_value(fields, "address"),
+                "order_id": _field_value(fields, "order_id", "order"),
+                "category": _field_value(fields, "category"),
+            }
+        )
     return rows
 
 
@@ -120,9 +126,7 @@ def _run_local(
         local_duckdb = _duckdb.__version__
     except Exception:
         local_duckdb = "unknown"
-    mismatch = _check_versions(
-        {"splink_version": local_splink, "duckdb_version": local_duckdb}
-    )
+    mismatch = _check_versions({"splink_version": local_splink, "duckdb_version": local_duckdb})
     if mismatch is not None:
         return _unavailable(mismatch)
     return {
@@ -160,17 +164,23 @@ def run_splink(
     """
     _ = unique_id
     if not enabled:
-        return _unavailable(
-            "SPLINK_UNAVAILABLE — fallback to Muse + fuzzy"
-        )
+        return _unavailable("SPLINK_UNAVAILABLE — fallback to Muse + fuzzy")
     if not rows:
-        return {"status": STATUS_OK, "clusters": [], "pairs": [],
-                "detail": "no input rows",
-                "splink_version": None, "duckdb_version": None}
+        return {
+            "status": STATUS_OK,
+            "clusters": [],
+            "pairs": [],
+            "detail": "no input rows",
+            "splink_version": None,
+            "duckdb_version": None,
+        }
     if not (service_url or "").strip():
         return _run_local(
-            rows, threshold=threshold, blocking=blocking,
-            policy_version=policy_version, work_id=work_id,
+            rows,
+            threshold=threshold,
+            blocking=blocking,
+            policy_version=policy_version,
+            work_id=work_id,
         )
     import httpx
 

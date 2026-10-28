@@ -25,7 +25,6 @@ from config import Settings
 from ingest import is_injection_bearing
 from schemas import CandidateFact, ProposalAttribute
 
-
 SYSTEM_PROMPT = """You merge fragmented identity records. You PROPOSE only; a deterministic
 engine decides. Rules:
 - For each attribute, propose exactly one observed value (copy it verbatim),
@@ -56,9 +55,7 @@ class ProposerNotConfiguredError(RuntimeError):
     """Raised when real Muse mode is requested without its required values."""
 
 
-async def propose_merge(
-    facts: list[CandidateFact], settings: Settings
-) -> dict[str, Any]:
+async def propose_merge(facts: list[CandidateFact], settings: Settings) -> dict[str, Any]:
     """Return a validated Muse merge proposal for one set of candidate facts."""
     if settings.use_mock_muse:
         return mock_proposal(facts)
@@ -66,16 +63,13 @@ async def propose_merge(
     return await real_proposal(facts, settings)
 
 
-async def real_proposal(
-    facts: list[CandidateFact], settings: Settings
-) -> dict[str, Any]:
+async def real_proposal(facts: list[CandidateFact], settings: Settings) -> dict[str, Any]:
     """Call Muse Spark Chat Completions with strict JSON schema.
 
     The schema constrains decoding; Pydantic validation still applies, and
     invented values/attributes/evidence are rejected (never silently kept).
     """
     from meta_client import MetaCallError, chat_json
-
     from schemas import ProposalAttribute as ProposalAttributeModel
 
     properties: dict[str, Any] = {}
@@ -91,15 +85,20 @@ async def real_proposal(
                         "type": "object",
                         "properties": {
                             "proposed_value": {"type": ["string", "null"]},
-                            "confidence": {"type": "string",
-                                           "enum": ["high", "medium", "low", "abstain"]},
+                            "confidence": {
+                                "type": "string",
+                                "enum": ["high", "medium", "low", "abstain"],
+                            },
                             "explanation": {"type": "string"},
-                            "evidence_fact_ids": {"type": "array",
-                                                  "items": {"type": "string"}},
+                            "evidence_fact_ids": {"type": "array", "items": {"type": "string"}},
                             "injection_detected": {"type": "boolean"},
                         },
-                        "required": ["confidence", "explanation",
-                                     "evidence_fact_ids", "injection_detected"],
+                        "required": [
+                            "confidence",
+                            "explanation",
+                            "evidence_fact_ids",
+                            "injection_detected",
+                        ],
                         "additionalProperties": False,
                     }
                     for attribute in sorted({fact.attribute for fact in facts})
@@ -114,11 +113,15 @@ async def real_proposal(
     _ = properties
     payload_facts = [
         {
-            "fact_id": fact.fact_id, "attribute": fact.attribute,
-            "value": fact.value, "source": fact.source,
-            "source_id": fact.source_id, "authority_rank": fact.authority_rank,
+            "fact_id": fact.fact_id,
+            "attribute": fact.attribute,
+            "value": fact.value,
+            "source": fact.source,
+            "source_id": fact.source_id,
+            "authority_rank": fact.authority_rank,
             "event_time": fact.event_time.isoformat(),
-            "verified": fact.verified, "ttl_seconds": fact.ttl_seconds,
+            "verified": fact.verified,
+            "ttl_seconds": fact.ttl_seconds,
         }
         for fact in facts
     ]
@@ -181,12 +184,8 @@ def parse_proposal_content(
     try:
         parsed = json.loads(text)
     except ValueError as exc:
-        raise ProposerError(
-            "invalid-json", f"Muse Spark output is not JSON: {exc}"
-        ) from exc
-    if not isinstance(parsed, dict) or not isinstance(
-        parsed.get("attributes"), dict
-    ):
+        raise ProposerError("invalid-json", f"Muse Spark output is not JSON: {exc}") from exc
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("attributes"), dict):
         raise ProposerError(
             "invalid-shape",
             "Muse Spark output must be an object with an attributes object",
@@ -212,9 +211,7 @@ def parse_proposal_content(
                 f"Muse Spark output for {name!r} failed validation: {exc}",
             ) from exc
         observed = {fact.value for fact in by_attribute[name]}
-        if validated.proposed_value is not None and (
-            validated.proposed_value not in observed
-        ):
+        if validated.proposed_value is not None and (validated.proposed_value not in observed):
             raise ProposerError(
                 "invented-value",
                 f"Muse Spark proposed an unobserved value for {name!r}; rejecting",
@@ -240,9 +237,7 @@ def parse_proposal_content(
                     "Model omitted this attribute; treated as abstain. "
                     "Human steward must decide."
                 ),
-                "evidence_fact_ids": [
-                    fact.fact_id for fact in by_attribute[name]
-                ],
+                "evidence_fact_ids": [fact.fact_id for fact in by_attribute[name]],
                 "injection_detected": False,
             }
 
@@ -278,9 +273,7 @@ def mock_proposal(facts: list[CandidateFact]) -> dict[str, Any]:
         injection = any(
             is_injection_bearing(fact.value) or is_injection_bearing(fact.source_id)
             for fact in group
-        ) or any(
-            is_injection_bearing(fact.value) for fact in group if fact.source == "ticket"
-        )
+        ) or any(is_injection_bearing(fact.value) for fact in group if fact.source == "ticket")
 
         if injection:
             attributes[attribute] = {
@@ -296,9 +289,7 @@ def mock_proposal(facts: list[CandidateFact]) -> dict[str, Any]:
             }
             continue
 
-        authoritative_verified = any(
-            fact.verified and fact.authority_rank == 1 for fact in group
-        )
+        authoritative_verified = any(fact.verified and fact.authority_rank == 1 for fact in group)
         if len(values) == 1:
             confidence = "high" if authoritative_verified else "medium"
             explanation = (

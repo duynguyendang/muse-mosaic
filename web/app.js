@@ -189,6 +189,56 @@
     return { entityType, entityId };
   }
 
+  async function loadEntities() {
+    // Entities are defined by data/mock fixtures (GET /entities). The three
+    // hardcoded <option>s stay as fallback if the fetch fails.
+    let items = [];
+    try {
+      const data = await api("/entities");
+      items = data.entities || [];
+    } catch (error) {
+      return;
+    }
+    if (!items.length) return;
+    const previous = entitySel.value;
+    entitySel.innerHTML = items.map((e) =>
+      `<option value="${esc(e.entity_type)}/${esc(e.entity_id)}">`
+      + `${esc(e.entity_type) === "user" ? "User" : "Product"} — ${esc(e.entity_id)}`
+      + ` (${e.fragments} fragments)</option>`).join("")
+      + `<option value="custom">Define custom entity…</option>`;
+    if (items.some((e) => `${e.entity_type}/${e.entity_id}` === previous)) {
+      entitySel.value = previous;
+    }
+  }
+
+  async function defineCustomEntity() {
+    const raw = window.prompt("Define entity as type/id (e.g. user/P-001):", "user/");
+    if (!raw) { entitySel.selectedIndex = 0; return loadFragments(); }
+    const value = raw.trim();
+    if (!/^[a-z][a-z0-9_]*\/.+/.test(value)) {
+      setStatus("Custom entity must look like type/id (e.g. user/P-001).");
+      entitySel.selectedIndex = 0;
+      return loadFragments();
+    }
+    if (![...entitySel.options].some((o) => o.value === value)) {
+      const [t, ...rest] = value.split("/");
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = `${t === "user" ? "User" : "Product"} — ${rest.join("/")} (custom)`;
+      entitySel.insertBefore(opt, entitySel.lastChild);
+    }
+    entitySel.value = value;
+    return loadFragments();
+  }
+
+  function onEntityChange() {
+    if (entitySel.value === "custom") {
+      defineCustomEntity().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
+      return;
+    }
+    loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
+  }
+
   async function loadFragments() {
     const { entityType, entityId } = currentEntity();
     const data = await api(`/fragments/${entityType}/${entityId}`);
@@ -212,11 +262,18 @@
     return list;
   }
 
+  const SRC_COLOR = {
+    "salesforce-like": "var(--src-salesforce)", "sap-like": "var(--src-sap)",
+    "ciam-like": "var(--src-ciam)", "pim-like": "var(--src-pim)",
+    "erp-like": "var(--src-erp)", "marketplace-like": "var(--src-market)",
+  };
+
   function renderFragments() {
     const list = activeFragments();
     proposerBody.innerHTML = list.map((f) => `
-      <div class="card">
-        <h3>${esc(f.attribute)} <span class="muted mono">${esc(f.value)}</span></h3>
+      <div class="card ${f.verified ? "info" : "warn"}">
+        <h3><span class="swatch" style="background:${SRC_COLOR[f.source] || "var(--tomb)"}"></span>
+        ${esc(f.attribute)} <span class="muted mono">${esc(f.value)}</span></h3>
         <div class="meta mono">${esc(f.source)} / ${esc(f.source_id)} · rank ${esc(f.authority_rank)} ·
         ${f.verified ? "verified" : "unverified"} · ${esc(f.event_time)}</div>
       </div>`).join("") || `<div class="card"><span class="muted">No fragments.</span></div>`;
@@ -281,9 +338,9 @@
       `<div class="meta">▸ <b>${esc(step.agent || "?")}</b>`
       + `${step.real_call ? " <span class='badge'>REAL</span>" : " <span class='badge'>mock</span>"}`
       + ` — ${esc(step.output_summary || "")}</div>`).join("");
-    proposerBody.innerHTML = (trace ? `<div class="card"><h3>Sub-agent trace</h3>${trace}</div>` : "")
+    proposerBody.innerHTML = (trace ? `<div class="card plum"><h3>Sub-agent trace</h3>${trace}</div>` : "")
       + attrs.map(([name, attr]) => `
-      <div class="card">
+      <div class="card info">
         <h3>${esc(name)} ${badge(attr.confidence)}</h3>
         <div>proposed: <span class="mono">${esc(attr.proposed_value ?? "— abstain —")}</span></div>
         <div class="meta">${esc(attr.explanation)}</div>
@@ -300,17 +357,20 @@
     }
     const attrs = Object.entries(golden.attributes || {}).map(([name, value]) => {
       if (name === "purchased_products" && Array.isArray(value)) {
-        return `<div><b>${esc(name)}</b>: ${value.map((p, i) =>
-          `<div class="mono">#${i} category=${esc(p.category || "?")}`
-          + (p._lineage ? ` · ${esc(JSON.stringify(p._lineage))}` : "") + `</div>`).join("")}</div>`;
+        const items = value.map((p, i) =>
+          `<div class="gold-field"><div class="fld">PURCHASED[${i}]</div>`
+          + `<div class="val">${esc(p.category || "?")}</div>`
+          + (p._lineage ? `<div class="prov mono">${esc(JSON.stringify(p._lineage))}</div>` : "") + `</div>`).join("");
+        return `<div class="gold-grid">${items}</div>`;
       }
       const line = typeof value === "object" && value !== null
-        ? `${esc(value.value)} <span class="muted">· ${esc(value.rule_fired || "")} · ${esc(value.taxonomy_version || "")}</span>`
-        : esc(value);
-      return `<div><b>${esc(name)}</b>: ${line}</div>`;
+        ? `<div class="val">${esc(value.value)}</div><div class="prov">${esc(value.rule_fired || "")} · ${esc(value.taxonomy_version || "")}</div>`
+        : `<div class="val">${esc(value)}</div>`;
+      return `<div class="gold-field"><div class="fld">FIELD: ${esc(name).toUpperCase()}</div>${line}</div>`;
     }).join("");
     $("golden-body").innerHTML =
-      `<div>version <span class="mono">${golden.version}</span> · taxonomy <span class="mono">${esc(golden.taxonomy_version || "—")}</span></div>` + attrs;
+      `<div class="meta">version <span class="mono">${golden.version}</span> · taxonomy <span class="mono">${esc(golden.taxonomy_version || "—")}</span></div>`
+      + `<div class="gold-grid">${attrs}</div>`;
   }
 
   function renderEngine(payload) {
@@ -319,7 +379,7 @@
     const goldenHtml = attrs.map(([name, value]) => {
       if (name === "purchased_products") return "";
       return `
-      <div class="card">
+      <div class="card ok">
         <h3>${esc(name)} <span class="mono">${esc(value.value)}</span> ${badge("published")}</h3>
         <div class="meta mono">winner ${esc(value.winner_fact_id)} · rule ${esc(value.rule_fired)} ·
         policy ${esc(value.policy_version)} · taxonomy ${esc(value.taxonomy_version || "—")}</div>
@@ -329,19 +389,20 @@
     }).join("");
 
     const conflictHtml = (payload.conflicts || []).map((c) => `
-      <div class="card">
+      <div class="card warn">
         <h3>${esc(c.attribute)} ${badge("escalated")}</h3>
         <div class="meta mono">${esc(c.reason_code)} · rule ${esc(c.rule_fired)} · policy ${esc(c.policy_version)} · taxonomy ${esc(c.taxonomy_version || "—")}</div>
         <div class="meta mono">facts: ${(c.fact_ids || []).map(esc).join(", ")}</div>
       </div>`).join("");
 
     const vlinkHtml = ((payload.verified_links && payload.verified_links.length) ? `
-      <div class="card"><h3>Verified links (L1)</h3>
+      <div class="card plum"><h3>Verified links (L1)</h3>
       <div class="meta mono">${payload.verified_links.map((l) =>
         `${esc(l.from_fact_id)} —${esc(l.proof)}→ ${esc(l.to_fact_id)}`).join("<br/>")}</div></div>` : "");
 
+    const verdictClass = payload.verdict === "published" ? "ok" : payload.verdict === "denied" ? "stop" : "warn";
     engineBody.innerHTML = `
-      <div class="card">
+      <div class="card ${verdictClass}">
         <h3>Decision <span class="mono">${esc(payload.decision_id)}</span> ${badge(payload.verdict)}</h3>
         <div class="meta mono">policy ${esc(payload.policy_version)} · taxonomy ${esc(payload.taxonomy_version || "—")}</div>
         <div class="steward-actions">
@@ -411,17 +472,17 @@
 
   function stewardCardHtml(item) {
     return `
-      <div class="card" data-steward="${esc(item.steward_id)}">
+      <div class="card warn" data-steward="${esc(item.steward_id)}">
         <h3>${esc(item.attribute)} <span class="muted mono">${esc(item.status)}</span></h3>
         <div class="meta">owner ${esc(item.owner)} · deputy ${esc(item.deputy || "—")}</div>
         <div class="meta">deadline <span class="mono">${esc(item.deadline)}</span></div>
         <div class="meta">fallback: ${esc(item.fallback)}</div>
         ${item.suggested_action ? `<div class="meta">suggested: <span class="mono">${esc(item.suggested_action)}</span></div>` : ""}
         <div class="steward-actions">
-          <button data-approve="${esc(item.steward_id)}">Approve w/ value…</button>
-          <button data-reject="${esc(item.steward_id)}">Reject</button>
+          <button class="btn-approve" data-approve="${esc(item.steward_id)}">Approve w/ value…</button>
+          <button class="btn-reject" data-reject="${esc(item.steward_id)}">Reject</button>
           <button data-split="${esc(item.steward_id)}">Split to v1</button>
-          ${item.suggested_action ? `<button data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept suggested</button>` : ""}
+          ${item.suggested_action ? `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept suggested</button>` : ""}
         </div>
       </div>`;
   }
@@ -507,8 +568,8 @@
       if (!p) return;
       const label = (n.node_id.split("-").slice(-2).join("/") || n.node_type).slice(-18);
       html += `<g data-node="${esc(n.node_id)}" style="cursor:pointer">`
-        + `<circle cx="${p.x}" cy="${p.y}" r="9" fill="${color[n.node_type] || "#64748b"}" stroke="#0b1020" stroke-width="2"><title>${esc(n.node_id)} [${esc(n.node_type)}]${n.source ? " · " + esc(n.source) : ""}</title></circle>`
-        + `<text x="${p.x + 12}" y="${p.y + 4}" font-size="10" fill="#93a0c2">${esc(label)}</text></g>`;
+        + `<circle cx="${p.x}" cy="${p.y}" r="11" fill="${color[n.node_type] || "#64748b"}" stroke="#ffffff" stroke-width="2.5"><title>${esc(n.node_id)} [${esc(n.node_type)}]${n.source ? " · " + esc(n.source) : ""}</title></circle>`
+        + `<text x="${p.x + 15}" y="${p.y + 4}" font-size="11" font-weight="600" fill="#1E293B" stroke="#ffffff" stroke-width="3" paint-order="stroke">${esc(label)}</text></g>`;
     });
     svg.innerHTML = html;
     $("graph-info").textContent = `${nodes.length} nodes, ${edges.length} edges. Solid = verified, dashed = proposed.`;
@@ -579,7 +640,7 @@
     const pairHtml = pairs.map((p) => `
       <div class="meta mono">${esc(p.left)} ↔ ${esc(p.right)} · weight ${esc(p.match_weight ?? "?")} · prob ${esc(p.match_probability ?? "?")} · via ${esc(p.blocking_rule || "?")} (${esc(p.proposer || "Splink")})</div>`).join("");
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = ok ? "card plum" : "card warn";
     card.innerHTML = `
       <h3>Matching Engine ${ok
         ? badge("published")
@@ -792,7 +853,7 @@
         }));
         continue;
       }
-      tiles.push({ kind: "user", label: `${name}=${value.value}`, wide: false, detail: value });
+      tiles.push({ kind: "gold", label: `${name}=${value.value}`, wide: false, detail: value });
     }
     const proposal = payload.proposal || { attributes: {} };
     for (const [name, attr] of Object.entries(proposal.attributes || {})) {
@@ -824,7 +885,7 @@
     }
   }
 
-  entitySel.addEventListener("change", loadFragments);
+  entitySel.addEventListener("change", onEntityChange);
   ticketBox.addEventListener("change", renderFragments);
   refreshBtn.addEventListener("click", loadFragments);
   resolveBtn.addEventListener("click", () => resolve(false));
@@ -874,6 +935,8 @@
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();
   window.setInterval(refreshHealth, 10000);
-  loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
+  loadEntities()
+    .catch(() => {})
+    .finally(() => loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`)));
   loadPending();
 })();

@@ -25,7 +25,6 @@ import time
 from typing import Any
 
 import httpx
-
 from config import Settings
 
 MUSE_TIMEOUT_SECONDS = 120.0
@@ -204,8 +203,7 @@ async def chat_json(
                 continue
             raise MetaCallError(
                 "refused",
-                f"Muse refused the call (HTTP {response.status_code}): "
-                f"{response.text[:300]}",
+                f"Muse refused the call (HTTP {response.status_code}): " f"{response.text[:300]}",
             )
         if attempt < MAX_ATTEMPTS - 1:
             await asyncio.sleep((2**attempt) + random.uniform(0, 1.0))
@@ -213,24 +211,18 @@ async def chat_json(
     raise last_error or MetaCallError("unknown", "Muse call failed")
 
 
-def _parse_success(
-    response: httpx.Response, model: str
-) -> tuple[dict[str, Any], dict[str, Any]]:
+def _parse_success(response: httpx.Response, model: str) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
         body = response.json()
         content = body["choices"][0]["message"]["content"]
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         _BREAKER.record(False)
-        raise MetaCallError(
-            "invalid-envelope", f"Muse output envelope unusable: {exc}"
-        ) from exc
+        raise MetaCallError("invalid-envelope", f"Muse output envelope unusable: {exc}") from exc
     try:
         parsed = extract_json_object(content)
     except ValueError as exc:
         _BREAKER.record(False)
-        raise MetaCallError(
-            "invalid-json", f"Muse output is not JSON: {exc}"
-        ) from exc
+        raise MetaCallError("invalid-json", f"Muse output is not JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         _BREAKER.record(False)
         raise MetaCallError("invalid-shape", "Muse output is not a JSON object")

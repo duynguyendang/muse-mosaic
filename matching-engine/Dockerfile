@@ -12,6 +12,8 @@ COPY matching-engine/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=app:app matching-engine/ ./
+COPY --chown=app:app shared/ ./shared/
+COPY --chown=app:app matching-engine/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 EXPOSE 8081
 

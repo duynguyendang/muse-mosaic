@@ -46,7 +46,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -55,10 +54,7 @@ VNH = timezone(timedelta(hours=7))
 ANCHOR_MAX = datetime(2026, 10, 27, 9, 0, 0, tzinfo=VNH)
 TTL_SECONDS = 3600  # same as the synthetic fixtures
 
-BASE_DEFAULT = (
-    Path.home()
-    / ".cache/kagglehub/datasets/vinaykandimalla/customer-360/versions/1"
-)
+BASE_DEFAULT = Path.home() / ".cache/kagglehub/datasets/vinaykandimalla/customer-360/versions/1"
 
 
 def read_csv(path: Path) -> list[dict]:
@@ -116,10 +112,7 @@ def main() -> int:
         if len(names) > 1:
             name_conflict.append(key)
             continue
-        full = {
-            tuple(sorted((kk, (vv or "").strip()) for kk, vv in r.items()))
-            for _, r in group
-        }
+        full = {tuple(sorted((kk, (vv or "").strip()) for kk, vv in r.items())) for _, r in group}
         if len(full) == 1:
             exact_dup.append(key)
         else:
@@ -156,12 +149,18 @@ def main() -> int:
         cust_orders[key].sort(key=lambda o: o["order_id"] or "")
 
     referenced_products = sorted(
-        {o["product_id"] for docs in cust_orders.values() for o in docs if (o.get("product_id") or "").strip()}
+        {
+            o["product_id"]
+            for docs in cust_orders.values()
+            for o in docs
+            if (o.get("product_id") or "").strip()
+        }
     )
     prod_by_id = {p["product_id"]: p for p in products}
     kept_products = [prod_by_id[pid] for pid in referenced_products if pid in prod_by_id]
     dropped_products = sum(
-        1 for pid in referenced_products
+        1
+        for pid in referenced_products
         if pid not in prod_by_id or not (prod_by_id[pid].get("category") or "").strip()
     )
     kept_products = [p for p in kept_products if (p.get("category") or "").strip()]
@@ -206,13 +205,15 @@ def main() -> int:
         customer_orders = cust_orders.get(row["customer_id"], [])
         if not customer_orders:
             if identity_fields:
-                documents.append({
-                    "document_id": f"kag-crm-{row_idx:06d}",
-                    "entity_type": "user",
-                    "source": "crm",
-                    "synthetic": True,
-                    "fields": identity_fields,
-                })
+                documents.append(
+                    {
+                        "document_id": f"kag-crm-{row_idx:06d}",
+                        "entity_type": "user",
+                        "source": "crm",
+                        "synthetic": True,
+                        "fields": identity_fields,
+                    }
+                )
             continue
         for order in customer_orders:
             order_seq += 1
@@ -220,15 +221,19 @@ def main() -> int:
             order_fields = dict(identity_fields)
             order_fields["order_id"] = field(order["order_id"], order_iso)
             # B-doc: identity + this order (join key), source crm.
-            b_fields = {k: dict(v, event_time=order_iso) if k in identity_fields else v
-                        for k, v in order_fields.items()}
-            documents.append({
-                "document_id": f"kag-crm-{row_idx:06d}-ord-{order_seq:06d}",
-                "entity_type": "user",
-                "source": "crm",
-                "synthetic": True,
-                "fields": b_fields,
-            })
+            b_fields = {
+                k: dict(v, event_time=order_iso) if k in identity_fields else v
+                for k, v in order_fields.items()
+            }
+            documents.append(
+                {
+                    "document_id": f"kag-crm-{row_idx:06d}-ord-{order_seq:06d}",
+                    "entity_type": "user",
+                    "source": "crm",
+                    "synthetic": True,
+                    "fields": b_fields,
+                }
+            )
             # O-doc: bare order record, source orders — shares order_id with its B-doc.
             o_fields = {"order_id": field(order["order_id"], order_iso)}
             if (order.get("product_id") or "").strip():
@@ -238,22 +243,26 @@ def main() -> int:
                     "verified": True,
                     "ttl_seconds": TTL_SECONDS,
                 }
-            documents.append({
-                "document_id": f"kag-ord-{order_seq:06d}",
-                "entity_type": "user",
-                "source": "orders",
-                "synthetic": True,
-                "fields": o_fields,
-            })
+            documents.append(
+                {
+                    "document_id": f"kag-ord-{order_seq:06d}",
+                    "entity_type": "user",
+                    "source": "orders",
+                    "synthetic": True,
+                    "fields": o_fields,
+                }
+            )
 
     for j, product in enumerate(sorted(kept_products, key=lambda p: p["product_id"])):
-        documents.append({
-            "document_id": f"kag-prod-{j:06d}",
-            "entity_type": "product",
-            "source": "catalog",
-            "synthetic": True,
-            "fields": {"category": field(product["category"].strip(), default_event)},
-        })
+        documents.append(
+            {
+                "document_id": f"kag-prod-{j:06d}",
+                "entity_type": "product",
+                "source": "catalog",
+                "synthetic": True,
+                "fields": {"category": field(product["category"].strip(), default_event)},
+            }
+        )
 
     meta = {
         "source": "Kaggle vinaykandimalla/customer-360 (synthetic per dataset card), frozen sample",
@@ -263,7 +272,10 @@ def main() -> int:
     }
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps({"documents": documents, "meta": meta}, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    out.write_text(
+        json.dumps({"documents": documents, "meta": meta}, indent=1, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
     print(f"wrote {out} ({len(documents)} documents)")
     return 0
 

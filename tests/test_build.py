@@ -65,8 +65,9 @@ def test_build_hidden_cluster_publishes_golden(api_client):
             continue
         for _name, field in golden["attributes"].items():
             if isinstance(field, dict):
-                assert field.get("winner_fact_id", "").find("F6-") == -1, \
-                    "trap fact must never win in the main cluster"
+                assert (
+                    field.get("winner_fact_id", "").find("F6-") == -1
+                ), "trap fact must never win in the main cluster"
 
 
 def test_build_is_idempotent(api_client):
@@ -89,40 +90,61 @@ def test_build_nests_verified_purchase_and_survives_rebuild(api_client):
 
     def frag(source, sid, attribute, value, rank=1, verified=True):
         return {
-            "source": source, "source_id": sid, "attribute": attribute,
-            "value": value, "authority_rank": rank, "event_time": ts,
-            "verified": verified, "ttl_seconds": 3600,
+            "source": source,
+            "source_id": sid,
+            "attribute": attribute,
+            "value": value,
+            "authority_rank": rank,
+            "event_time": ts,
+            "verified": verified,
+            "ttl_seconds": 3600,
         }
 
     def doc_field(value, rank=1, verified=True):
         return {
-            "value": value, "authority_rank": rank, "event_time": ts,
-            "verified": verified, "ttl_seconds": 3600,
+            "value": value,
+            "authority_rank": rank,
+            "event_time": ts,
+            "verified": verified,
+            "ttl_seconds": 3600,
         }
 
-    resolve = api_client.post("/resolve", json={
-        "work_id": "work-nest-prod", "idempotency_key": "nest-prod",
-        "entity_type": "product", "entity_id": "prod-nest-1",
-        "fragments": [frag("pim-like", "nest-cat", "category", "Smartphone")],
-    })
+    resolve = api_client.post(
+        "/resolve",
+        json={
+            "work_id": "work-nest-prod",
+            "idempotency_key": "nest-prod",
+            "entity_type": "product",
+            "entity_id": "prod-nest-1",
+            "fragments": [frag("pim-like", "nest-cat", "category", "Smartphone")],
+        },
+    )
     assert resolve.status_code == 200, resolve.text
     assert resolve.json()["verdict"] == "published", resolve.json()
 
     order = "ORD-NEST-1"
     docs = [
-        {"document_id": "nest-b", "entity_type": "user", "source": "crm",
-         "synthetic": True,
-         "fields": {
-             "email": doc_field("nest@example.com"),
-             "phone": doc_field("0900000001"),
-             "order_id": doc_field(order),
-         }},
-        {"document_id": "nest-o", "entity_type": "user", "source": "orders",
-         "synthetic": True,
-         "fields": {
-             "order_id": doc_field(order),
-             "product_ref": doc_field("prod-nest-1"),
-         }},
+        {
+            "document_id": "nest-b",
+            "entity_type": "user",
+            "source": "crm",
+            "synthetic": True,
+            "fields": {
+                "email": doc_field("nest@example.com"),
+                "phone": doc_field("0900000001"),
+                "order_id": doc_field(order),
+            },
+        },
+        {
+            "document_id": "nest-o",
+            "entity_type": "user",
+            "source": "orders",
+            "synthetic": True,
+            "fields": {
+                "order_id": doc_field(order),
+                "product_ref": doc_field("prod-nest-1"),
+            },
+        },
     ]
     first = build(api_client, docs, "build-nest-1")
     assert first.status_code == 200, first.text
@@ -156,7 +178,9 @@ def test_upload_template_and_csv_rejected(api_client):
     import json
     from pathlib import Path
 
-    template = Path(__file__).resolve().parents[1] / "data" / "mock" / "templates" / "user_profile.json"
+    template = (
+        Path(__file__).resolve().parents[1] / "data" / "mock" / "templates" / "user_profile.json"
+    )
     data = json.loads(template.read_text(encoding="utf-8"))
     response = api_client.post(
         "/upload",

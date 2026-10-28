@@ -22,29 +22,34 @@ import hashlib
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import ledger
 from config import Settings
-from graph import derive_purchased_edges
+from graph import GraphEdge, derive_purchased_edges, insert_graph_rows, plan_graph
 from ingest import to_candidate_facts
+from policies import PolicyError, active_version, check_attributes
 from proposer import ProposerError
 from schemas import (
     CandidateFact,
     ConflictFact,
+    DeriveRequest,
     DeriveResponse,
     GoldenFact,
     GoldenRecord,
-    ProposedLink,
     Proposal,
+    ProposedLink,
     ResolveRequest,
     ResolveResponse,
     StewardItem,
     VerifiedLink,
 )
 from subagents import validate_links
-from trust import TrustEngineError, derive as trust_derive
+from taxonomies import default_version
+from trust import TrustEngineError
+from trust import derive as trust_derive
 
 NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
@@ -103,7 +108,7 @@ def decision_id_for(idempotency_key: str, payload_hash: str) -> str:
 
 
 def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _steward_fallback(attribute: str) -> str:
@@ -141,10 +146,14 @@ def _batch_links(
         if key in seen:
             return
         seen.add(key)
-        links.append({
-            "from_fact_id": from_id, "to_fact_id": to_id,
-            "proof": proof, "proposer": proposer,
-        })
+        links.append(
+            {
+                "from_fact_id": from_id,
+                "to_fact_id": to_id,
+                "proof": proof,
+                "proposer": proposer,
+            }
+        )
 
     if fact_documents:
         by_doc: dict[str, list[str]] = {}
@@ -157,11 +166,11 @@ def _batch_links(
             ids = sorted(by_doc[ordered_docs[0]])
         else:
             ids = sorted(fact.fact_id for fact in facts)
-        for first, second in zip(ids, ids[1:]):
+        for first, second in zip(ids, ids[1:], strict=False):
             add(first, second, "same_fragment", "mosaic-api")
     else:
         ids = sorted(fact.fact_id for fact in facts)
-        for first, second in zip(ids, ids[1:]):
+        for first, second in zip(ids, ids[1:], strict=False):
             add(first, second, "same_fragment", "mosaic-api")
     for link in linker_links:
         add(link.from_fact_id, link.to_fact_id, link.proof, link.proposer)
@@ -188,13 +197,9 @@ async def run_builder_pipeline(
     from subagents import run_real_pipeline as real_pipeline
 
     if settings.use_mock_muse:
-        proposal, _trace = await mock_pipeline(
-            facts, taxonomy, allowed_attributes, fact_documents
-        )
+        proposal, _trace = await mock_pipeline(facts, taxonomy, allowed_attributes, fact_documents)
     else:
-        proposal, _trace = await real_pipeline(
-            facts, settings, taxonomy, fact_documents
-        )
+        proposal, _trace = await real_pipeline(facts, settings, taxonomy, fact_documents)
     fact_ids = {fact.fact_id for fact in facts}
     combined = list(proposal.get("links", [])) + list(extra_links or [])
     valid_links, link_errors = validate_links(combined, fact_ids)
@@ -229,40 +234,148 @@ async def resolve_flow(
     taxonomy_version defaults to the entity default; expected_structure
     defaults to the baked-in demo template for the entity type.
     """
-    from policies import active_version, check_attributes
-    from taxonomies import default_version
-
-    policy = active_version(policies, request.entity_type)
-    check_attributes(
-        policy, [fragment.attribute for fragment in request.fragments]
+    policy, taxonomy, taxonomy_version_resolved = _resolve_policy(
+        request, policies, taxonomies, taxonomy_version
     )
-    taxonomy = None
-    taxonomy_version_resolved = ""
-    if taxonomies:
-        taxonomy_version_resolved = (
-            taxonomy_version or default_version(taxonomies, request.entity_type)
-        )
-        taxonomy = taxonomies.get(taxonomy_version_resolved)
-        if taxonomy is None:
-            from policies import PolicyError
-
-            raise PolicyError(
-                f"no taxonomy {taxonomy_version_resolved!r}; fail closed"
-            )
-
     payload_hash = canonical_payload_hash(request)
     decision_id = decision_id_for(request.idempotency_key, payload_hash)
     created_at = now_iso or utcnow_iso()
-
     facts = to_candidate_facts(
-        request.entity_type, request.entity_id, request.fragments,
+        request.entity_type,
+        request.entity_id,
+        request.fragments,
         work_id=request.work_id,
     )
     facts, taxonomy_claims = apply_taxonomy_mappings(facts, taxonomy)
+    proposal, link_dicts, trace = await _run_proposal(
+        settings,
+        request,
+        facts,
+        policy,
+        taxonomy,
+        fact_documents,
+        decision_id,
+        created_at,
+    )
+    stored = ledger.fetch_decision_by_key(settings.database_path, request.idempotency_key)
+    if stored is not None:
+        if stored["payload_hash"] != payload_hash:
+            raise IdempotencyConflictError(
+                f"idempotency key {request.idempotency_key!r} was already used "
+                "with a different payload; refusing to write"
+            )
+        return replay_response(settings, stored["decision_id"]), proposal
+    links = [ProposedLink.model_validate(item) for item in link_dicts]
+    derived = await _run_derive(
+        settings,
+        request,
+        facts,
+        links,
+        policy,
+        taxonomy_version_resolved,
+        payload_hash,
+        decision_id,
+        created_at,
+    )
+    golden, conflicts, steward_queue, nested, purchased = _gate_structure(
+        request,
+        facts,
+        proposal,
+        derived,
+        decision_id,
+        policy,
+        taxonomy_version_resolved,
+        taxonomy_claims,
+        created_at,
+        settings,
+        expected_structure,
+        documents or [],
+    )
+    response = persist_decision(
+        settings=settings,
+        request=request,
+        facts=facts,
+        payload_hash=payload_hash,
+        decision_id=decision_id,
+        policy_version=policy.policy_version,
+        taxonomy_version=taxonomy_version_resolved,
+        rule_fired=_primary_rule(derived, conflicts),
+        verdict=_verdict(golden, steward_queue, conflicts),
+        reason_code=_primary_reason(conflicts, derived),
+        golden=golden,
+        conflicts=conflicts,
+        stewards=steward_queue,
+        created_at=created_at,
+        links=links,
+        verified_links=[
+            VerifiedLink(**link) if isinstance(link, dict) else link
+            for link in derived.verified_links
+        ],
+        purchased_edges=purchased,
+        nested_products=nested,
+        publish_golden=bool(golden),
+        traces={
+            "subagents": {
+                "trace": [
+                    step.model_dump() if hasattr(step, "model_dump") else step
+                    for step in proposal.subagent_trace
+                ],
+                "taxonomy_claims": taxonomy_claims,
+                "usage": proposal.usage,
+                "mode": proposal.mode,
+                "model": proposal.model,
+            }
+        },
+    )
+    # Wonder adjudicates escalations only, and only if configured.
+    wonder_notes = await _maybe_adjudicate(settings, steward_queue, request, decision_id)
+    if wonder_notes:
+        ledger.store_agent_trace(
+            settings.database_path,
+            decision_id,
+            "wonder",
+            {"notes": wonder_notes},
+            created_at,
+        )
+    return response, proposal
 
+
+def _resolve_policy(
+    request: ResolveRequest,
+    policies: dict,
+    taxonomies: dict | None,
+    taxonomy_version: str | None,
+):
+    """Policy + taxonomy for the request; unknown taxonomy fails closed."""
+    policy = active_version(policies, request.entity_type)
+    check_attributes(policy, [fragment.attribute for fragment in request.fragments])
+    taxonomy = None
+    resolved = ""
+    if taxonomies:
+        resolved = taxonomy_version or default_version(taxonomies, request.entity_type)
+        taxonomy = taxonomies.get(resolved)
+        if taxonomy is None:
+            raise PolicyError(f"no taxonomy {resolved!r}; fail closed")
+    return policy, taxonomy, resolved
+
+
+async def _run_proposal(
+    settings: Settings,
+    request: ResolveRequest,
+    facts: list,
+    policy,
+    taxonomy,
+    fact_documents: dict[str, str] | None,
+    decision_id: str,
+    created_at: str,
+):
+    """Muse propose phase; proposer failure escalates, never publishes."""
     try:
         builder_out, link_dicts, trace = await run_builder_pipeline(
-            facts, settings, taxonomy, set(policy.allowed_attributes),
+            facts,
+            settings,
+            taxonomy,
+            set(policy.allowed_attributes),
             fact_documents,
         )
         proposal = Proposal.model_validate(builder_out)
@@ -286,112 +399,106 @@ async def resolve_flow(
             steward_items=steward_rows,
             reason_code="PROPOSER_UNAVAILABLE",
         ) from exc
+    return proposal, link_dicts, trace
 
-    stored = ledger.fetch_decision_by_key(settings.database_path, request.idempotency_key)
-    if stored is not None:
-        if stored["payload_hash"] != payload_hash:
-            raise IdempotencyConflictError(
-                f"idempotency key {request.idempotency_key!r} was already used "
-                "with a different payload; refusing to write"
-            )
-        return replay_response(settings, stored["decision_id"]), proposal
 
-    from schemas import DeriveRequest, ProposedLink
-
-    links = [ProposedLink.model_validate(item) for item in link_dicts]
-    derive_request = DeriveRequest(
-        decision_id=decision_id,
-        entity_type=request.entity_type,
-        entity_id=request.entity_id,
-        idempotency_key=request.idempotency_key,
-        payload_hash=payload_hash,
-        policy_version=policy.policy_version,
-        taxonomy_version=taxonomy_version_resolved,
-        candidate_facts=facts,
-        links=links,
-    )
+async def _run_derive(
+    settings: Settings,
+    request: ResolveRequest,
+    facts: list,
+    links: list,
+    policy,
+    taxonomy_version: str,
+    payload_hash: str,
+    decision_id: str,
+    created_at: str,
+):
+    """Trust-engine derive; engine failure escalates, never publishes."""
     try:
-        derived = await trust_derive(settings, derive_request)
+        return await trust_derive(
+            settings,
+            DeriveRequest(
+                decision_id=decision_id,
+                entity_type=request.entity_type,
+                entity_id=request.entity_id,
+                idempotency_key=request.idempotency_key,
+                payload_hash=payload_hash,
+                policy_version=policy.policy_version,
+                taxonomy_version=taxonomy_version,
+                candidate_facts=facts,
+                links=links,
+            ),
+        )
     except TrustEngineError as exc:
         steward_rows = escalate_unavailable(
             settings, request, facts, decision_id, policy.policy_version, created_at
         )
-        raise EngineUnavailableError(str(exc), decision_id=decision_id,
-                                     steward_items=steward_rows) from exc
+        raise EngineUnavailableError(
+            str(exc), decision_id=decision_id, steward_items=steward_rows
+        ) from exc
 
+
+def _gate_structure(
+    request: ResolveRequest,
+    facts: list,
+    proposal: Proposal,
+    derived,
+    decision_id: str,
+    policy,
+    taxonomy_version: str,
+    taxonomy_claims: list,
+    created_at: str,
+    settings: Settings,
+    expected_structure: dict[str, Any] | None,
+    documents: list[dict[str, Any]],
+):
+    """Proposer gate + taxonomy items + whole-document structure gate."""
     golden, conflicts, stewards = apply_proposer_gate(
-        request, facts, proposal, derived, decision_id,
+        request,
+        facts,
+        proposal,
+        derived,
+        decision_id,
         critical_attributes=set(policy.critical_attributes),
-        taxonomy_version=taxonomy_version_resolved,
+        taxonomy_version=taxonomy_version,
     )
     # Taxonomy steward items for proposed new terms (steward-only Accept).
     tax_conflicts, tax_stewards = taxonomy_steward_items(
-        proposal, request.entity_type, request.entity_id, decision_id, facts,
-        created_at, policy_version=policy.policy_version,
-        taxonomy_version=taxonomy_version_resolved,
+        proposal,
+        request.entity_type,
+        request.entity_id,
+        decision_id,
+        facts,
+        created_at,
+        policy_version=policy.policy_version,
+        taxonomy_version=taxonomy_version,
     )
     conflicts.extend(tax_conflicts)
     steward_queue = list(stewards) + tax_stewards
-
-    structure = expected_structure if expected_structure is not None else None
-    (assembled, nested_purchased, purchased_edges,
-     struct_conflicts, struct_stewards, struct_ok) = assemble_and_validate(
-        request=request,
-        facts=facts,
-        golden=golden,
-        policy_version=policy.policy_version,
-        taxonomy_version=taxonomy_version_resolved,
-        golden_attrs=set(policy.golden_attributes or [f.attribute for f in facts]),
-        expected_structure=structure,
-        documents=documents or [],
-        decision_id=decision_id,
-        created_at=created_at,
-        database_path=settings.database_path,
+    assembled, nested_purchased, purchased_edges, struct_conflicts, struct_stewards, struct_ok = (
+        assemble_and_validate(
+            request=request,
+            facts=facts,
+            golden=golden,
+            policy_version=policy.policy_version,
+            taxonomy_version=taxonomy_version,
+            golden_attrs=set(policy.golden_attributes or [f.attribute for f in facts]),
+            expected_structure=expected_structure,
+            documents=documents,
+            decision_id=decision_id,
+            created_at=created_at,
+            database_path=settings.database_path,
+        )
     )
     conflicts.extend(struct_conflicts)
     steward_queue.extend(struct_stewards)
-
-    response = persist_decision(
-        settings=settings,
-        request=request,
-        facts=facts,
-        payload_hash=payload_hash,
-        decision_id=decision_id,
-        policy_version=policy.policy_version,
-        taxonomy_version=taxonomy_version_resolved,
-        rule_fired=_primary_rule(derived, conflicts),
-        verdict=_verdict(assembled, steward_queue, conflicts),
-        reason_code=_primary_reason(conflicts, derived),
-        golden=assembled,
-        conflicts=conflicts,
-        stewards=steward_queue,
-        created_at=created_at,
-        links=links,
-        verified_links=[VerifiedLink(**link) if isinstance(link, dict) else link for link in derived.verified_links],
-        purchased_edges=purchased_edges,
-        nested_products=nested_purchased,
-        publish_golden=struct_ok,
-        traces={
-            "subagents": {
-                "trace": [step.model_dump() if hasattr(step, "model_dump") else step for step in proposal.subagent_trace],
-                "taxonomy_claims": taxonomy_claims,
-                "usage": proposal.usage,
-                "mode": proposal.mode,
-                "model": proposal.model,
-            }
-        },
+    return (
+        (assembled if struct_ok else []),
+        conflicts,
+        steward_queue,
+        nested_purchased,
+        purchased_edges,
     )
-
-    # Wonder adjudicates escalations only, and only if configured.
-    wonder_notes = await _maybe_adjudicate(
-        settings, steward_queue, request, decision_id
-    )
-    if wonder_notes:
-        ledger.store_agent_trace(
-            settings.database_path, decision_id, "wonder",
-            {"notes": wonder_notes}, created_at,
-        )
-    return response, proposal
 
 
 def escalate_unavailable(
@@ -434,8 +541,14 @@ def escalate_unavailable(
                         decision_id,
                     ),
                 )
-                rows.append({"steward_id": steward_id, "attribute": attribute,
-                             "status": "pending", "decision_id": decision_id})
+                rows.append(
+                    {
+                        "steward_id": steward_id,
+                        "attribute": attribute,
+                        "status": "pending",
+                        "decision_id": decision_id,
+                    }
+                )
         return rows
     finally:
         connection.close()
@@ -456,21 +569,33 @@ def taxonomy_steward_items(
     stewards: list[StewardItem] = []
     attribute = "category" if entity_type == "product" else "display_name"
     for term in proposal.new_terms:
-        stewards.append(StewardItem(
-            steward_id=f"st-{decision_id}-tax-{_slug(term.raw_value)}",
-            entity_type=entity_type, entity_id=entity_id, attribute=attribute,
-            owner="steward-001", deputy="steward-002",
-            deadline=_deadline_from_facts(facts),
-            fallback="do not use the new term until a steward accepts it",
-            status="pending", decision_id=decision_id,
-            suggested_action=term.suggested_action,
-        ))
-        conflicts.append(ConflictFact(
-            entity_type=entity_type, entity_id=entity_id, attribute=attribute,
-            reason_code="TAXONOMY_NEW_TERM_PROPOSED", rule_fired="T1",
-            fact_ids=[], policy_version=policy_version,
-            taxonomy_version=taxonomy_version,
-        ))
+        stewards.append(
+            StewardItem(
+                steward_id=f"st-{decision_id}-tax-{_slug(term.raw_value)}",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                attribute=attribute,
+                owner="steward-001",
+                deputy="steward-002",
+                deadline=_deadline_from_facts(facts),
+                fallback="do not use the new term until a steward accepts it",
+                status="pending",
+                decision_id=decision_id,
+                suggested_action=term.suggested_action,
+            )
+        )
+        conflicts.append(
+            ConflictFact(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                attribute=attribute,
+                reason_code="TAXONOMY_NEW_TERM_PROPOSED",
+                rule_fired="T1",
+                fact_ids=[],
+                policy_version=policy_version,
+                taxonomy_version=taxonomy_version,
+            )
+        )
     return conflicts, stewards
 
 
@@ -506,17 +631,12 @@ def apply_proposer_gate(
         untrusted_claim = (
             fact.attribute in critical_attributes
             and fact.attribute not in escalated_attrs
-            and _has_conflicting_unverified_ticket_claim(
-                facts, fact.attribute, fact.value
-            )
+            and _has_conflicting_unverified_ticket_claim(facts, fact.attribute, fact.value)
         )
         if not (low_confidence or untrusted_claim):
             golden.append(fact)
             continue
-        reason = (
-            "UNVERIFIED_CRITICAL_CLAIM" if untrusted_claim
-            else "PROPOSER_LOW_CONFIDENCE"
-        )
+        reason = "UNVERIFIED_CRITICAL_CLAIM" if untrusted_claim else "PROPOSER_LOW_CONFIDENCE"
         conflicts.append(
             ConflictFact(
                 entity_type=fact.entity_type,
@@ -524,9 +644,7 @@ def apply_proposer_gate(
                 attribute=fact.attribute,
                 reason_code=reason,
                 rule_fired="R2",
-                fact_ids=sorted(
-                    {fact.winner_fact_id, *fact.loser_fact_ids}
-                ),
+                fact_ids=sorted({fact.winner_fact_id, *fact.loser_fact_ids}),
                 policy_version=fact.policy_version,
                 taxonomy_version=taxonomy_version,
             )
@@ -566,10 +684,14 @@ def apply_taxonomy_mappings(
     for fact in facts:
         canonical, kind = canonical_term(taxonomy, fact.attribute, fact.value)
         if kind in ("term_exact", "synonym_exact") and canonical != fact.value:
-            claims.append({
-                "kind": kind, "raw": fact.value, "canonical": canonical,
-                "attribute": fact.attribute,
-            })
+            claims.append(
+                {
+                    "kind": kind,
+                    "raw": fact.value,
+                    "canonical": canonical,
+                    "attribute": fact.attribute,
+                }
+            )
             remapped.append(fact.model_copy(update={"value": canonical}))
         else:
             if kind == "unmapped" and any(
@@ -624,11 +746,13 @@ def validate_structure(
     validator = Draft202012Validator(expected_structure)
     errors = []
     for error in validator.iter_errors(assembled):
-        errors.append({
-            "path": list(error.absolute_path),
-            "reason": error.message,
-            "validator": error.validator,
-        })
+        errors.append(
+            {
+                "path": list(error.absolute_path),
+                "reason": error.message,
+                "validator": error.validator,
+            }
+        )
     return errors
 
 
@@ -668,25 +792,45 @@ def _structure_downgrades(
     conflicts: list[ConflictFact] = []
     stewards: list[StewardItem] = []
     for attribute in sorted(dropped_attrs):
-        conflicts.append(ConflictFact(
-            entity_type=entity_type, entity_id=entity_id, attribute=attribute,
-            reason_code="STRUCTURE_MISMATCH", rule_fired="STRUCT",
-            fact_ids=[], policy_version=policy_version,
-        ))
-        stewards.append(StewardItem(
-            steward_id=f"st-{decision_id}-{attribute}-structure",
-            entity_type=entity_type, entity_id=entity_id, attribute=attribute,
-            owner="steward-001", deputy="steward-002", deadline=deadline,
-            fallback="do not use this value downstream: it failed structure validation",
-            status="pending", decision_id=decision_id,
-        ))
-    for index in sorted(dropped_nested, reverse=True):
-        conflicts.append(ConflictFact(
-            entity_type=entity_type, entity_id=entity_id,
-            attribute="purchased_products",
-            reason_code="STRUCTURE_MISMATCH_NESTED", rule_fired="STRUCT",
-            fact_ids=[], policy_version=policy_version,
-        ))
+        conflicts.append(
+            ConflictFact(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                attribute=attribute,
+                reason_code="STRUCTURE_MISMATCH",
+                rule_fired="STRUCT",
+                fact_ids=[],
+                policy_version=policy_version,
+            )
+        )
+        stewards.append(
+            StewardItem(
+                steward_id=f"st-{decision_id}-{attribute}-structure",
+                entity_type=entity_type,
+                entity_id=entity_id,
+                attribute=attribute,
+                owner="steward-001",
+                deputy="steward-002",
+                deadline=deadline,
+                fallback="do not use this value downstream: it failed structure validation",
+                status="pending",
+                decision_id=decision_id,
+            )
+        )
+    # One conflict row per dropped nested index (ConflictFact carries no
+    # index, so rows for the same attribute are identical by contract).
+    for _index in sorted(dropped_nested, reverse=True):
+        conflicts.append(
+            ConflictFact(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                attribute="purchased_products",
+                reason_code="STRUCTURE_MISMATCH_NESTED",
+                rule_fired="STRUCT",
+                fact_ids=[],
+                policy_version=policy_version,
+            )
+        )
     return dropped_attrs, dropped_nested, conflicts, stewards, False
 
 
@@ -707,21 +851,27 @@ async def _maybe_adjudicate(
         return notes
     if not model_id or settings.use_mock_muse:
         for item in stewards[:1]:
-            notes.append({
-                "status": "not_available",
-                "attribute": item.attribute,
-                "note": "Wonder: not available in this run (no verified model id).",
-            })
+            notes.append(
+                {
+                    "status": "not_available",
+                    "attribute": item.attribute,
+                    "note": "Wonder: not available in this run (no verified model id).",
+                }
+            )
         return notes
     from meta_tooling import wonder_adjudicate
 
     for item in stewards:
-        notes.append(await wonder_adjudicate(
-            settings, attribute=item.attribute,
-            entity_type=item.entity_type, entity_id=item.entity_id,
-            evidence={"decision_id": decision_id, "fallback": item.fallback},
-            wonder_model_id=model_id,
-        ))
+        notes.append(
+            await wonder_adjudicate(
+                settings,
+                attribute=item.attribute,
+                entity_type=item.entity_type,
+                entity_id=item.entity_id,
+                evidence={"decision_id": decision_id, "fallback": item.fallback},
+                wonder_model_id=model_id,
+            )
+        )
     return notes
 
 
@@ -739,7 +889,14 @@ def assemble_and_validate(
     created_at: str,
     database_path: str,
     purchased_override: list[dict[str, Any]] | None = None,
-) -> tuple[list[GoldenFact], list[dict[str, Any]], list[dict[str, Any]], list[ConflictFact], list[StewardItem], bool]:
+) -> tuple[
+    list[GoldenFact],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[ConflictFact],
+    list[StewardItem],
+    bool,
+]:
     """Assemble nested golden, validate whole document, gate publishing.
 
     Only golden_attrs enter the record (order_id stays linkage proof).
@@ -753,8 +910,13 @@ def assemble_and_validate(
     """
     kept = [fact for fact in golden if fact.attribute in golden_attrs]
     purchased_items, purchased_edges = _verified_purchased_nested(
-        request, documents, decision_id, policy_version, taxonomy_version,
-        created_at, database_path,
+        request,
+        documents,
+        decision_id,
+        policy_version,
+        taxonomy_version,
+        created_at,
+        database_path,
     )
     if purchased_override is not None:
         purchased_items = purchased_override
@@ -774,20 +936,32 @@ def assemble_and_validate(
     deadline = _deadline_from_facts(facts) if facts else created_at
 
     def _escalate_field(attribute: str, reason: str) -> None:
-        conflicts.append(ConflictFact(
-            entity_type=request.entity_type, entity_id=request.entity_id,
-            attribute=attribute, reason_code=reason, rule_fired="STRUCT",
-            fact_ids=[], policy_version=policy_version,
-            taxonomy_version=taxonomy_version,
-        ))
-        stewards.append(StewardItem(
-            entity_type=request.entity_type, entity_id=request.entity_id,
-            attribute=attribute, owner="steward-001", deputy="steward-002",
-            deadline=deadline,
-            fallback="do not use this value downstream: it failed structure validation",
-            status="pending", decision_id=decision_id,
-            steward_id=f"st-{decision_id}-{attribute}-structure",
-        ))
+        conflicts.append(
+            ConflictFact(
+                entity_type=request.entity_type,
+                entity_id=request.entity_id,
+                attribute=attribute,
+                reason_code=reason,
+                rule_fired="STRUCT",
+                fact_ids=[],
+                policy_version=policy_version,
+                taxonomy_version=taxonomy_version,
+            )
+        )
+        stewards.append(
+            StewardItem(
+                entity_type=request.entity_type,
+                entity_id=request.entity_id,
+                attribute=attribute,
+                owner="steward-001",
+                deputy="steward-002",
+                deadline=deadline,
+                fallback="do not use this value downstream: it failed structure validation",
+                status="pending",
+                decision_id=decision_id,
+                steward_id=f"st-{decision_id}-{attribute}-structure",
+            )
+        )
 
     for _ in range(len(working_kept) + len(working_purchased) + 2):
         errors = validate_structure(working, expected_structure)
@@ -799,8 +973,7 @@ def assemble_and_validate(
             if not path and error.get("validator") == "required":
                 import re as _re
 
-                match = _re.search(r"'([^']+)' is a required property",
-                                   error.get("reason", ""))
+                match = _re.search(r"'([^']+)' is a required property", error.get("reason", ""))
                 if match and match.group(1) in working:
                     working.pop(match.group(1), None)
                     working_kept = [f for f in working_kept if f.attribute != match.group(1)]
@@ -827,27 +1000,44 @@ def assemble_and_validate(
 
     errors = validate_structure(working, expected_structure)
     if errors:
-        conflicts.append(ConflictFact(
-            entity_type=request.entity_type, entity_id=request.entity_id,
-            attribute="golden", reason_code="STRUCTURE_MISMATCH", rule_fired="STRUCT",
-            fact_ids=[], policy_version=policy_version,
-            taxonomy_version=taxonomy_version,
-        ))
-        stewards.append(StewardItem(
-            steward_id=f"st-{decision_id}-golden-structure",
-            entity_type=request.entity_type, entity_id=request.entity_id,
-            attribute="golden", owner="steward-001", deputy="steward-002",
-            deadline=deadline,
-            fallback="do not use any value from this golden: structure invalid",
-            status="pending", decision_id=decision_id,
-        ))
+        conflicts.append(
+            ConflictFact(
+                entity_type=request.entity_type,
+                entity_id=request.entity_id,
+                attribute="golden",
+                reason_code="STRUCTURE_MISMATCH",
+                rule_fired="STRUCT",
+                fact_ids=[],
+                policy_version=policy_version,
+                taxonomy_version=taxonomy_version,
+            )
+        )
+        stewards.append(
+            StewardItem(
+                steward_id=f"st-{decision_id}-golden-structure",
+                entity_type=request.entity_type,
+                entity_id=request.entity_id,
+                attribute="golden",
+                owner="steward-001",
+                deputy="steward-002",
+                deadline=deadline,
+                fallback="do not use any value from this golden: structure invalid",
+                status="pending",
+                decision_id=decision_id,
+            )
+        )
         return [], [], [], conflicts, stewards, False
     return working_kept, working_purchased, purchased_edges, conflicts, stewards, True
 
 
 def _verified_purchased_nested(
-    request, documents, decision_id, policy_version, taxonomy_version,
-    created_at, database_path,
+    request,
+    documents,
+    decision_id,
+    policy_version,
+    taxonomy_version,
+    created_at,
+    database_path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Verify purchased edges and assemble nestable product goldens.
 
@@ -867,9 +1057,12 @@ def _verified_purchased_nested(
         if golden is not None:
             product_goldens[product_id] = golden
     edges, _nodes = derive_purchased_edges(
-        documents, product_goldens,
-        decision_id=decision_id, policy_version=policy_version,
-        taxonomy_version=taxonomy_version, created_at=created_at,
+        documents,
+        product_goldens,
+        decision_id=decision_id,
+        policy_version=policy_version,
+        taxonomy_version=taxonomy_version,
+        created_at=created_at,
         entity_type=getattr(request, "entity_type", None) or "user",
         entity_id=getattr(request, "entity_id", None) or "",
     )
@@ -890,18 +1083,20 @@ def _verified_purchased_nested(
                 category = (attributes.get("category") or {}).get("value")
                 if category is None and isinstance(attributes.get("category"), str):
                     category = attributes["category"]
-                items.append({
-                    "name": product_id,
-                    "category": category,
-                    "_lineage": {
-                        "proof": edge.proof,
-                        "rule_fired": edge.rule_fired,
-                        "policy_version": edge.policy_version,
-                        "taxonomy_version": edge.taxonomy_version,
-                        "decision_id": edge.decision_id,
-                        "product_decision_id": golden.get("decision_id"),
-                    },
-                })
+                items.append(
+                    {
+                        "name": product_id,
+                        "category": category,
+                        "_lineage": {
+                            "proof": edge.proof,
+                            "rule_fired": edge.rule_fired,
+                            "policy_version": edge.policy_version,
+                            "taxonomy_version": edge.taxonomy_version,
+                            "decision_id": edge.decision_id,
+                            "product_decision_id": golden.get("decision_id"),
+                        },
+                    }
+                )
     return items, edge_dicts
 
 
@@ -952,9 +1147,7 @@ def _primary_rule(derived: DeriveResponse, conflicts: list[ConflictFact]) -> str
     return best
 
 
-def _primary_reason(
-    conflicts: list[ConflictFact], derived: DeriveResponse
-) -> str | None:
+def _primary_reason(conflicts: list[ConflictFact], derived: DeriveResponse) -> str | None:
     if conflicts:
         order = {"STRUCT": -1, "R2": 0, "R3": 1, "L1": 2, "C1": 3, "C2": 4, "T1": 5, "R4": 6}
         ranked = sorted(
@@ -965,6 +1158,297 @@ def _primary_reason(
     if derived.golden_facts:
         return None
     return "ALL_DENIED"
+
+
+@dataclass
+class _PersistCtx:
+    """Everything one atomic decision write needs, including the connection."""
+
+    settings: Settings
+    request: ResolveRequest
+    facts: list[CandidateFact]
+    payload_hash: str
+    decision_id: str
+    policy_version: str
+    taxonomy_version: str
+    rule_fired: str | None
+    verdict: str
+    reason_code: str | None
+    golden: list[GoldenFact]
+    conflicts: list[ConflictFact]
+    stewards: list[StewardItem]
+    created_at: str
+    links: list | None = None
+    verified_links: list | None = None
+    traces: dict[str, dict[str, Any]] | None = None
+    publish_golden: bool = True
+    purchased_edges: list | None = None
+    nested_products: list[dict[str, Any]] | None = None
+    clusters: list[dict[str, Any]] | None = None
+    fact_documents: dict[str, str] | None = None
+    connection: Any = None
+    golden_id: str = ""
+    new_version: int = 0
+    merged: dict[str, Any] = field(default_factory=dict)
+
+
+def _write_facts(ctx: _PersistCtx) -> None:
+    """INSERT-OR-IGNORE every candidate fact (idempotent by fact_id)."""
+    for fact in ctx.facts:
+        ctx.connection.execute(
+            """
+            INSERT OR IGNORE INTO candidate_facts
+              (fact_id, entity_type, entity_id, attribute, value,
+               source, source_id, authority_rank, event_time,
+               verified, ttl_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                fact.fact_id,
+                fact.entity_type,
+                fact.entity_id,
+                fact.attribute,
+                fact.value,
+                fact.source,
+                fact.source_id,
+                fact.authority_rank,
+                fact.event_time.isoformat(),
+                1 if fact.verified else 0,
+                fact.ttl_seconds,
+            ),
+        )
+
+
+def _write_decision_row(ctx: _PersistCtx) -> None:
+    """INSERT the decision row (UNIQUE idempotency key; race -> 409)."""
+    ctx.connection.execute(
+        """
+        INSERT INTO decisions
+          (decision_id, work_id, idempotency_key, payload_hash,
+           rule_fired, verdict, reason_code, policy_version,
+           taxonomy_version, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ctx.decision_id,
+            ctx.request.work_id,
+            ctx.request.idempotency_key,
+            ctx.payload_hash,
+            ctx.rule_fired,
+            ctx.verdict,
+            ctx.reason_code,
+            ctx.policy_version,
+            ctx.taxonomy_version,
+            ctx.created_at,
+        ),
+    )
+
+
+def _write_golden_and_tombstones(ctx: _PersistCtx) -> None:
+    """Merge golden version, INSERT it, tombstone losers and withdrawals.
+
+    publish_golden=False writes nothing: the previous golden stays latest.
+    Sets ctx.golden_id/new_version/merged for the graph + response.
+    """
+    previous = ledger.fetch_latest_golden(
+        ctx.settings.database_path, ctx.request.entity_type, ctx.request.entity_id
+    )
+    previous_attrs: dict[str, Any] = (
+        json.loads(json.dumps(previous["attributes"])) if previous else {}
+    )
+    previous_version = previous["version"] if previous else 0
+
+    ctx.golden_id = f"golden-{ctx.decision_id}"
+    ctx.new_version = previous_version + 1
+    ctx.merged: dict[str, Any] = {}
+    if ctx.publish_golden:
+        published_attrs = {fact.attribute for fact in ctx.golden}
+        withdrawn = [attr for attr in previous_attrs if attr not in published_attrs]
+
+        ctx.merged = dict(previous_attrs)
+        for fact in ctx.golden:
+            ctx.merged[fact.attribute] = {
+                "value": fact.value,
+                "winner_fact_id": fact.winner_fact_id,
+                "loser_fact_ids": fact.loser_fact_ids,
+                "rule_fired": fact.rule_fired,
+                "policy_version": fact.policy_version,
+                "taxonomy_version": ctx.taxonomy_version,
+                "lineage": fact.lineage,
+            }
+        if ctx.nested_products:
+            ctx.merged["purchased_products"] = ctx.nested_products
+        else:
+            # No verified purchase this run: drop any stale nesting
+            # rather than carrying forward an unproven link.
+            ctx.merged.pop("purchased_products", None)
+        for attr in withdrawn:
+            if attr == "purchased_products":
+                continue  # handled above; nested data is not a loser fact
+            ctx.merged.pop(attr, None)
+
+        ctx.connection.execute(
+            """
+            INSERT INTO golden_records
+              (golden_id, entity_type, entity_id, version, attributes,
+               decision_id, policy_version, taxonomy_version,
+               created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ctx.golden_id,
+                ctx.request.entity_type,
+                ctx.request.entity_id,
+                ctx.new_version,
+                json.dumps(ctx.merged, sort_keys=True, ensure_ascii=False),
+                ctx.decision_id,
+                ctx.policy_version,
+                ctx.taxonomy_version,
+                ctx.created_at,
+                ctx.created_at,
+            ),
+        )
+
+        for fact in ctx.golden:
+            for loser_id in fact.loser_fact_ids:
+                ledger.insert_tombstone(
+                    ctx.connection,
+                    f"tb-{ctx.decision_id}-{loser_id}",
+                    loser_id,
+                    ctx.golden_id,
+                    ctx.decision_id,
+                    "R1-superseded",
+                )
+            prev_value = previous_attrs.get(fact.attribute) or {}
+            prev_winner = prev_value.get("winner_fact_id") if isinstance(prev_value, dict) else None
+            if prev_winner and prev_winner != fact.winner_fact_id:
+                ledger.insert_tombstone(
+                    ctx.connection,
+                    f"tb-{ctx.decision_id}-{prev_winner}-prev",
+                    prev_winner,
+                    ctx.golden_id,
+                    ctx.decision_id,
+                    "superseded-by-new-version",
+                )
+        published_names = {fact.attribute for fact in ctx.golden}
+        for attr in [attr_ for attr_ in previous_attrs if attr_ not in published_names]:
+            # Nested assembled products have no single winner to tombstone:
+            # their history lives in golden versions, not loser facts.
+            # Guard against non-dict values (e.g. the purchased_products
+            # list) so a withdrawn nested field can never crash the write.
+            prev_value = previous_attrs.get(attr)
+            prev_winner = prev_value.get("winner_fact_id") if isinstance(prev_value, dict) else None
+            if prev_winner:
+                ledger.insert_tombstone(
+                    ctx.connection,
+                    f"tb-{ctx.decision_id}-{prev_winner}-withdrawn",
+                    prev_winner,
+                    ctx.golden_id,
+                    ctx.decision_id,
+                    "escalated-no-trusted-value",
+                )
+
+
+def _write_conflicts(ctx: _PersistCtx) -> None:
+    """INSERT-OR-IGNORE every conflict row for this decision."""
+    for conflict in ctx.conflicts:
+        ctx.connection.execute(
+            """
+            INSERT OR IGNORE INTO conflicts
+              (conflict_id, decision_id, entity_type, entity_id,
+               attribute, reason_code, rule_fired, fact_ids,
+               policy_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"cf-{ctx.decision_id}-{conflict.attribute}-{conflict.reason_code}",
+                ctx.decision_id,
+                conflict.entity_type,
+                conflict.entity_id,
+                conflict.attribute,
+                conflict.reason_code,
+                conflict.rule_fired,
+                json.dumps(sorted(conflict.fact_ids)),
+                conflict.policy_version,
+            ),
+        )
+
+
+def _write_stewards(ctx: _PersistCtx) -> None:
+    """INSERT-OR-IGNORE every steward queue row for this decision."""
+    for item in ctx.stewards:
+        ctx.connection.execute(
+            """
+            INSERT OR IGNORE INTO steward_queue
+              (steward_id, entity_type, entity_id, attribute, owner,
+               deputy, deadline, fallback, status, decision_id,
+               suggested_action)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item.steward_id,
+                item.entity_type,
+                item.entity_id,
+                item.attribute,
+                item.owner,
+                item.deputy,
+                item.deadline.isoformat() if hasattr(item.deadline, "isoformat") else item.deadline,
+                item.fallback,
+                item.status,
+                item.decision_id,
+                item.suggested_action,
+            ),
+        )
+
+
+def _write_traces(ctx: _PersistCtx) -> None:
+    """Persist agent traces (subagents, wonder, prompt guard)."""
+    for kind, payload in (ctx.traces or {}).items():
+        ledger.insert_agent_trace(
+            ctx.connection,
+            ctx.decision_id,
+            kind,
+            payload if isinstance(payload, dict) else {"payload": payload},
+            ctx.created_at,
+        )
+
+
+def _write_graph(ctx: _PersistCtx) -> dict | None:
+    """Plan + INSERT graph rows in the same transaction; return the golden record dict."""
+    golden_record = None
+    if ctx.publish_golden:
+        nodes, edges = plan_graph(
+            entity_type=ctx.request.entity_type,
+            entity_id=ctx.request.entity_id,
+            facts=ctx.facts,
+            proposed_links=ctx.links or [],
+            verified_links=ctx.verified_links or [],
+            golden_version=ctx.new_version,
+            decision_id=ctx.decision_id,
+            policy_version=ctx.policy_version,
+            taxonomy_version=ctx.taxonomy_version,
+            created_at=ctx.created_at,
+            clusters=ctx.clusters,
+            fact_documents=ctx.fact_documents,
+        )
+        for purchased_edge in ctx.purchased_edges or []:
+            if isinstance(purchased_edge, dict):
+                purchased_edge = GraphEdge.model_validate(purchased_edge)
+            edges.append(purchased_edge)
+        insert_graph_rows(ctx.connection, nodes, edges, ctx.decision_id)
+        golden_record = {
+            "golden_id": ctx.golden_id,
+            "entity_type": ctx.request.entity_type,
+            "entity_id": ctx.request.entity_id,
+            "version": ctx.new_version,
+            "attributes": ctx.merged,
+            "decision_id": ctx.decision_id,
+            "policy_version": ctx.policy_version,
+            "taxonomy_version": ctx.taxonomy_version,
+            "created_at": ctx.created_at,
+            "updated_at": ctx.created_at,
+        }
+    return golden_record
 
 
 def persist_decision(
@@ -1000,282 +1484,46 @@ def persist_decision(
     silently published. Graph nodes/edges are written in the same transaction
     as the golden (CSD 3.1 [STRUCTURE] gate).
     """
-    from graph import insert_graph_rows, plan_graph
-
-    connection = ledger.connect(settings.database_path)
+    ctx = _PersistCtx(
+        settings=settings,
+        request=request,
+        facts=facts,
+        payload_hash=payload_hash,
+        decision_id=decision_id,
+        policy_version=policy_version,
+        taxonomy_version=taxonomy_version,
+        rule_fired=rule_fired,
+        verdict=verdict,
+        reason_code=reason_code,
+        golden=golden,
+        conflicts=conflicts,
+        stewards=stewards,
+        created_at=created_at,
+        links=links,
+        verified_links=verified_links,
+        traces=traces,
+        publish_golden=publish_golden,
+        purchased_edges=purchased_edges,
+        nested_products=nested_products,
+        clusters=clusters,
+        fact_documents=fact_documents,
+    )
+    ctx.connection = ledger.connect(settings.database_path)
     try:
-        with connection:
-            for fact in facts:
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO candidate_facts
-                      (fact_id, entity_type, entity_id, attribute, value,
-                       source, source_id, authority_rank, event_time,
-                       verified, ttl_seconds)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        fact.fact_id,
-                        fact.entity_type,
-                        fact.entity_id,
-                        fact.attribute,
-                        fact.value,
-                        fact.source,
-                        fact.source_id,
-                        fact.authority_rank,
-                        fact.event_time.isoformat(),
-                        1 if fact.verified else 0,
-                        fact.ttl_seconds,
-                    ),
-                )
-            connection.execute(
-                """
-                INSERT INTO decisions
-                  (decision_id, work_id, idempotency_key, payload_hash,
-                   rule_fired, verdict, reason_code, policy_version,
-                   taxonomy_version, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    decision_id,
-                    request.work_id,
-                    request.idempotency_key,
-                    payload_hash,
-                    rule_fired,
-                    verdict,
-                    reason_code,
-                    policy_version,
-                    taxonomy_version,
-                    created_at,
-                ),
-            )
-
-            previous = ledger.fetch_latest_golden(
-                settings.database_path, request.entity_type, request.entity_id
-            )
-            previous_attrs: dict[str, Any] = (
-                json.loads(json.dumps(previous["attributes"]))
-                if previous
-                else {}
-            )
-            previous_version = previous["version"] if previous else 0
-
-            golden_id = f"golden-{decision_id}"
-            new_version = previous_version + 1
-            merged: dict[str, Any] = {}
-            if publish_golden:
-                published_attrs = {fact.attribute for fact in golden}
-                withdrawn = [
-                    attr
-                    for attr in previous_attrs
-                    if attr not in published_attrs
-                ]
-
-                merged = dict(previous_attrs)
-                for fact in golden:
-                    merged[fact.attribute] = {
-                        "value": fact.value,
-                        "winner_fact_id": fact.winner_fact_id,
-                        "loser_fact_ids": fact.loser_fact_ids,
-                        "rule_fired": fact.rule_fired,
-                        "policy_version": fact.policy_version,
-                        "taxonomy_version": taxonomy_version,
-                        "lineage": fact.lineage,
-                    }
-                if nested_products:
-                    merged["purchased_products"] = nested_products
-                else:
-                    # No verified purchase this run: drop any stale nesting
-                    # rather than carrying forward an unproven link.
-                    merged.pop("purchased_products", None)
-                for attr in withdrawn:
-                    if attr == "purchased_products":
-                        continue  # handled above; nested data is not a loser fact
-                    merged.pop(attr, None)
-
-                connection.execute(
-                    """
-                    INSERT INTO golden_records
-                      (golden_id, entity_type, entity_id, version, attributes,
-                       decision_id, policy_version, taxonomy_version,
-                       created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        golden_id,
-                        request.entity_type,
-                        request.entity_id,
-                        new_version,
-                        json.dumps(merged, sort_keys=True, ensure_ascii=False),
-                        decision_id,
-                        policy_version,
-                        taxonomy_version,
-                        created_at,
-                        created_at,
-                    ),
-                )
-
-                for fact in golden:
-                    for loser_id in fact.loser_fact_ids:
-                        connection.execute(
-                            """
-                            INSERT OR IGNORE INTO tombstones
-                              (tombstone_id, loser_fact_id, survivor_golden_id,
-                               decision_id, reason)
-                            VALUES (?, ?, ?, ?, ?)
-                            """,
-                            (
-                                f"tb-{decision_id}-{loser_id}",
-                                loser_id,
-                                golden_id,
-                                decision_id,
-                                "R1-superseded",
-                            ),
-                        )
-                    prev_value = previous_attrs.get(fact.attribute) or {}
-                    prev_winner = (
-                        prev_value.get("winner_fact_id")
-                        if isinstance(prev_value, dict) else None
-                    )
-                    if (
-                        prev_winner
-                        and prev_winner != fact.winner_fact_id
-                    ):
-                        connection.execute(
-                            """
-                            INSERT OR IGNORE INTO tombstones
-                              (tombstone_id, loser_fact_id, survivor_golden_id,
-                               decision_id, reason)
-                            VALUES (?, ?, ?, ?, ?)
-                            """,
-                            (
-                                f"tb-{decision_id}-{prev_winner}-prev",
-                                prev_winner,
-                                golden_id,
-                                decision_id,
-                                "superseded-by-new-version",
-                            ),
-                        )
-                published_names = {fact.attribute for fact in golden}
-                for attr in [
-                    attr_ for attr_ in previous_attrs if attr_ not in published_names
-                ]:
-                    # Nested assembled products have no single winner to tombstone:
-                    # their history lives in golden versions, not loser facts.
-                    # Guard against non-dict values (e.g. the purchased_products
-                    # list) so a withdrawn nested field can never crash the write.
-                    prev_value = previous_attrs.get(attr)
-                    prev_winner = (
-                        prev_value.get("winner_fact_id")
-                        if isinstance(prev_value, dict) else None
-                    )
-                    if prev_winner:
-                        connection.execute(
-                            """
-                            INSERT OR IGNORE INTO tombstones
-                              (tombstone_id, loser_fact_id, survivor_golden_id,
-                               decision_id, reason)
-                            VALUES (?, ?, ?, ?, ?)
-                            """,
-                            (
-                                f"tb-{decision_id}-{prev_winner}-withdrawn",
-                                prev_winner,
-                                golden_id,
-                                decision_id,
-                                "escalated-no-trusted-value",
-                            ),
-                        )
-
-            for conflict in conflicts:
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO conflicts
-                      (conflict_id, decision_id, entity_type, entity_id,
-                       attribute, reason_code, rule_fired, fact_ids,
-                       policy_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        f"cf-{decision_id}-{conflict.attribute}-{conflict.reason_code}",
-                        decision_id,
-                        conflict.entity_type,
-                        conflict.entity_id,
-                        conflict.attribute,
-                        conflict.reason_code,
-                        conflict.rule_fired,
-                        json.dumps(sorted(conflict.fact_ids)),
-                        conflict.policy_version,
-                    ),
-                )
-            for item in stewards:
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO steward_queue
-                      (steward_id, entity_type, entity_id, attribute, owner,
-                       deputy, deadline, fallback, status, decision_id,
-                       suggested_action)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        item.steward_id,
-                        item.entity_type,
-                        item.entity_id,
-                        item.attribute,
-                        item.owner,
-                        item.deputy,
-                        item.deadline.isoformat() if hasattr(item.deadline, "isoformat") else item.deadline,
-                        item.fallback,
-                        item.status,
-                        item.decision_id,
-                        item.suggested_action,
-                    ),
-                )
-            for kind, payload in (traces or {}).items():
-                ledger.insert_agent_trace(
-                    connection, decision_id, kind,
-                    payload if isinstance(payload, dict) else {"payload": payload},
-                    created_at,
-                )
-
-            golden_record = None
-            if publish_golden:
-                from graph import GraphEdge as _GraphEdge
-
-                nodes, edges = plan_graph(
-                    entity_type=request.entity_type, entity_id=request.entity_id,
-                    facts=facts,
-                    proposed_links=links or [], verified_links=verified_links or [],
-                    golden_version=new_version, decision_id=decision_id,
-                    policy_version=policy_version, taxonomy_version=taxonomy_version,
-                    created_at=created_at,
-                    clusters=clusters, fact_documents=fact_documents,
-                )
-                for purchased_edge in purchased_edges or []:
-                    if isinstance(purchased_edge, dict):
-                        purchased_edge = _GraphEdge.model_validate(purchased_edge)
-                    edges.append(purchased_edge)
-                insert_graph_rows(connection, nodes, edges, decision_id)
-                golden_record = {
-                    "golden_id": golden_id,
-                    "entity_type": request.entity_type,
-                    "entity_id": request.entity_id,
-                    "version": new_version,
-                    "attributes": merged,
-                    "decision_id": decision_id,
-                    "policy_version": policy_version,
-                    "taxonomy_version": taxonomy_version,
-                    "created_at": created_at,
-                    "updated_at": created_at,
-                }
+        with ctx.connection:
+            _write_facts(ctx)
+            _write_decision_row(ctx)
+            _write_golden_and_tombstones(ctx)
+            _write_conflicts(ctx)
+            _write_stewards(ctx)
+            _write_traces(ctx)
+            golden_record = _write_graph(ctx)
     except sqlite3.IntegrityError as exc:
         raise IdempotencyConflictError(
             "decision write conflict (duplicate key or version race); no partial write was kept"
         ) from exc
     finally:
-        connection.close()
-
-    from schemas import GoldenRecord
-
+        ctx.connection.close()
     return ResolveResponse(
         decision_id=decision_id,
         entity_type=request.entity_type,
@@ -1291,7 +1539,6 @@ def persist_decision(
 
 def replay_response(settings: Settings, decision_id: str) -> ResolveResponse:
     """Rebuild a stored response from the ledger. No engine call, no write."""
-    from schemas import GoldenRecord
 
     decision = ledger.fetch_decision(settings.database_path, decision_id)
     if decision is None:
@@ -1310,9 +1557,7 @@ def replay_response(settings: Settings, decision_id: str) -> ResolveResponse:
                 "policy_version": row["policy_version"],
             }
         )
-        for row in ledger.fetch_conflicts_by_decision(
-            settings.database_path, decision_id
-        )
+        for row in ledger.fetch_conflicts_by_decision(settings.database_path, decision_id)
     ]
     stewards = [
         StewardItem.model_validate(
@@ -1329,9 +1574,7 @@ def replay_response(settings: Settings, decision_id: str) -> ResolveResponse:
                 "decision_id": row["decision_id"],
             }
         )
-        for row in ledger.fetch_stewards_by_decision(
-            settings.database_path, decision_id
-        )
+        for row in ledger.fetch_stewards_by_decision(settings.database_path, decision_id)
     ]
     entity_type = entity_id = ""
     if latest:
