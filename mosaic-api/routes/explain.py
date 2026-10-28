@@ -6,6 +6,7 @@ is never stored) and rebuilds the derivation tree from the graph.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import ledger
@@ -14,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from graph import derivation_tree as build_tree
 from graph import fetch_graph
 from proposer import mock_proposal
-from schemas import CandidateFact, ExplainResponse
+from schemas import CandidateFact, ConflictFact, ExplainResponse, StewardItem
 
 from routes.deps import _row_to_fact, logger
 
@@ -24,8 +25,8 @@ router = APIRouter()
 def _explain_inputs(
     decision: dict[str, Any],
     goldens: list[dict[str, Any]],
-    conflicts: list[dict[str, Any]],
-    stewards: list[dict[str, Any]],
+    conflicts: list[ConflictFact],
+    stewards: list[StewardItem],
 ) -> tuple[str, str, str | None, list[str], list[str]]:
     """Who/what went into the decision: entity, winner, losers, input ids."""
     entity_type = entity_id = ""
@@ -40,16 +41,53 @@ def _explain_inputs(
                 winner_fact_id = value.get("winner_fact_id")
             loser_fact_ids.extend(value.get("loser_fact_ids", []))
     if not entity_type and stewards:
-        entity_type = stewards[0]["entity_type"]
-        entity_id = stewards[0]["entity_id"]
+        entity_type = stewards[0].entity_type
+        entity_id = stewards[0].entity_id
     if not entity_type and conflicts:
-        entity_type = conflicts[0]["entity_type"]
-        entity_id = conflicts[0]["entity_id"]
+        entity_type = conflicts[0].entity_type
+        entity_id = conflicts[0].entity_id
     input_ids = sorted(
         {winner_fact_id, *loser_fact_ids}
-        | {fact for conflict in conflicts for fact in conflict["fact_ids"]} - {None}
+        | {fact for conflict in conflicts for fact in conflict.fact_ids} - {None}
     )
     return entity_type, entity_id, winner_fact_id, loser_fact_ids, input_ids
+
+
+def _row_to_conflict(row: dict[str, Any]) -> ConflictFact:
+    """Ledger conflict row -> ConflictFact (drop storage ids, parse JSON lists)."""
+    fact_ids = row.get("fact_ids")
+    if isinstance(fact_ids, str):
+        try:
+            fact_ids = json.loads(fact_ids)
+        except ValueError:
+            fact_ids = []
+    return ConflictFact(
+        entity_type=row["entity_type"],
+        entity_id=row["entity_id"],
+        attribute=row["attribute"],
+        reason_code=row["reason_code"],
+        rule_fired=row["rule_fired"],
+        fact_ids=list(fact_ids or []),
+        policy_version=row["policy_version"],
+        taxonomy_version=row.get("taxonomy_version"),
+    )
+
+
+def _row_to_steward(row: dict[str, Any]) -> StewardItem:
+    """Ledger steward row -> StewardItem (drop storage-only columns)."""
+    return StewardItem(
+        steward_id=row["steward_id"],
+        entity_type=row["entity_type"],
+        entity_id=row["entity_id"],
+        attribute=row["attribute"],
+        owner=row["owner"],
+        deputy=row.get("deputy"),
+        deadline=row["deadline"],
+        fallback=row["fallback"],
+        status=row["status"],
+        decision_id=row["decision_id"],
+        suggested_action=row.get("suggested_action"),
+    )
 
 
 def _replay_proposal(current: Settings, entity_type: str, entity_id: str) -> dict[str, Any] | None:
@@ -59,7 +97,20 @@ def _replay_proposal(current: Settings, entity_type: str, entity_id: str) -> dic
     all_facts = ledger.fetch_candidate_facts(current.database_path, entity_type, entity_id)
     if not all_facts:
         return None
-    proposal = mock_proposal([CandidateFact.model_validate(_row_to_fact(row)) for row in all_facts])
+    # Replay needs full CandidateFacts (fact_id included); _row_to_fact alone
+    # is Fragment-shaped and would fail validation (fact_id required).
+    replay_facts = [
+        CandidateFact.model_validate(
+            {
+                **_row_to_fact(row),
+                "fact_id": row["fact_id"],
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+            }
+        )
+        for row in all_facts
+    ]
+    proposal = mock_proposal(replay_facts)
     if not current.use_mock_muse:
         # The live Muse proposal was returned at resolve time and
         # is not stored; replay reconstructs it deterministically
@@ -109,8 +160,14 @@ def explain(decision_id: str, request: Request) -> dict[str, Any]:
     if decision is None:
         raise HTTPException(status_code=404, detail=f"decision {decision_id} not found")
     goldens = ledger.fetch_goldens_by_decision(current.database_path, decision_id)
-    conflicts = ledger.fetch_conflicts_by_decision(current.database_path, decision_id)
-    stewards = ledger.fetch_stewards_by_decision(current.database_path, decision_id)
+    conflicts = [
+        _row_to_conflict(dict(row))
+        for row in ledger.fetch_conflicts_by_decision(current.database_path, decision_id)
+    ]
+    stewards = [
+        _row_to_steward(dict(row))
+        for row in ledger.fetch_stewards_by_decision(current.database_path, decision_id)
+    ]
     entity_type, entity_id, winner, losers, input_ids = _explain_inputs(
         decision, goldens, conflicts, stewards
     )

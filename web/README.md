@@ -1,8 +1,10 @@
 # web/ — Muse Mosaic frontend (separate deploy)
 
-Static, no build step: `index.html` + `app.js`. UX source: `docs/internal/muse-mosaic-ux-design.2.1.md`
-(Sec 4.13 Autonomous Loop). Holds no API key, calls no model directly, derives nothing —
+Static, no build step: `index.html` + `app.js`. UX source: `docs/internal/muse-mosaic-ux-design.2.2.md`
+(§4.14 Friendly View default; §4.13 Autonomous Loop, full v2.1 screen kept as one-click Detail View).
+Holds no API key, calls no model directly, derives nothing —
 every value renders from the mosaic-api ledger with proof (rule, policy, taxonomy versions).
+Friendly View and Detail View call the same endpoints and show the same golden and decision id.
 
 ## Local / demo
 

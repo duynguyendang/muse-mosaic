@@ -252,15 +252,81 @@
       .tile { color: #fff; }
       .tile:hover { filter: brightness(1.08); }
       #downstream-pill { background: #F5F3FF; border-color: #C4B5FD; color: #5B21B6; font-weight: 600; }
+      /* ---- Friendly View (v2.2 default) ---- */
+      body.friendly .detail-only { display: none !important; }
+      body.detail .f-only { display: none !important; }
+      #detail-view[hidden] { display: none; }
+      .f-steps {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin: 0 0 16px; padding: 12px 18px;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+        font-size: 14px; color: var(--muted);
+      }
+      .f-steps .step { display: inline-flex; align-items: center; gap: 8px; }
+      .f-steps .step .n {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 50%;
+        border: 1px solid var(--line-strong); font-size: 12px; font-weight: 700;
+      }
+      .f-steps .step.active { color: var(--text); font-weight: 700; }
+      .f-steps .step.active .n { background: #0F172A; border-color: #0F172A; color: #fff; }
+      .f-steps .arrow { color: var(--line-strong); }
+      .f-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; margin-bottom: 16px; }
+      .f-col-h { font-size: 13px; font-weight: 700; color: var(--muted); margin: 2px 2px 8px; text-transform: none; }
+      .f-piece {
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+        padding: 10px 14px; margin-bottom: 10px; font-size: 14px;
+      }
+      .f-piece .src { font-weight: 700; }
+      .f-answer {
+        border-radius: 12px; padding: 18px 20px; background: var(--panel);
+        border: 1px solid var(--line-strong);
+      }
+      .f-answer h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; line-height: 1.3; }
+      .f-answer .f-body { font-size: 16px; line-height: 1.55; }
+      .f-answer.ok { border: 2px solid var(--good); background: var(--good-bg); }
+      .f-answer.need { border: 2px solid var(--warm); background: var(--warm-bg); }
+      .f-answer.stop { border: 2px solid var(--bad); background: var(--bad-bg); }
+      .f-field { margin: 10px 0; }
+      .f-field .f-val { font-size: 16px; }
+      .f-field .f-why { font-size: 13px; color: var(--body); }
+      .f-field button, .f-answer .f-act { margin-top: 6px; }
+      .f-proof {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+        margin-bottom: 16px; padding: 12px 18px;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+        font-size: 14px;
+      }
+      .f-loop {
+        margin-bottom: 16px; padding: 10px 18px;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+        font-size: 14px;
+      }
+      .f-loop button { min-height: 0; padding: 4px 10px; font-size: 13px; }
+      #f-loop-more { margin: 8px 0 0; padding-left: 18px; color: var(--body); font-size: 13px; }
+      .f-upload {
+        margin-bottom: 16px; padding: 16px 18px; text-align: left;
+        border: 2px dashed var(--line-strong); border-radius: 12px; background: var(--panel);
+      }
+      .f-upload p { margin: 0 0 10px; font-size: 15px; }
+      .f-status-ready { border-color: var(--good); color: var(--good); }
+      .f-status-working { border-color: var(--accent); color: var(--accent); }
+      .f-status-need { border-color: var(--warm); color: var(--warm); font-weight: 700; }
+      .f-status-down { border-color: var(--bad); color: var(--bad); font-weight: 700; }
+      .f-steward-q { font-size: 16px; margin: 10px 0; }
+      .f-steward-meta { font-size: 13px; color: var(--body); margin: 8px 0; }
+      #f-back-top { margin-bottom: 16px; }
+      @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     </style>
   </head>
-  <body>
+  <body class="friendly">
     <header>
       <div class="brand">
         <h1>Muse Mosaic</h1>
         <span>Many fragments, one trusted picture, with proof for every piece.</span>
       </div>
+      <span class="pill f-only" id="f-status-pill" role="status">● Ready</span>
       <label class="muted">Entity
         <select id="entity" class="hdr-select" aria-label="Entity selector">
           <option value="user/P-001">User — P-001</option>
@@ -268,15 +334,63 @@
           <option value="product/prod-002">Product — prod-002</option>
         </select>
       </label>
-      <span class="pill ver-badge" id="policy-badge" title="Policy version in force">Policy: checking…</span>
-      <span class="pill ver-badge" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
-      <span class="pill"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
-      <span class="pill"><span id="api-dot" class="dot"></span><span id="api-status">mosaic-api: checking…</span></span>
-      <span class="pill"><span id="splink-dot" class="dot"></span><span id="splink-status">matching engine: checking…</span></span>
-      <button class="pill badge-btn" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
+      <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
+      <span class="pill ver-badge detail-only" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
+      <span class="pill detail-only"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
+      <span class="pill detail-only"><span id="api-dot" class="dot"></span><span id="api-status">mosaic-api: checking…</span></span>
+      <span class="pill detail-only"><span id="splink-dot" class="dot"></span><span id="splink-status">matching engine: checking…</span></span>
+      <button class="pill badge-btn detail-only" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
+      <button class="f-only" id="f-show-detail" type="button">Show how it was decided</button>
+      <button class="f-only" id="f-pause" type="button">Pause the loop</button>
+      <button class="detail-only" id="f-back" type="button">Back to trusted picture</button>
     </header>
 
     <main>
+      <div id="friendly">
+        <div class="f-steps" aria-label="Three steps">
+          <span class="step active" id="f-step-1"><span class="n">1</span> Messy pieces</span>
+          <span class="arrow">→</span>
+          <span class="step" id="f-step-2"><span class="n">2</span> Trusted picture</span>
+          <span class="arrow">→</span>
+          <span class="step" id="f-step-3"><span class="n">3</span> What you can do (or why we stop)</span>
+        </div>
+
+        <div class="f-cols">
+          <div>
+            <div class="f-col-h">What we were given</div>
+            <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
+          </div>
+          <div>
+            <div class="f-col-h">What you can safely use</div>
+            <div class="f-answer" id="f-answer" role="status">
+              <h2 id="f-answer-head">No answer yet</h2>
+              <div class="f-body" id="f-answer-body">Run the picture to get one trusted answer — or an honest stop.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="f-proof" id="f-proof">
+          <span id="f-proof-text">Muse suggests, the engine checks. Nothing derived yet.</span>
+          <button id="f-show-detail-2" type="button">Show how it was decided</button>
+        </div>
+
+        <div class="f-loop" id="f-loop">
+          <span id="f-loop-text">Mosaic is watching.</span>
+          <button id="f-loop-more-btn" type="button">See what it did by itself</button>
+          <ol id="f-loop-more" hidden></ol>
+        </div>
+
+        <div class="f-upload" id="f-upload">
+          <p><b>Drop your messy JSON here</b> — we will show you one trusted picture, or tell you honestly when we cannot.</p>
+          <label class="check">Your JSON file <input type="file" id="f-upload-file" accept=".json,application/json" /></label>
+          <button id="f-upload-btn" type="button">Upload + show the picture</button>
+          <button id="f-try-example" type="button">Try the messy example</button>
+          <span class="muted">Synthetic or non-sensitive data only for the demo.</span>
+        </div>
+      </div>
+
+      <div id="detail-view" hidden>
+      <div><button id="f-back-top" type="button">Back to trusted picture</button></div>
       <div id="engine-banner" role="alert"></div>
 
       <section id="loop-strip" aria-labelledby="loop-title">
@@ -424,6 +538,7 @@
         REAL: Meta Model API call, mosaic-api, trust-engine, ledger, graph, UI
         &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream
       </div>
+      </div><!-- /#detail-view -->
     </main>
 
     <div id="drawer-scrim"></div>

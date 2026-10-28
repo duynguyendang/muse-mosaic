@@ -88,6 +88,257 @@
     $("steward-count").textContent = String(k);
     $("loop-escalated").textContent =
       `Escalated, needs a human: ${k} items — see Steward Queue`;
+    fState.needCount = k;
+    renderFStatus();
+  }
+
+  /* ---- Friendly View (v2.2 default): same endpoints, same decisions ---- */
+  const fState = { ran: false, working: false, downstream: null, needCount: 0 };
+  let lastFriendly = null;
+
+  const SRC_PLAIN = {
+    "salesforce-like": "Sales system",
+    "sap-like": "Payment system",
+    "ciam-like": "Login system",
+    "ticket": "Support ticket",
+    "pim-like": "Catalogue system",
+    "erp-like": "Ledger system",
+    "marketplace-like": "Marketplace listing",
+  };
+
+  function plainSource(source) {
+    if (SRC_PLAIN[source]) return SRC_PLAIN[source];
+    const base = String(source || "unknown").replace(/-like$/, "").replace(/[_-]+/g, " ").trim() || "unknown";
+    return base.charAt(0).toUpperCase() + base.slice(1) + " system";
+  }
+
+  function setFriendlyFromResolve(payload) {
+    lastFriendly = {
+      verdict: payload.verdict,
+      golden: payload.golden || null,
+      steward_queue: payload.steward_queue || [],
+      conflicts: payload.conflicts || [],
+      decision_id: payload.decision_id,
+      policy_version: payload.policy_version,
+      taxonomy_version: payload.taxonomy_version,
+    };
+    fState.ran = true;
+  }
+
+  function setFriendlyFromBuild(payload) {
+    const first = (payload.goldens || []).find((g) => g.golden_id) || null;
+    lastFriendly = {
+      verdict: payload.verdict,
+      golden: first,
+      steward_queue: payload.steward_queue || [],
+      conflicts: payload.conflicts || [],
+      decision_id: payload.decision_id,
+      policy_version: payload.policy_version_user,
+      taxonomy_version: payload.taxonomy,
+    };
+    fState.ran = true;
+  }
+
+  function showDetail(open) {
+    document.body.classList.toggle("detail", open);
+    document.body.classList.toggle("friendly", !open);
+    $("detail-view").hidden = !open;
+    if (open) $("detail-view").scrollIntoView();
+    else window.scrollTo(0, 0);
+  }
+
+  function toggleLoop() {
+    loop.mode = loop.mode === "running" ? "paused" : "running";
+    renderLoop();
+    renderFLoop();
+    renderFStatus();
+    feed(loop.mode === "running"
+      ? "Autonomous Loop resumed — next auto check: on next upload."
+      : "Autonomous Loop paused — no auto run until resumed.");
+  }
+
+  function renderFStatus() {
+    const pill = $("f-status-pill");
+    if (!pill) return;
+    pill.className = "pill f-only";
+    if (loop.engineDown) {
+      pill.textContent = "■ Engine down — nothing publishes";
+      pill.classList.add("f-status-down");
+    } else if (fState.working) {
+      pill.textContent = "○ Working…";
+      pill.classList.add("f-status-working");
+    } else if (fState.needCount > 0) {
+      pill.textContent = `⚠ Needs you (${fState.needCount})`;
+      pill.classList.add("f-status-need");
+    } else {
+      pill.textContent = "● Ready";
+      pill.classList.add("f-status-ready");
+    }
+    const fp = $("f-pause");
+    if (fp) fp.textContent = loop.mode === "running" ? "Pause the loop" : "Resume the loop";
+  }
+
+  function renderFSteps() {
+    $("f-step-1").classList.toggle("active", true);
+    $("f-step-2").classList.toggle("active", fState.ran);
+    $("f-step-3").classList.toggle("active", !!fState.downstream);
+  }
+
+  function renderFPieces() {
+    const box = $("f-pieces");
+    const list = activeFragments();
+    if (!list.length) {
+      box.innerHTML = `<div class="f-piece">No pieces loaded yet.</div>`;
+      return;
+    }
+    const byAttr = {};
+    list.forEach((f) => { (byAttr[f.attribute] = byAttr[f.attribute] || []).push(f); });
+    const order = {};
+    Object.entries(byAttr).forEach(([attr, arr]) => {
+      const times = [...new Set(arr.map((f) => f.event_time))].sort();
+      arr.forEach((f) => {
+        if (times.length > 1) order[f.source_id + "|" + f.value] = f.event_time === times[times.length - 1] ? "newer" : "older";
+      });
+    });
+    const bySource = {};
+    list.forEach((f) => { (bySource[f.source] = bySource[f.source] || []).push(f); });
+    box.innerHTML = Object.entries(bySource).map(([source, arr]) => {
+      const lines = arr.map((f) => {
+        const age = order[f.source_id + "|" + f.value] ? ` · ${order[f.source_id + "|" + f.value]}` : "";
+        const proven = f.verified ? "verified" : "not proven yet";
+        return `<div>${esc(f.attribute)} ${esc(f.value)} <span class="muted">(${proven} · rank ${esc(f.authority_rank)}${age})</span></div>`;
+      }).join("");
+      return `<div class="f-piece"><span class="src">${esc(plainSource(source))} says:</span>${lines}</div>`;
+    }).join("");
+  }
+
+  function fragmentForAttribute(attribute) {
+    const list = activeFragments().filter((f) => f.attribute === attribute);
+    return list.find((f) => !f.verified) || list[0] || null;
+  }
+
+  function renderFAnswer() {
+    const box = $("f-answer");
+    const head = $("f-answer-head");
+    const body = $("f-answer-body");
+    box.className = "f-answer";
+    if (!fState.ran || !lastFriendly) {
+      head.textContent = "No answer yet";
+      body.innerHTML = `Run the picture to get one trusted answer — or an honest stop.`;
+      return;
+    }
+    const f = lastFriendly;
+    const needs = (f.steward_queue || []).length;
+    const { entityId } = currentEntity();
+    let downstreamLine = "";
+    if (fState.downstream) {
+      const d = fState.downstream;
+      const who = d.agent === "search" ? "Search" : "OTP";
+      downstreamLine = d.answer === "golden"
+        ? `<div class="f-field">${esc(who)} can use ${esc(d.field)} ${esc(d.value)} now.</div>`
+        : `<div class="f-field">Downstream stopped: no trusted value.</div>`;
+    }
+    if (needs > 0) {
+      box.classList.add("need");
+      head.textContent = `⚠ Needs a human (${needs}) — we did not guess.`;
+      const item = f.steward_queue[0];
+      const frag = fragmentForAttribute(item.attribute);
+      const what = frag
+        ? `"${frag.value}" for ${item.attribute} came from ${plainSource(frag.source).toLowerCase()} and could not be proven.`
+        : `${item.attribute} could not be proven.`;
+      const ownerLine = `Owner: ${item.owner || "steward-001"} · Decide by: ${item.deadline || "—"} · If no decision: ${item.fallback || "do not use this value"}`;
+      let actions;
+      if (item.suggested_action) {
+        actions = `<div class="f-act"><button data-f-detail type="button">Decide in Detail View</button></div>`;
+      } else {
+        actions = `<div class="steward-actions">`
+          + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
+          + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
+          + `<button data-split="${esc(item.steward_id)}">These are two different people</button>`
+          + `</div>`;
+      }
+      body.innerHTML = `<div class="f-steward-q">${esc(what)}</div>`
+        + `<div class="f-steward-meta">${esc(ownerLine)}</div>` + actions
+        + (f.decision_id
+          ? `<div class="f-field"><button data-f-proof3 type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
+          : "")
+        + downstreamLine;
+      bindStewardActions(body);
+      const pb3 = body.querySelector("[data-f-proof3]");
+      if (pb3) pb3.addEventListener("click", () => explain(f.decision_id));
+      const detailBtn = body.querySelector("[data-f-detail]");
+      if (detailBtn) detailBtn.addEventListener("click", () => showDetail(true));
+      return;
+    }
+    const golden = f.golden;
+    if (golden && Object.keys(golden.attributes || {}).length > 0) {
+      box.classList.add("ok");
+      head.textContent = `✓ Trusted picture — ${entityId}`;
+      const fields = Object.entries(golden.attributes || {}).map(([name, value]) => {
+        if (name === "purchased_products" && Array.isArray(value)) {
+          const cats = value.map((p) => p.category || "?").join(", ");
+          return `<div class="f-field"><b>Bought:</b> <span class="f-val">${esc(cats)}</span>`
+            + `<div class="f-why">Verified links, checked by the engine</div></div>`;
+        }
+        const val = (value && typeof value === "object") ? value.value : value;
+        const why = (value && typeof value === "object")
+          ? `${value.rule_fired || ""} · winner ${value.winner_fact_id || ""} · ${value.policy_version || ""}` : "";
+        return `<div class="f-field"><b>${esc(name)}:</b> <span class="f-val">${esc(val)}</span>`
+          + (why ? `<div class="f-why">${esc(why)}</div>` : "")
+          + `<button data-f-explain type="button">Why this value?</button></div>`;
+      }).join("");
+      body.innerHTML = fields + downstreamLine;
+      if (f.decision_id) {
+        body.insertAdjacentHTML("beforeend",
+          `<div class="f-field"><button data-f-explain type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`);
+      }
+      body.querySelectorAll("[data-f-explain]").forEach((btn) =>
+        btn.addEventListener("click", () => explain(f.decision_id)));
+      return;
+    }
+    box.classList.add("stop");
+    head.textContent = "■ No trusted value — we stop, we do not guess.";
+    body.innerHTML = `<div>No value passed every check, so no agent may act on this person yet.</div>`
+      + `<div class="f-act"><button data-f-detail type="button">See why we stopped</button></div>`
+      + (f.decision_id
+        ? `<div class="f-field"><button data-f-proof2 type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
+        : "")
+      + downstreamLine;
+    body.querySelector("[data-f-detail]").addEventListener("click", () => showDetail(true));
+    const pb = body.querySelector("[data-f-proof2]");
+    if (pb) pb.addEventListener("click", () => explain(f.decision_id));
+  }
+
+  function renderFProof() {
+    const el = $("f-proof-text");
+    if (!el) return;
+    if (!fState.ran || !lastFriendly) {
+      el.textContent = "Muse suggests, the engine checks. Nothing derived yet.";
+      return;
+    }
+    const t = lastFriendly.golden ? Object.keys(lastFriendly.golden.attributes || {}).length : 0;
+    const n = (lastFriendly.steward_queue || []).length;
+    el.textContent = n > 0
+      ? `Muse suggested the links. The engine checked them. ${t} field${t === 1 ? "" : "s"} trusted, ${n} need${n === 1 ? "s" : ""} a human.`
+      : `Muse suggested the links. The engine checked them. All ${t} fields trusted.`;
+  }
+
+  function renderFLoop() {
+    const el = $("f-loop-text");
+    if (!el) return;
+    const k = fState.needCount;
+    el.textContent = k > 0
+      ? `Mosaic is watching: it cleaned ${loop.autoGoldens} by itself, ${k} need${k === 1 ? "s" : ""} you.${loop.lastAutoRunAt ? ` Last cleaned by itself: ${loop.lastAutoRunAt}.` : ""}`
+      : `Mosaic is watching: it cleaned ${loop.autoGoldens} by itself, nothing needs you right now.`;
+  }
+
+  function renderFriendly() {
+    renderFPieces();
+    renderFAnswer();
+    renderFProof();
+    renderFLoop();
+    renderFSteps();
+    renderFStatus();
   }
 
   function noteAutoRun(payload) {
@@ -178,6 +429,7 @@
         banner.textContent = "";
       }
       renderLoop();
+      renderFStatus();
     } catch (error) {
       $("api-dot").className = "dot down";
       $("api-status").textContent = "mosaic-api: unreachable";
@@ -232,6 +484,9 @@
   }
 
   function onEntityChange() {
+    fState.ran = false;
+    fState.downstream = null;
+    lastFriendly = null;
     if (entitySel.value === "custom") {
       defineCustomEntity().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
       return;
@@ -245,6 +500,7 @@
     fragments = data.fragments || [];
     tickets = data.tickets || [];
     renderFragments();
+    renderFriendly();
     setStatus(
       `Loaded ${fragments.length} synthetic fragments${tickets.length ? ` + ${tickets.length} ticket(s)` : ""}.`
     );
@@ -285,6 +541,8 @@
 
   async function resolve(auto) {
     resolveBtn.disabled = true;
+    fState.working = true;
+    renderFStatus();
     try {
       const { entityType, entityId } = currentEntity();
       const list = activeFragments();
@@ -323,11 +581,15 @@
         feed(`Manual run (click) — Decision: ${payload.decision_id} — Verdict: ${verdictCap}`);
       }
       setStatus(`Decision ${payload.decision_id} — verdict: ${payload.verdict}.`);
+      setFriendlyFromResolve(payload);
+      renderFriendly();
     } catch (error) {
       setStatus(`Resolve failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto run failed (fail-closed): ${error.message} — nothing published`);
     } finally {
       resolveBtn.disabled = false;
+      fState.working = false;
+      renderFStatus();
     }
   }
 
@@ -428,9 +690,19 @@
       });
       setStatus(`Taxonomy ${version} created; re-derived. Golden: ${payload.golden ? "published" : "withheld"}.`);
       feed(`Steward accepted taxonomy suggestion — new version ${version}; re-derived, no hand edit`);
-      loadPending();
+      dropFriendlySteward(id);
     } catch (error) {
       setStatus(`Accept failed (fail-closed): ${error.message}`);
+    }
+  }
+
+  function dropFriendlySteward(id) {
+    if (lastFriendly && lastFriendly.steward_queue) {
+      lastFriendly.steward_queue = lastFriendly.steward_queue.filter((s) => s.steward_id !== id);
+      renderEscalatedCount(lastFriendly.steward_queue.length);
+      renderFriendly();
+    } else {
+      loadPending();
     }
   }
 
@@ -438,7 +710,7 @@
     await api(`/steward/${id}/reject`, { method: "POST" });
     setStatus("Steward rejected the escalated attribute. No golden written.");
     feed(`Steward rejected escalated attribute — golden unchanged, decision recorded`);
-    loadPending();
+    dropFriendlySteward(id);
   }
 
   async function stewardApprove(id) {
@@ -450,6 +722,8 @@
       body: JSON.stringify({ value }),
     });
     lastResolve = payload;
+    setFriendlyFromResolve(payload);
+    renderFriendly();
     renderEngine(payload);
     renderSteward(payload.steward_queue || []);
     renderMosaic(payload);
@@ -467,7 +741,7 @@
     });
     setStatus(`Split restored v1 as v${payload.golden_version} (decision ${payload.decision_id}).`);
     feed(`Steward split identity — restored v1 as v${payload.golden_version}, Decision: ${payload.decision_id}`);
-    loadPending();
+    dropFriendlySteward(id);
   }
 
   function stewardCardHtml(item) {
@@ -654,8 +928,9 @@
   }
 
   async function buildMosaic(auto) {
-    const { entityType } = currentEntity();
-    const docsBySource = {};
+    fState.working = true;
+    renderFStatus();
+    const { entityType } = currentEntity();    const docsBySource = {};
     for (const f of activeFragments()) {
       (docsBySource[f.source] = docsBySource[f.source] || { source: f.source, fields: {} });
     }
@@ -683,6 +958,8 @@
       });
       lastResolve = payload;
       setStatus(`Build ${payload.decision_id} — verdict: ${payload.verdict} (${payload.splink_status}).`);
+      setFriendlyFromBuild(payload);
+      renderFriendly();
       await loadGraph();
       const first = (payload.goldens || []).find((g) => g.golden_id) || null;
       if (first) {
@@ -710,11 +987,16 @@
     } catch (error) {
       setStatus(`Build failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto build failed (fail-closed): ${error.message} — nothing published`);
+      fState.working = false;
+      renderFStatus();
+      return;
     }
+    fState.working = false;
+    renderFStatus();
   }
 
-  async function uploadFile(auto) {
-    const input = $("upload-file");
+  async function uploadFile(auto, fileInput) {
+    const input = fileInput || $("upload-file");
     if (!input.files || !input.files.length) {
       setStatus("Choose a JSON file first (or use a template).");
       return null;
@@ -747,6 +1029,8 @@
       setStatus("Upload a file first.");
       return;
     }
+    fState.working = true;
+    renderFStatus();
     try {
       const { entityId } = currentEntity();
       const key = `ui-upload-${Date.now()}`;
@@ -784,9 +1068,14 @@
         feed(`Manual upload resolve (click) — Decision: ${payload.decision_id} — Verdict: ${verdictCap}`);
       }
       setStatus(`Upload resolved — decision ${payload.decision_id}, verdict ${payload.verdict}.`);
+      setFriendlyFromResolve(payload);
+      renderFriendly();
     } catch (error) {
       setStatus(`Upload resolve failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto run failed (fail-closed): ${error.message} — nothing published`);
+    } finally {
+      fState.working = false;
+      renderFStatus();
     }
   }
 
@@ -796,6 +1085,11 @@
     const field = agent === "search" ? "category" : "phone";
     try {
       const payload = await api(`/downstream/${agent}?entity_type=${entityType}&entity_id=${entityId}&field=${field}`);
+      fState.downstream = {
+        agent, answer: payload.answer, field: payload.field,
+        value: payload.value, reason: payload.reason,
+      };
+      renderFriendly();
       $("downstream-answer").textContent = JSON.stringify(payload, null, 1);
       const label = agent === "search" ? `Search uses ${payload.value}` : `OTP uses ${payload.value}`;
       if (payload.answer === "golden") {
@@ -911,12 +1205,36 @@
   $("graph-impact").addEventListener("click", graphImpact);
   $("downstream-otp").addEventListener("click", () => askDownstream("otp"));
   $("downstream-search").addEventListener("click", () => askDownstream("search"));
-  $("pause-btn").addEventListener("click", () => {
-    loop.mode = loop.mode === "running" ? "paused" : "running";
-    renderLoop();
-    feed(loop.mode === "running"
-      ? "Autonomous Loop resumed — next auto check: on next upload."
-      : "Autonomous Loop paused — no auto run until resumed.");
+  $("pause-btn").addEventListener("click", toggleLoop);
+  $("f-pause").addEventListener("click", toggleLoop);
+  $("f-show-detail").addEventListener("click", () => showDetail(true));
+  $("f-show-detail-2").addEventListener("click", () => showDetail(true));
+  $("f-back").addEventListener("click", () => showDetail(false));
+  $("f-back-top").addEventListener("click", () => showDetail(false));
+  $("f-loop-more-btn").addEventListener("click", () => {
+    const more = $("f-loop-more");
+    const items = [...$("feed-list").children].slice(0, 3);
+    more.innerHTML = items.map((li) => `<li>${esc(li.textContent)}</li>`).join("")
+      || `<li>No autonomous steps yet.</li>`;
+    more.hidden = !more.hidden;
+    $("f-loop-more-btn").textContent = more.hidden ? "See what it did by itself" : "Hide";
+  });
+  $("f-try-example").addEventListener("click", () => resolve(false));
+  $("f-upload-btn").addEventListener("click", async () => {
+    await uploadFile(false, $("f-upload-file"));
+    if ((window.__uploadedFragments || []).length) {
+      await resolveUpload(false);
+    }
+  });
+  $("f-upload-file").addEventListener("change", async () => {
+    if (loop.mode !== "running") {
+      setStatus("Loop Paused: file staged — click Upload to run manually.");
+      return;
+    }
+    const uploaded = await uploadFile(true, $("f-upload-file"));
+    if (uploaded && (window.__uploadedFragments || []).length) {
+      await resolveUpload(true);
+    }
   });
   $("steward-open").addEventListener("click", openDrawer);
   $("drawer-close").addEventListener("click", closeDrawer);
@@ -932,6 +1250,7 @@
   });
 
   renderLoop();
+  renderFriendly();
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();
   window.setInterval(refreshHealth, 10000);
