@@ -247,6 +247,8 @@ class HealthResponse(StrictModel):
     mosaic_api: Literal["ok"]
     trust_engine: Literal["ok", "down"]
     splink: Literal["ok", "unavailable"] | None = None
+    splink_version: str | None = None
+    duckdb_version: str | None = None
     policy_version_user: str | None = None
     policy_version_product: str | None = None
 

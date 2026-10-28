@@ -130,6 +130,68 @@ class TrustEngine:
         self.stop()
 
 
+class MatchingEngine:
+    """A managed matching-engine subprocess (real matching engine over HTTP)."""
+
+    def __init__(self):
+        self.port = _free_port()
+        self.process: subprocess.Popen | None = None
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.port}"
+
+    def start(self) -> "MatchingEngine":
+        self.process = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "main:app",
+             "--host", "127.0.0.1", "--port", str(self.port)],
+            cwd=ROOT / "matching-engine",
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        _wait_for_http_health(f"{self.url}/health")
+        return self
+
+    def stop(self) -> None:
+        if self.process is not None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+            self.process = None
+
+    def __enter__(self) -> "MatchingEngine":
+        return self.start()
+
+    def __exit__(self, *exc) -> None:
+        self.stop()
+
+
+def _wait_for_http_health(url: str, timeout: float = 60.0) -> None:
+    """Wait until a JSON /health endpoint answers HTTP 200."""
+    import json as _json
+    import urllib.request as _request
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with _request.urlopen(url, timeout=2) as response:
+                if response.status == 200 and _json.load(response).get("status") == "ok":
+                    return
+        except Exception:
+            time.sleep(0.5)
+    raise RuntimeError(f"service did not become healthy at {url}")
+
+
+@pytest.fixture(scope="module")
+def matching_engine():
+    """A running matching-engine for matcher tests (module-scoped)."""
+    pytest.importorskip("splink", reason="splink not installed")
+    service = MatchingEngine().start()
+    yield service.url
+    service.stop()
+
+
 @pytest.fixture(scope="module")
 def te_url(trust_engine_binary, mkit_bin):
     """A running trust-engine for derive-path tests (module-scoped)."""
@@ -145,8 +207,10 @@ def api_client(te_url, tmp_path):
         yield client
 
 
-def make_api_client(te_derive_url: str, tmp_path):
+def make_api_client(te_derive_url: str, tmp_path, matching_service_url: str | None = None):
     """Build a TestClient against any trust-engine URL (kill-test helper)."""
+    import dataclasses
+
     from fastapi.testclient import TestClient
 
     from config import Settings
@@ -163,4 +227,6 @@ def make_api_client(te_derive_url: str, tmp_path):
         manglekit_bin="",
         database_path=str(Path(tmp_path) / "mosaic.db"),
     )
+    if matching_service_url:
+        settings = dataclasses.replace(settings, matching_service_url=matching_service_url)
     return TestClient(create_app(settings))

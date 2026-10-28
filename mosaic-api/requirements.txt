@@ -2,6 +2,9 @@ fastapi==0.141.1
 pydantic==2.12.5
 uvicorn[standard]==0.52.4
 httpx==0.28.1
+# Splink + DuckDB are used ONLY by the single-container in-process fallback
+# (mosaic-api/splink_local.py, behind the same match interface). The
+# three-container topology never imports them in mosaic-api's main flow.
 splink==5.0.0
 duckdb==2.0.0
 jsonschema==4.26.0

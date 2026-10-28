@@ -75,6 +75,7 @@ class Settings:
     muse_model_id: str = ""
     wonder_model_id: str = ""
     splink_enabled: bool = True
+    matching_service_url: str = "http://127.0.0.1:8081"
     embedding_model: str = ""
     embedding_version: str = ""
     embedding_dim: int | None = None
@@ -108,6 +109,7 @@ class Settings:
             muse_model_id=get("MUSE_MODEL_ID"),
             wonder_model_id=get("WONDER_MODEL_ID"),
             splink_enabled=_parse_bool(get("SPLINK_ENABLED") or "true", "SPLINK_ENABLED"),
+            matching_service_url=get("MATCHING_ENGINE_URL") or "http://127.0.0.1:8081",
             embedding_model=get("EMBEDDING_MODEL"),
             embedding_version=get("EMBEDDING_VERSION"),
             embedding_dim=_parse_optional_dim(get("EMBEDDING_DIM"), "EMBEDDING_DIM"),
@@ -127,6 +129,11 @@ class Settings:
     def health_url(self) -> str:
         """Return the trust-engine health URL derived from TRUST_ENGINE_URL."""
         parts = urlsplit(self.trust_engine_url)
+        return urlunsplit((parts.scheme, parts.netloc, "/health", "", ""))
+
+    def matching_health_url(self) -> str:
+        """Return the matching-engine health URL derived from MATCHING_ENGINE_URL."""
+        parts = urlsplit(self.matching_service_url)
         return urlunsplit((parts.scheme, parts.netloc, "/health", "", ""))
 
     def validate_startup(self) -> None:

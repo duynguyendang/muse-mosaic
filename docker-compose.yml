@@ -21,6 +21,20 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  matching-engine:
+    build:
+      context: .
+      dockerfile: matching-engine/Dockerfile
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
   mosaic-api:
     build:
       context: .
@@ -35,6 +49,7 @@ services:
       EMBEDDING_VERSION: ${EMBEDDING_VERSION:-}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-}
       TRUST_ENGINE_URL: http://trust-engine:8080/derive
+      MATCHING_ENGINE_URL: http://matching-engine:8081
       MANGLEKIT_BIN: ${MANGLEKIT_BIN:-}
       TAXONOMY_DIR: /app/taxonomy
       DATABASE_PATH: /app/state/mosaic.db
