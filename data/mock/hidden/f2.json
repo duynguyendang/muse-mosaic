@@ -1,0 +1,36 @@
+{
+  "synthetic": true,
+  "document_id": "F2",
+  "entity_type": "user",
+  "source": "order-like",
+  "notice": "SYNTHETIC DEMO DATA. Person P-HIDDEN fragment 2 of 5: order ORD-101 for product prod-001. No real order.",
+  "fields": {
+    "email": {
+      "value": "an.van@example.com",
+      "authority_rank": 1,
+      "event_time": "2026-10-27T09:05:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    "phone": {
+      "value": "0901234567",
+      "authority_rank": 2,
+      "event_time": "2026-10-27T09:05:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    "order_id": {
+      "value": "ORD-101",
+      "authority_rank": 1,
+      "event_time": "2026-10-27T09:05:00+07:00",
+      "verified": true,
+      "ttl_seconds": 86400
+    },
+    "product_ref": {
+      "value": "prod-001",
+      "event_time": "2026-10-27T09:05:00+07:00",
+      "verified": true,
+      "ttl_seconds": 86400
+    }
+  }
+}

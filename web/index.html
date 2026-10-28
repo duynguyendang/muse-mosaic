@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Muse Mosaic — trusted merge demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #F8FAFC;
+        --panel: #FFFFFF;
+        --line: #E2E8F0;
+        --line-strong: #CBD5E1;
+        --text: #0F172A;
+        --body: #334155;
+        --muted: #64748B;
+        --accent: #2563EB;
+        --warm: #B45309;
+        --warm-bg: #FFFBEB;
+        --good: #15803D;
+        --good-bg: #F0FDF4;
+        --bad: #B91C1C;
+        --bad-bg: #FEF2F2;
+        --proposed-bg: #EFF6FF;
+        --splink: #7C3AED;
+        --splink-bg: #F5F3FF;
+        --tomb: #64748B;
+        --tomb-bg: #F1F5F9;
+        --src-salesforce: #2563EB;
+        --src-sap: #0F766E;
+        --src-ciam: #7C3AED;
+        --src-pim: #EA580C;
+        --src-erp: #475569;
+        --src-market: #DB2777;
+        --src-ticket: #D97706;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 14px;
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
+      .brand h1 { margin: 0; font-size: 20px; font-weight: 700; }
+      .brand span { color: var(--muted); font-size: 13px; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 5px 10px; border-radius: 999px;
+        border: 1px solid var(--line); background: var(--panel);
+        font-size: 12px; color: var(--body);
+      }
+      .pill.badge-btn { cursor: pointer; font: inherit; }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+      .dot.ok { background: var(--good); }
+      .dot.down { background: var(--bad); }
+      .hdr-select {
+        font: inherit; color: var(--text);
+        background: var(--panel); border: 1px solid var(--line-strong);
+        border-radius: 8px; padding: 8px 10px;
+      }
+      .ver-badge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+      main { padding: 20px 24px 40px; max-width: 1440px; margin: 0 auto; }
+      #engine-banner {
+        display: none;
+        margin-bottom: 16px; padding: 12px 16px;
+        border: 1px solid var(--bad); border-radius: 12px;
+        background: var(--bad-bg); color: var(--bad); font-weight: 600;
+      }
+      #loop-strip {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+        margin-bottom: 16px; padding: 12px 16px;
+        border: 1px solid var(--line-strong); border-radius: 12px;
+        background: var(--panel);
+        font-size: 13px;
+      }
+      #loop-strip .loop-state { font-weight: 700; }
+      #loop-strip .loop-state.running { color: var(--good); }
+      #loop-strip .loop-state.paused { color: var(--warm); }
+      #loop-strip .loop-meta { color: var(--body); }
+      #loop-strip .mono { font-size: 12px; }
+      #config-summary {
+        margin-bottom: 16px; padding: 10px 16px;
+        border: 1px solid var(--line); border-radius: 12px;
+        background: var(--tomb-bg); color: var(--body); font-size: 13px;
+      }
+      .controls {
+        display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+        margin-bottom: 16px; padding: 12px 16px;
+        border: 1px solid var(--line); border-radius: 12px;
+        background: var(--panel);
+      }
+      select, button, input {
+        font: inherit; color: var(--text);
+        background: var(--panel); border: 1px solid var(--line-strong);
+        border-radius: 8px; padding: 8px 12px;
+      }
+      button { cursor: pointer; min-height: 44px; }
+      button.primary { background: #0F172A; border-color: #0F172A; color: #fff; font-weight: 600; }
+      button:disabled { opacity: 0.5; cursor: wait; }
+      #pause-btn { border-color: #0F172A; font-weight: 600; }
+      .check { display: inline-flex; gap: 7px; align-items: center; font-size: 13px; color: var(--body); }
+      .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+      .panel {
+        border: 1px solid var(--line); border-radius: 12px;
+        background: var(--panel);
+        overflow: hidden; min-height: 0;
+      }
+      .panel.tall { min-height: 480px; }
+      .panel-head {
+        padding: 12px 16px; border-bottom: 1px solid var(--line);
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      }
+      .panel-head h2 { margin: 0; font-size: 16px; font-weight: 700; }
+      .panel-head .tag {
+        font-size: 11px; color: var(--muted);
+        border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px;
+        white-space: nowrap;
+      }
+      .panel-body { padding: 12px 16px; display: grid; gap: 12px; align-content: start; }
+      .card {
+        border: 1px solid var(--line); border-radius: 12px;
+        padding: 12px 14px; background: var(--panel);
+        font-size: 13px; line-height: 1.5;
+      }
+      .card h3 { margin: 0 0 6px; font-size: 13px; }
+      .card .meta, .muted { color: var(--muted); font-size: 12px; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
+      .badge {
+        display: inline-block; padding: 2px 8px; border-radius: 999px;
+        font-size: 11px; border: 1px solid var(--line-strong); margin-right: 6px;
+        color: var(--body);
+      }
+      .badge.high, .badge.published { color: var(--good); border-color: var(--good); }
+      .badge.medium { color: var(--warm); border-color: var(--warm); }
+      .badge.low, .badge.escalated, .badge.abstain, .badge.denied { color: var(--bad); border-color: var(--bad); }
+      .badge.proposed { color: var(--accent); border-color: var(--accent); }
+      .badge.candidate { color: var(--splink); border-color: var(--splink); }
+      #feed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+      #feed-list li { font-size: 12.5px; color: var(--body); border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+      #feed-list li:last-child { border-bottom: none; }
+      #feed-list .ts { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); margin-right: 8px; }
+      .mosaic { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 30px; gap: 5px; }
+      .tile { border-radius: 6px; border: 1px solid rgba(15,23,42,0.15); opacity: 0.9; cursor: pointer; padding: 0; }
+      .tile.user { grid-column: span 2; background: #38bdf8; }
+      .tile.agent { grid-column: span 2; background: #a78bfa; }
+      .tile.rule { grid-column: span 2; background: #fbbf24; }
+      .tile.wide { grid-column: span 3; }
+      .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--muted); }
+      .legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+      .exception-card {
+        border: 1px dashed var(--warm); border-radius: 12px;
+        background: var(--warm-bg); padding: 12px 14px; font-size: 13px;
+        display: grid; gap: 8px;
+      }
+      .steward-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+      #steward-drawer {
+        position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 94vw);
+        background: var(--panel); border-left: 1px solid var(--line-strong);
+        box-shadow: -8px 0 24px rgba(15,23,42,0.12);
+        z-index: 20; display: none; flex-direction: column;
+      }
+      #steward-drawer.open { display: flex; }
+      #steward-drawer .drawer-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 18px; border-bottom: 1px solid var(--line);
+      }
+      #steward-drawer .drawer-head h2 { margin: 0; font-size: 16px; }
+      #steward-drawer-list { padding: 14px 18px; overflow: auto; display: grid; gap: 12px; align-content: start; }
+      #drawer-scrim {
+        position: fixed; inset: 0; background: rgba(15,23,42,0.35);
+        z-index: 15; display: none;
+      }
+      #drawer-scrim.open { display: block; }
+      dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line-strong); border-radius: 12px; max-width: 640px; width: 90vw; }
+      dialog::backdrop { background: rgba(15,23,42,0.4); }
+      #downstream-log { font-size: 12px; color: var(--body); }
+      #realtime-bar {
+        margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
+        color: var(--muted); font-size: 11.5px; line-height: 1.6;
+      }
+      @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <h1>Muse Mosaic</h1>
+        <span>Many fragments, one trusted picture, with proof for every piece.</span>
+      </div>
+      <label class="muted">Entity
+        <select id="entity" class="hdr-select" aria-label="Entity selector">
+          <option value="user/P-001">User — P-001</option>
+          <option value="product/prod-001">Product — prod-001</option>
+          <option value="product/prod-002">Product — prod-002</option>
+        </select>
+      </label>
+      <span class="pill ver-badge" id="policy-badge" title="Policy version in force">Policy: checking…</span>
+      <span class="pill ver-badge" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
+      <span class="pill"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
+      <span class="pill"><span id="api-dot" class="dot"></span><span id="api-status">mosaic-api: checking…</span></span>
+      <span class="pill"><span id="splink-dot" class="dot"></span><span id="splink-status">splink: checking…</span></span>
+      <button class="pill badge-btn" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
+    </header>
+
+    <main>
+      <div id="engine-banner" role="alert"></div>
+
+      <section id="loop-strip" aria-labelledby="loop-title">
+        <span class="loop-state running" id="loop-state">● Autonomous Loop: Running</span>
+        <span class="loop-meta" id="loop-last">Last auto run: none yet — no auto run has completed.</span>
+        <span class="loop-meta" id="loop-counts">Auto-published this session: 0 goldens, 0 links — without a human click</span>
+        <span class="loop-meta" id="loop-escalated">Escalated, needs a human: 0 items — see Steward Queue</span>
+        <span class="loop-meta">Next auto check: on next upload / on next batch</span>
+        <button id="pause-btn" class="primary" type="button">Pause Autonomous Loop</button>
+      </section>
+
+      <div id="config-summary" role="note">Config in force — Policy: checking… · Taxonomy: checking… (from /health; no config proposed yet)</div>
+
+      <section class="panel" style="margin-bottom: 16px;" aria-labelledby="upload-title">
+        <div class="panel-head">
+          <h2 id="upload-title">Upload data</h2>
+          <button id="feed-toggle-inline" class="tag" type="button" style="cursor:pointer" title="Show or hide the activity feed">Activity feed: shown below</button>
+        </div>
+        <div class="panel-body">
+          <div class="controls" style="margin:0;">
+            <span class="muted">Drop JSON files here, or click to choose files. JSON only in v1.</span>
+            <label class="check">Upload JSON <input type="file" id="upload-file" accept=".json,application/json" /></label>
+            <button id="upload-btn" type="button">Upload + propose links</button>
+            <span class="muted">Synthetic or non-sensitive data only for the demo. Uploaded data is sent to the Muse builder via the Meta Model API in real mode, so do not upload real PII in the demo.</span>
+            <span class="muted" id="loop-hint">Loop Running: choosing a file auto-runs the approved pipeline, no click needed.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" style="margin-bottom: 16px;" aria-labelledby="feed-title">
+        <div class="panel-head">
+          <h2 id="feed-title">Autonomous Loop — Activity feed</h2>
+          <span class="tag">newest first · every line traces to a decision id or a ledger row</span>
+        </div>
+        <div class="panel-body">
+          <ol id="feed-list" aria-live="polite"></ol>
+        </div>
+      </section>
+
+      <section class="panel tall" style="margin-bottom: 16px;" aria-labelledby="graph-title">
+        <div class="panel-head">
+          <h2 id="graph-title">Data graph — canvas</h2>
+          <span class="tag">queryable, persisted</span>
+        </div>
+        <div class="panel-body">
+          <div class="controls" style="margin:0 0 10px 0;">
+            <button id="graph-load" type="button">Load graph</button>
+            <button id="graph-path" type="button">Pathfinder F1-F5</button>
+            <button id="graph-impact" type="button">Blast radius: phone</button>
+            <span class="muted" id="graph-info">Nodes and edges for the current entity.</span>
+          </div>
+          <svg id="graph-canvas" width="100%" height="300" role="img" aria-label="Data graph canvas"></svg>
+          <div class="card mono" id="graph-detail">No graph loaded.</div>
+        </div>
+      </section>
+
+      <div class="controls" role="toolbar" aria-label="Manual run controls">
+        <label class="check"><input type="checkbox" id="with-ticket" /> include synthetic ticket fragment</label>
+        <button class="primary" id="resolve" type="button">Propose + resolve</button>
+        <button id="refresh" type="button">Reload fragments</button>
+        <button id="build" type="button" title="Manual single run only — the loop auto-runs on upload">Build Mosaic</button>
+        <span class="muted" id="status-line">Synthetic demo data only. Muse mock proposes; manglekit derives.</span>
+      </div>
+
+      <div class="grid">
+        <section class="panel tall" aria-labelledby="proposer-title">
+          <div class="panel-head">
+            <h2 id="proposer-title">Muse Spark — Builder</h2>
+            <span class="tag">proposes only · REAL · AUTO REASONING</span>
+          </div>
+          <div class="panel-body" id="proposer-body">
+            <div class="card"><span class="muted">Fragments and the mock proposal appear here.</span></div>
+          </div>
+        </section>
+
+        <section class="panel tall" aria-labelledby="engine-title">
+          <div class="panel-head">
+            <h2 id="engine-title">Trust Engine — manglekit, Datalog</h2>
+            <span class="tag">derives only · REAL · AUTO VERIFYING</span>
+          </div>
+          <div class="panel-body" id="engine-body">
+            <div class="card"><span class="muted">Derived golden record, lineage, conflicts and steward queue appear here.</span></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid" style="margin-top: 16px;">
+        <section class="panel" style="min-height: 0;" aria-labelledby="mosaic-title">
+          <div class="panel-head">
+            <h2 id="mosaic-title">Mosaic picture</h2>
+            <span class="tag">click a tile for lineage</span>
+          </div>
+          <div class="panel-body">
+            <div class="mosaic" id="mosaic" aria-hidden="false"></div>
+            <div class="legend" style="margin-top: 10px;">
+              <span><i class="swatch" style="background: var(--src-sap)"></i>■ Source colour = which system it came from</span>
+              <span>Solid = verified</span>
+              <span>Dashed = proposed / loser</span>
+              <span>Amber dashed = escalated, not published</span>
+              <span>Grey = denied</span>
+            </div>
+            <div class="card mono" id="tile-detail">No tile selected.</div>
+          </div>
+        </section>
+
+        <section class="panel" style="min-height: 0;" aria-labelledby="steward-title">
+          <div class="panel-head">
+            <h2 id="steward-title">Steward Queue — exceptions only</h2>
+            <span class="tag">human only on escalate</span>
+          </div>
+          <div class="panel-body" id="steward-body">
+            <div class="card"><span class="muted">Queue empty — nothing escalated.</span></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid" style="margin-top: 16px;">
+        <section class="panel" style="min-height: 0;" aria-labelledby="golden-title">
+          <div class="panel-head">
+            <h2 id="golden-title">Golden Record</h2>
+            <span class="tag">nested + validated</span>
+          </div>
+          <div class="panel-body">
+            <div class="card mono" id="golden-body">No golden record yet. Click Build Mosaic.</div>
+          </div>
+        </section>
+        <section class="panel" style="min-height: 0;" aria-labelledby="downstream-title">
+          <div class="panel-head">
+            <h2 id="downstream-title">Downstream agent</h2>
+            <span class="tag">golden or stop</span>
+          </div>
+          <div class="panel-body">
+            <div class="controls" style="margin:0 0 10px 0;">
+              <button id="downstream-otp" type="button">Ask OTP mock</button>
+              <button id="downstream-search" type="button">Ask search mock</button>
+              <span class="pill" id="downstream-pill">Downstream: no query yet</span>
+            </div>
+            <div class="card mono" id="downstream-answer">No downstream query yet.</div>
+            <div class="card mono" id="downstream-log">Downstream action log: no downstream action yet.</div>
+          </div>
+        </section>
+      </div>
+
+      <div id="realtime-bar">
+        REAL: Meta Model API call, mosaic-api, trust-engine, ledger, graph, UI
+        &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream
+      </div>
+    </main>
+
+    <div id="drawer-scrim"></div>
+    <aside id="steward-drawer" aria-labelledby="drawer-steward-title" role="dialog" aria-modal="true">
+      <div class="drawer-head">
+        <h2 id="drawer-steward-title">Steward Queue</h2>
+        <button id="drawer-close" type="button">Close (Esc)</button>
+      </div>
+      <div id="steward-drawer-list"></div>
+    </aside>
+
+    <dialog id="explain-dialog">
+      <h3 style="margin-top:0">Explain — <span class="mono" id="explain-id"></span></h3>
+      <div class="mono" id="explain-body" style="white-space: pre-wrap;"></div>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

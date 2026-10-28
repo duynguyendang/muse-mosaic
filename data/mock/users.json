@@ -1,0 +1,123 @@
+{
+  "synthetic": true,
+  "notice": "SYNTHETIC DEMO DATA. No real people, phone numbers, emails or addresses. All sources are labelled '-like' because no real CRM, ERP, CIAM or ticket integration exists. Open question: display_name is allowed by policy but has no authority matrix; the ranks on display_name fragments are fixture placeholders, not policy ranks, and must not be used to derive a winner.",
+  "entities": [
+    {
+      "entity_type": "user",
+      "entity_id": "P-001",
+      "label": "Synthetic Person P-001 (not a real person)",
+      "fragments": [
+        {
+          "source": "salesforce-like",
+          "source_id": "sf-001-name",
+          "attribute": "display_name",
+          "value": "Synthetic Person P-001",
+          "authority_rank": 2,
+          "event_time": "2026-10-27T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "sap-like",
+          "source_id": "sap-001-name",
+          "attribute": "display_name",
+          "value": "Synthetic Person P-001",
+          "authority_rank": 1,
+          "event_time": "2026-10-26T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "ciam-like",
+          "source_id": "ciam-001-name",
+          "attribute": "display_name",
+          "value": "Synthetic Person P-001",
+          "authority_rank": 3,
+          "event_time": "2026-10-27T08:30:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "salesforce-like",
+          "source_id": "sf-001-phone",
+          "attribute": "phone",
+          "value": "+84 900 000 002",
+          "authority_rank": 2,
+          "event_time": "2026-10-27T09:00:00+07:00",
+          "verified": false,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "sap-like",
+          "source_id": "sap-001-phone",
+          "attribute": "phone",
+          "value": "+84 900 000 001",
+          "authority_rank": 1,
+          "event_time": "2026-10-26T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 172800
+        },
+        {
+          "source": "salesforce-like",
+          "source_id": "sf-001-email",
+          "attribute": "email",
+          "value": "synthetic.person.p001@example.invalid",
+          "authority_rank": 2,
+          "event_time": "2026-10-27T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "sap-like",
+          "source_id": "sap-001-email",
+          "attribute": "email",
+          "value": "synthetic.person.p001@example.invalid",
+          "authority_rank": 3,
+          "event_time": "2026-10-26T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "ciam-like",
+          "source_id": "ciam-001-email",
+          "attribute": "email",
+          "value": "synthetic.person.p001@example.invalid",
+          "authority_rank": 1,
+          "event_time": "2026-10-27T08:30:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "salesforce-like",
+          "source_id": "sf-001-address",
+          "attribute": "address",
+          "value": "12 Synthetic Street, District 1, Ho Chi Minh City",
+          "authority_rank": 2,
+          "event_time": "2026-10-27T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "sap-like",
+          "source_id": "sap-001-address",
+          "attribute": "address",
+          "value": "14 Synthetic Street, District 1, Ho Chi Minh City",
+          "authority_rank": 3,
+          "event_time": "2026-10-26T09:00:00+07:00",
+          "verified": true,
+          "ttl_seconds": 3600
+        },
+        {
+          "source": "ciam-like",
+          "source_id": "ciam-001-address",
+          "attribute": "address",
+          "value": "PO Box 99, Synthetic City",
+          "authority_rank": 3,
+          "event_time": "2026-10-27T08:30:00+07:00",
+          "verified": false,
+          "ttl_seconds": 3600
+        }
+      ]
+    }
+  ]
+}

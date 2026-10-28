@@ -1,0 +1,23 @@
+{
+  "synthetic": true,
+  "document_id": "F1",
+  "entity_type": "user",
+  "source": "salesforce-like",
+  "notice": "SYNTHETIC DEMO DATA. Person P-HIDDEN fragment 1 of 5. No real person.",
+  "fields": {
+    "display_name": {
+      "value": "Nguyen Van An",
+      "authority_rank": 2,
+      "event_time": "2026-10-27T09:00:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    "email": {
+      "value": "an.van@example.com",
+      "authority_rank": 2,
+      "event_time": "2026-10-27T09:00:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    }
+  }
+}

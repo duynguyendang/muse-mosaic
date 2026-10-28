@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "document_id": "F3",
+  "entity_type": "user",
+  "source": "sap-like",
+  "notice": "SYNTHETIC DEMO DATA. Person P-HIDDEN fragment 3 of 5. No real person.",
+  "fields": {
+    "display_name": {
+      "value": "An Nguyen",
+      "authority_rank": 1,
+      "event_time": "2026-10-27T09:02:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    "phone": {
+      "value": "0901234567",
+      "authority_rank": 1,
+      "event_time": "2026-10-27T09:02:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    "address": {
+      "value": "123 Le Loi, HCM",
+      "authority_rank": 3,
+      "event_time": "2026-10-27T09:02:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    }
+  }
+}

@@ -1,0 +1,65 @@
+name: muse-mosaic
+
+services:
+  trust-engine:
+    build:
+      context: .
+      dockerfile: trust-engine/Dockerfile
+    environment:
+      PORT: "8080"
+      POLICY_DIR: /app/policies
+      TAXONOMY_DIR: /app/taxonomy
+    expose:
+      - "8080"
+    volumes:
+      - mosaic-taxonomy:/app/taxonomy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  mosaic-api:
+    build:
+      context: .
+      dockerfile: mosaic-api/Dockerfile
+    environment:
+      USE_MOCK_MUSE: ${USE_MOCK_MUSE:-true}
+      META_MODEL_API_KEY: ${META_MODEL_API_KEY:-}
+      MUSE_MODEL_ID: ${MUSE_MODEL_ID:-}
+      WONDER_MODEL_ID: ${WONDER_MODEL_ID:-}
+      SPLINK_ENABLED: ${SPLINK_ENABLED:-true}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_VERSION: ${EMBEDDING_VERSION:-}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-}
+      TRUST_ENGINE_URL: http://trust-engine:8080/derive
+      MANGLEKIT_BIN: ${MANGLEKIT_BIN:-}
+      TAXONOMY_DIR: /app/taxonomy
+      DATABASE_PATH: /app/state/mosaic.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - mosaic-state:/app/state
+      - mosaic-taxonomy:/app/taxonomy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      trust-engine:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mosaic-state:
+  mosaic-taxonomy:

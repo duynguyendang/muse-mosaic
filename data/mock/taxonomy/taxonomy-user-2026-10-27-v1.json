@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "taxonomy_version": "tax-user-2026-10-27-v1",
+  "entity_type": "user",
+  "notice": "SYNTHETIC DEMO TAXONOMY. Canonical attribute names and aliases for user fragments. No real data.",
+  "attribute_aliases": {
+    "phone": ["phone_number", "mobile", "tel", "sdt", "dien_thoai", "customer_phone"],
+    "email": ["customer_email", "e-mail", "mail"],
+    "address": ["shipping_address", "dia_chi", "addr"],
+    "display_name": ["name", "full_name", "customer_name", "reviewer"],
+    "order_id": ["order", "order_number", "orderid"]
+  },
+  "terms": []
+}

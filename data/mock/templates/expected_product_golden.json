@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Expected product golden",
+  "description": "Default expected structure for a product golden. Category is required: a product golden without a derived category never validates.",
+  "type": "object",
+  "required": ["category"],
+  "properties": {
+    "name": {"type": "string"},
+    "category": {"type": "string", "minLength": 1},
+    "purchased_by": {
+      "type": "array",
+      "items": {"type": "object"},
+      "description": "Reverse purchased edges. Informational in v1."
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Expected user golden",
+  "description": "Default expected structure for a user golden. Only email is required: phone, address and display_name may legitimately escalate (per-attribute trust), and order_id is linkage proof, not a golden field. A golden missing email does not validate.",
+  "type": "object",
+  "required": ["email"],
+  "properties": {
+    "display_name": {"type": "string", "minLength": 1},
+    "phone": {"type": "string", "minLength": 1},
+    "email": {"type": "string", "minLength": 1},
+    "address": {"type": "string", "minLength": 1},
+    "purchased_products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category"],
+        "properties": {
+          "name": {"type": "string"},
+          "category": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

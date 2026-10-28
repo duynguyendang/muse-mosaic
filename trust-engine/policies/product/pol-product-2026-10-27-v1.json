@@ -1,0 +1,26 @@
+{
+  "policy_version": "pol-product-2026-10-27-v1",
+  "entity_type": "product",
+  "allowed_attributes": ["category"],
+  "golden_attributes": ["category"],
+  "authority_matrix": {
+    "category": {
+      "pim-like": 1,
+      "erp-like": 2,
+      "marketplace-like": 3
+    }
+  },
+  "critical_attributes": [],
+  "rules": ["R1", "R2", "R3", "R4", "L1", "C1", "C2", "T1", "I1"],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording"
+  },
+  "ttls_seconds": {
+    "detector-like": 600,
+    "inventory-like": 3600
+  },
+  "splink": {
+    "threshold": 0.9,
+    "blocking": ["category"]
+  }
+}

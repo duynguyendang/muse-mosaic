@@ -1,0 +1,35 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# SQLite ledger (never commit generated state)
+data/*.db
+data/*.db-*
+data/*.sqlite
+data/*.sqlite-*
+*.db
+*.db-shm
+*.db-wal
+
+# Go
+trust-engine/trust-engine
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.agents/
+.stitch/
+.pytest_cache/
+# Internal (never published)
+/docs/internal/

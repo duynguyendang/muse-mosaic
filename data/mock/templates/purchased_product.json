@@ -1,0 +1,38 @@
+{
+  "synthetic": true,
+  "notice": "SYNTHETIC UPLOAD TEMPLATE. Same prod-001 fragments as products.json, in upload-ready JSON shape for POST /upload.",
+  "entity_type": "product",
+  "entity_id": "prod-001",
+  "fragments": [
+    {
+      "source": "pim-like",
+      "source_id": "pim-001-category",
+      "attribute": "category",
+      "value": "Smartphone",
+      "authority_rank": 1,
+      "event_time": "2026-10-27T09:00:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    {
+      "source": "erp-like",
+      "source_id": "erp-001-category",
+      "attribute": "category",
+      "value": "Điện thoại",
+      "authority_rank": 2,
+      "event_time": "2026-10-27T08:00:00+07:00",
+      "verified": true,
+      "ttl_seconds": 3600
+    },
+    {
+      "source": "marketplace-like",
+      "source_id": "mp-001-category",
+      "attribute": "category",
+      "value": "Phụ kiện điện thoại",
+      "authority_rank": 3,
+      "event_time": "2026-10-27T10:00:00+07:00",
+      "verified": false,
+      "ttl_seconds": 3600
+    }
+  ]
+}

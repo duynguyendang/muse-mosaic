@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "document_id": "F5",
+  "entity_type": "user",
+  "source": "marketplace-like",
+  "notice": "SYNTHETIC DEMO DATA. Person P-HIDDEN fragment 5 of 5: marketplace review of order ORD-101. No real review.",
+  "fields": {
+    "display_name": {
+      "value": "A. Nguyen",
+      "authority_rank": 3,
+      "event_time": "2026-10-27T09:12:00+07:00",
+      "verified": false,
+      "ttl_seconds": 3600
+    },
+    "address": {
+      "value": "123 Le Loi, HCM",
+      "authority_rank": 3,
+      "event_time": "2026-10-27T09:12:00+07:00",
+      "verified": false,
+      "ttl_seconds": 3600
+    },
+    "order_id": {
+      "value": "ORD-101",
+      "authority_rank": 2,
+      "event_time": "2026-10-27T09:12:00+07:00",
+      "verified": false,
+      "ttl_seconds": 86400
+    }
+  }
+}

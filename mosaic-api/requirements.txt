@@ -1,0 +1,8 @@
+fastapi==0.141.1
+pydantic==2.12.5
+uvicorn[standard]==0.52.4
+httpx==0.28.1
+splink==5.0.0
+duckdb==2.0.0
+jsonschema==4.26.0
+python-multipart==0.0.20

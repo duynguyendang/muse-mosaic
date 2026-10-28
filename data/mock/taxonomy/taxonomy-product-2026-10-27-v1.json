@@ -1,0 +1,23 @@
+{
+  "synthetic": true,
+  "taxonomy_version": "tax-product-2026-10-27-v1",
+  "entity_type": "product",
+  "notice": "SYNTHETIC DEMO TAXONOMY. Canonical product categories and Vietnamese/English synonyms. No real data.",
+  "attribute_aliases": {
+    "category": ["product_category", "cat", "loai_san_pham"]
+  },
+  "terms": [
+    {
+      "term": "Smartphone",
+      "synonyms": ["Điện thoại", "điện thoại thông minh", "mobile phone", "dienthoai"]
+    },
+    {
+      "term": "Laptop",
+      "synonyms": ["Máy tính xách tay", "notebook"]
+    },
+    {
+      "term": "Wireless Earbuds",
+      "synonyms": []
+    }
+  ]
+}
