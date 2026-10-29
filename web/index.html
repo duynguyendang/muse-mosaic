@@ -99,6 +99,31 @@
         border: 1px solid var(--line); border-radius: 12px;
         background: var(--tomb-bg); color: var(--body); font-size: 13px;
       }
+      .gate-arrow {
+        grid-column: 1 / -1; text-align: center; font-weight: 700; color: #0F172A;
+        background: #FEF9C3; border: 1px dashed #B45309; border-radius: 8px;
+        padding: 6px 10px; margin-bottom: 2px;
+      }
+      .gate-arrow strong { color: #B45309; }
+      /* 1280x720 viewport safety: detail panels scroll internally instead of
+         growing the page. Friendly view is untouched (it scrolls normally). */
+      body.detail #sec-graph .panel-body { max-height: 42vh; overflow: auto; }
+      body.detail #graph-canvas { height: 220px; }
+      body.detail .panel.tall .panel-body { max-height: 38vh; overflow: auto; }
+      body.detail .panel.tall { min-height: 0; }
+      #graph-canvas line { transition: stroke 0.25s ease, stroke-width 0.25s ease; }
+      #graph-canvas line.lit { stroke: #15803D !important; stroke-width: 3.5 !important; stroke-dasharray: none !important; }
+      .gold-field.f-hit { outline: 3px solid #15803D; outline-offset: 2px; }
+      .f-config { border: 2px solid #2563EB; border-radius: 10px; padding: 12px 14px; margin: 12px 0; background: #EFF6FF; }
+      .f-config h3 { margin: 0 0 8px 0; color: #1E3A8A; }
+      .f-config .cfg-row { margin: 6px 0; font-size: 14px; color: #0F172A; }
+      .f-config .cfg-row .tag { font-size: 11px; background: #DBEAFE; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+      .f-config-summary { border: 1px solid #15803D; border-radius: 8px; padding: 8px 12px; margin: 12px 0; background: #F0FDF4; color: #14532D; font-weight: 600; }
+      .checklist { list-style: none; margin: 8px 0 0 0; padding: 0; }
+      .checklist li { margin: 3px 0; font-size: 13px; }
+      .checklist .ok { color: #15803D; font-weight: 700; }
+      .checklist .bad { color: #B91C1C; font-weight: 700; }
+      .checklist .na { color: #64748B; font-weight: 700; }
       .controls {
         display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
         margin-bottom: 16px; padding: 12px 16px;
@@ -396,13 +421,13 @@
       <button class="pill badge-btn detail-only" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
       <button class="f-only" id="f-show-detail" type="button">Show how it was decided</button>
       <button class="f-only" id="f-pause" type="button">Pause the loop</button>
-      <button class="detail-only" id="f-back" type="button">Back to trusted picture</button>
+      <button class="detail-only" id="f-back" type="button">Back to simple view</button>
     </header>
 
     <main>
       <div id="friendly">
         <div class="f-steps" aria-label="Three steps">
-          <span class="step active" id="f-step-1"><span class="n">1</span> <span class="lbl">Start with messy pieces</span></span>
+          <span class="step active" id="f-step-1"><span class="n">1</span> <span class="lbl">Messy pieces</span></span>
           <span class="arrow">→</span>
           <span class="step" id="f-step-2"><span class="n">2</span> <span class="lbl">Trusted picture</span></span>
           <span class="arrow">→</span>
@@ -447,12 +472,25 @@
           <label class="check">Your JSON file <input type="file" id="f-upload-file" accept=".json,application/json" /></label>
           <button id="f-upload-btn" type="button">Upload + show the picture</button>
           <button id="f-try-example" type="button">Try the messy example</button>
+          <button id="f-scene0" type="button">Messy JSON (Scene 0)</button>
           <span class="muted">Synthetic or non-sensitive data only for the demo.</span>
         </div>
+
+        <div class="f-config" id="f-config" hidden>
+          <h3>Scene 0 — Config proposal <span class="tag">nothing published yet</span></h3>
+          <div id="f-config-body"></div>
+          <div class="steward-actions">
+            <button id="f-config-approve" class="primary" type="button">Yes, clean like this</button>
+            <button id="f-config-build" type="button" disabled>Build Mosaic</button>
+            <button id="f-config-cancel" type="button">Cancel</button>
+          </div>
+          <div class="meta" id="f-config-note"></div>
+        </div>
+        <div class="f-config-summary" id="f-config-summary" hidden></div>
       </div>
 
       <div id="detail-view" hidden>
-      <div><button id="f-back-top" type="button">Back to trusted picture</button></div>
+      <div><button id="f-back-top" type="button">Back to simple view</button></div>
       <section class="panel" id="detail-empty" style="margin-bottom: 16px;">
         <div class="panel-body"><div class="card">Nothing has run yet — run the picture in the Friendly View, or click Build Mosaic here.</div></div>
       </section>
@@ -536,6 +574,7 @@
       </div>
 
       <div class="grid">
+        <div class="gate-arrow" role="note" aria-label="Trust boundary">Builder proposes <span aria-hidden="true">→</span> <strong>Verify, not Approve</strong> <span aria-hidden="true">→</span> Engine derives</div>
         <section class="panel tall accent-blue" aria-labelledby="proposer-title">
           <div class="panel-head">
             <h2 id="proposer-title">Muse Spark — Builder</h2>
@@ -645,6 +684,8 @@
       </div>
     </dialog>
 
+    <script src="./config.js"></script>
+    <script src="./drawers.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

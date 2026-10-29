@@ -12,7 +12,12 @@
   // Separate frontend deploy: point at the API with e.g.
   // <script>window.MOSAIC_API_BASE = "https://api.example.com"</script>
   // before app.js. Same-origin default keeps local/demo working.
-  const API_BASE = (window.MOSAIC_API_BASE || "").replace(/\/+$/, "");
+  // Shared constants and pure label helpers live in config.js.
+  const API_BASE = window.MosaicConfig.API_BASE;
+  const esc = window.MosaicConfig.esc;
+  const plainSource = window.MosaicConfig.plainSource;
+  const plainAttr = window.MosaicConfig.plainAttr;
+  const SRC_COLOR = window.MosaicConfig.SRC_COLOR;
   const entitySel = $("entity");
   const ticketBox = $("with-ticket");
   const resolveBtn = $("resolve");
@@ -148,23 +153,6 @@
     if (empty) empty.hidden = false;
   }
 
-  const SRC_PLAIN = {
-    "salesforce-like": "Sales system",
-    "sap-like": "Payment system",
-    "ciam-like": "Login system",
-    "ticket": "Support ticket",
-    "pim-like": "Catalogue system",
-    "erp-like": "Ledger system",
-    "marketplace-like": "Marketplace listing",
-    "ticket-verified": "Ticket system (verified)",
-  };
-
-  function plainSource(source) {
-    if (SRC_PLAIN[source]) return SRC_PLAIN[source];
-    const base = String(source || "unknown").replace(/-like$/, "").replace(/[_-]+/g, " ").trim() || "unknown";
-    return base.charAt(0).toUpperCase() + base.slice(1) + " system";
-  }
-
   function setFriendlyFromResolve(payload) {
     lastFriendly = {
       verdict: payload.verdict,
@@ -237,7 +225,7 @@
 
   function renderFSteps() {
     const s1 = $("f-step-1"), s2 = $("f-step-2"), s3 = $("f-step-3");
-    s1.querySelector(".lbl").textContent = fState.ran ? "Messy pieces" : "Start with messy pieces";
+    s1.querySelector(".lbl").textContent = "Messy pieces";
     const setState = (el, mode) => {
       el.classList.toggle("done", mode === "done");
       el.classList.toggle("now", mode === "now");
@@ -247,22 +235,6 @@
     setState(s2, !fState.ran ? "future" : (fState.downstream ? "done" : "now"));
     const stopped = !!(fState.ran && lastFriendly && lastFriendly.verdict === "denied");
     setState(s3, fState.downstream || stopped ? "done" : "future");
-  }
-
-  const ATTR_PLAIN = {
-    display_name: "Name",
-    name: "Name",
-    phone: "Phone",
-    email: "Email",
-    address: "Address",
-    category: "Category",
-    order_id: "Order",
-  };
-
-  function plainAttr(attribute) {
-    if (ATTR_PLAIN[attribute]) return ATTR_PLAIN[attribute];
-    const base = String(attribute || "?").replace(/[_-]+/g, " ").trim() || "?";
-    return base.charAt(0).toUpperCase() + base.slice(1);
   }
 
   function renderFPieces() {
@@ -393,12 +365,12 @@
           ? `<div class="f-field"><button data-f-proof3 type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
           : "")
         + downstreamLine;
-      bindStewardActions(body);
+      MosaicDrawers.bindStewardActions(drawerCtx, body);
       const pb3 = body.querySelector("[data-f-proof3]");
       if (pb3) pb3.addEventListener("click", () => explain(f.decision_id));
       const fa = body.querySelector("[data-f-accept]");
       if (fa) fa.addEventListener("click", () =>
-        stewardAcceptAsk(fa.getAttribute("data-f-accept"), fa.getAttribute("data-action"), fa));
+        MosaicDrawers.stewardAcceptAsk(drawerCtx, fa.getAttribute("data-f-accept"), fa.getAttribute("data-action"), fa));
       return;
     }
     const golden = f.golden;
@@ -532,23 +504,6 @@
     }
     loop.autoLinks += (payload.verified_links || []).length;
     renderLoop();
-  }
-
-  function openDrawer() {
-    $("steward-drawer").classList.add("open");
-    $("drawer-scrim").classList.add("open");
-    $("drawer-close").focus();
-  }
-
-  function closeDrawer() {
-    $("steward-drawer").classList.remove("open");
-    $("drawer-scrim").classList.remove("open");
-  }
-
-  function esc(text) {
-    return String(text).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
   }
 
   function inlinePrompt(title, def) {
@@ -759,12 +714,6 @@
     return list;
   }
 
-  const SRC_COLOR = {
-    "salesforce-like": "var(--src-salesforce)", "sap-like": "var(--src-sap)",
-    "ciam-like": "var(--src-ciam)", "pim-like": "var(--src-pim)",
-    "erp-like": "var(--src-erp)", "marketplace-like": "var(--src-market)",
-  };
-
   function renderFragments() {
     const list = activeFragments();
     proposerBody.innerHTML = `<div class="card"><span class="muted">Loaded fragments — no builder trace yet. Resolve or build to see Scout / Linker / Cluster / Taxonomist / Critic claims.</span></div>`
@@ -807,7 +756,7 @@
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
-      renderSteward(payload.steward_queue || []);
+      MosaicDrawers.renderSteward(drawerCtx, payload.steward_queue || []);
       renderMosaic(payload);
       renderEscalatedCount((payload.steward_queue || []).length);
       const verdictCap = payload.verdict.charAt(0).toUpperCase() + payload.verdict.slice(1);
@@ -857,6 +806,7 @@
 
   function renderGolden(payload) {
     const golden = payload.golden;
+    window.__lastGolden = golden || null;
     if (!golden) {
       $("golden-body").textContent = `No golden published (verdict: ${payload.verdict}).`;
       return;
@@ -864,7 +814,7 @@
     const attrs = Object.entries(golden.attributes || {}).map(([name, value]) => {
       if (name === "purchased_products" && Array.isArray(value)) {
         const items = value.map((p, i) =>
-          `<div class="gold-field"><div class="fld">PURCHASED[${i}]</div>`
+          `<div class="gold-field" data-g-field="purchased_products" data-winner=""><div class="fld">PURCHASED[${i}]</div>`
           + `<div class="val">${esc(p.category || "?")}</div>`
           + (p._lineage ? `<div class="prov mono">${esc(JSON.stringify(p._lineage))}</div>` : "") + `</div>`).join("");
         return `<div class="gold-grid">${items}</div>`;
@@ -872,11 +822,67 @@
       const line = typeof value === "object" && value !== null
         ? `<div class="val">${esc(value.value)}</div><div class="prov">${esc(value.rule_fired || "")} · ${esc(value.taxonomy_version || "")}</div>`
         : `<div class="val">${esc(value)}</div>`;
-      return `<div class="gold-field"><div class="fld">FIELD: ${esc(name).toUpperCase()}</div>${line}</div>`;
+      const winner = (value && typeof value === "object" && value.winner_fact_id) || "";
+      return `<div class="gold-field" data-g-field="${esc(name)}" data-winner="${esc(winner)}" style="cursor:pointer" title="Show on the graph canvas"><div class="fld">FIELD: ${esc(name).toUpperCase()}</div>${line}<div class="meta">Show on graph →</div></div>`;
     }).join("");
     $("golden-body").innerHTML =
       `<div class="meta">version <span class="mono">${golden.version}</span> · taxonomy <span class="mono">${esc(golden.taxonomy_version || "—")}</span></div>`
       + `<div class="gold-grid">${attrs}</div>`;
+    $("golden-body").querySelectorAll(".gold-field[data-winner]").forEach((el) => {
+      const winner = el.getAttribute("data-winner");
+      if (!winner) return;
+      el.addEventListener("click", () => highlightOnCanvas(winner));
+    });
+  }
+
+  // Verifying checklist: every row is computed from the derive response
+  // (plus /health versions). A row is ✓ only when the payload proves it,
+  // ✗ when the payload contradicts it, ○ when the payload says nothing.
+  // Nothing here is asserted without evidence.
+  function verifyingChecklist(payload) {
+    const KNOWN_RULES = ["R1", "R2", "R3", "R4", "L1", "C1", "C2", "T1", "STRUCT", "SPLIT", "I1"];
+    const SOLE_PROOFS = ["exact_email", "exact_phone", "exact_order"];
+    const golden = payload.golden || {};
+    const attrs = Object.entries(golden.attributes || {});
+    const healthPolicy = fState.policyUser && fState.policyProduct
+      ? [fState.policyUser, fState.policyProduct] : [];
+    const checks = [];
+    const push = (ok, label, detail) => checks.push({ ok, label, detail });
+    push(!!payload.decision_id, "Decision id recorded", payload.decision_id ? String(payload.decision_id).slice(0, 8) + "…" : "missing");
+    push(!!payload.policy_version, "Policy version pinned",
+      payload.policy_version || "missing");
+    if (healthPolicy.length && payload.policy_version) {
+      push(healthPolicy.includes(payload.policy_version),
+        "Policy matches /health in-force versions",
+        healthPolicy.includes(payload.policy_version) ? "match" : `response ${payload.policy_version} vs health ${healthPolicy.join(" / ")}`);
+    } else {
+      push(null, "Policy matches /health in-force versions", "health unknown — cannot confirm");
+    }
+    push(!!payload.taxonomy_version, "Taxonomy version pinned", payload.taxonomy_version || "missing");
+    const winners = attrs.filter(([, v]) => v && typeof v === "object" && v.winner_fact_id);
+    push(attrs.length === 0 || winners.length === attrs.length,
+      "Every golden field names its winner fact",
+      attrs.length ? `${winners.length}/${attrs.length} named` : "no golden fields");
+    const badRules = attrs.filter(([, v]) => v && typeof v === "object" && v.rule_fired && !KNOWN_RULES.includes(v.rule_fired));
+    push(badRules.length === 0, "Every rule fired is a known rule",
+      badRules.length ? `unknown: ${badRules.map(([n]) => n).join(", ")}` : "R1/R2/R3/R4 + L1/C1/C2/T1 only");
+    const noLineage = attrs.filter(([, v]) => v && typeof v === "object" && !v.lineage);
+    push(attrs.length === 0 || noLineage.length === 0, "Every golden field carries lineage",
+      attrs.length ? `${attrs.length - noLineage.length}/${attrs.length} with lineage` : "no golden fields");
+    const vlinks = payload.verified_links || [];
+    const weakVlinks = vlinks.filter((l) => !SOLE_PROOFS.includes(l.proof));
+    push(weakVlinks.length === 0, "Verified links are sole-proof hops only (L1)",
+      vlinks.length ? (weakVlinks.length ? `non-sole: ${weakVlinks.map((l) => l.proof).join(", ")}` : `${vlinks.length} sole-proof hop(s)`) : "no verified links this run");
+    const badConflicts = (payload.conflicts || []).filter((c) => !c.reason_code);
+    push(badConflicts.length === 0, "Every conflict names its reason code",
+      (payload.conflicts || []).length ? `${(payload.conflicts || []).length - badConflicts.length}/${(payload.conflicts || []).length} named` : "no conflicts");
+    const structFails = (payload.conflicts || []).filter((c) => c.rule_fired === "STRUCT" || c.reason_code === "STRUCTURE_MISMATCH");
+    push(!(payload.golden && structFails.length > 0), "Whole-document structure gate held",
+      payload.golden ? (structFails.length ? "WITHHELD — field failures escalated instead" : "assembled document validated") : `withheld (${payload.verdict}) — nothing partial published`);
+    return `<div class="card"><h3>Verifying checklist <span class="muted">computed from this response, not asserted</span></h3>`
+      + `<ul class="checklist">` + checks.map((c) =>
+        `<li><span class="${c.ok === true ? "ok" : c.ok === false ? "bad" : "na"}">${c.ok === true ? "✓" : c.ok === false ? "✗" : "○"}</span> ${esc(c.label)} <span class="muted mono">— ${esc(c.detail)}</span></li>`).join("")
+      + `</ul></div>`;
   }
 
   function renderEngine(payload) {
@@ -914,7 +920,7 @@
         <div class="steward-actions">
           <button data-explain="${esc(payload.decision_id)}">Explain / replay</button>
         </div>
-      </div>` + (goldenHtml || "") + (conflictHtml || "") + vlinkHtml;
+      </div>` + (goldenHtml || "") + (conflictHtml || "") + vlinkHtml + verifyingChecklist(payload);
     engineBody.querySelectorAll("[data-explain]").forEach((btn) => {
       btn.addEventListener("click", () => explain(btn.getAttribute("data-explain")));
     });
@@ -924,295 +930,6 @@
   }
 
   let lastStewardItems = [];
-
-  function stewardItemById(id) {
-    return lastStewardItems.find((s) => s.steward_id === id)
-      || ((lastFriendly && lastFriendly.steward_queue) || []).find((s) => s.steward_id === id)
-      || null;
-  }
-
-  function valuesForAttribute(attribute) {
-    const seen = new Map();
-    activeFragments()
-      .filter((f) => f.attribute === attribute)
-      .forEach((f) => {
-        if (!seen.has(f.value)) seen.set(f.value, f.source);
-      });
-    return [...seen.entries()].map(([value, source]) => ({ value, source }));
-  }
-
-  function ownerLinesHtml(item) {
-    return `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")}</div>`
-      + `<div class="f-steward-meta">Decide by: ${esc(item.deadline || "—")}</div>`
-      + `<div class="f-steward-meta">If no decision: ${esc(item.fallback || "do not use this value")}</div>`;
-  }
-
-  function stewardQuestionHtml(item) {
-    const frag = fragmentForAttribute(item.attribute);
-    const what = frag
-      ? `"${frag.value}" for ${plainAttr(item.attribute)} came from ${plainSource(frag.source).toLowerCase()} and could not be proven.`
-      : `${plainAttr(item.attribute)} could not be proven.`;
-    return `<div class="f-steward-q">${esc(what)}</div>` + ownerLinesHtml(item);
-  }
-
-  const confirmStash = new Map();
-
-  function afterApprove(payload, id) {
-    lastResolve = payload;
-    setFriendlyFromResolve(payload);
-    renderFriendly();
-    renderEngine(payload);
-    renderSteward(payload.steward_queue || []);
-    renderMosaic(payload);
-    renderEscalatedCount((payload.steward_queue || []).length);
-    setStatus(`Steward approved ${id}; re-derived as a new fact.`);
-    feed(`Steward approved ${id} as a new fact — re-derived, Decision: ${payload.decision_id}`);
-  }
-
-  async function doApprove(id, value, errEl) {
-    try {
-      const payload = await api(`/steward/${id}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value }),
-      });
-      afterApprove(payload, id);
-    } catch (error) {
-      errEl.hidden = false;
-      errEl.textContent = `Approve failed (fail-closed): ${error.message}`;
-    }
-  }
-
-  function stewardApproveAsk(id, btn) {
-    const item = stewardItemById(id);
-    if (!item) {
-      setStatus(`Steward item ${id} not found.`);
-      return;
-    }
-    const vals = valuesForAttribute(item.attribute);
-    const options = vals.length
-      ? vals.map((v, i) =>
-          `<label class="check"><input type="radio" name="cf-${esc(id)}" value="${esc(v.value)}"${i === 0 ? " checked" : ""} /> ${esc(v.value)} — ${esc(plainSource(v.source))}</label>`).join("")
-      : `<label>Value to approve (no existing value found)<input data-cf-value style="width:100%" value="" /></label>`;
-    const card = `<div class="f-steward-q">Use this value for ${esc(plainAttr(item.attribute))}?</div>`
-      + ownerLinesHtml(item)
-      + `<div class="f-confirm-vals">${options}</div>`
-      + `<div class="steward-actions"><button data-cf-yes class="btn-approve" type="button">Use this value</button>`
-      + `<button data-cf-no type="button">Cancel</button></div>`
-      + `<div class="meta" data-cf-err hidden></div>`;
-    const friendly = btn && btn.closest("#f-answer");
-    if (friendly) {
-      const body = $("f-answer-body");
-      body.innerHTML = card;
-      wireApproveCard(body, id, vals.length > 0, true);
-      return;
-    }
-    const holder = btn ? btn.closest("[data-steward]") : null;
-    if (!holder) return;
-    if (!confirmStash.has(holder)) confirmStash.set(holder, holder.innerHTML);
-    holder.innerHTML = card;
-    wireApproveCard(holder, id, vals.length > 0, false);
-  }
-
-  function wireApproveCard(root, id, hasValues, friendly) {
-    const errEl = root.querySelector("[data-cf-err]");
-    root.querySelector("[data-cf-no]").addEventListener("click", () => {
-      if (friendly) {
-        renderFriendly();
-      } else {
-        const h = confirmStash.get(root);
-        confirmStash.delete(root);
-        if (h != null) {
-          root.innerHTML = h;
-          bindStewardActions(root);
-        }
-      }
-    });
-    root.querySelector("[data-cf-yes]").addEventListener("click", () => {
-      let value;
-      if (hasValues) {
-        const checked = root.querySelector(`input[name="cf-${CSS.escape(id)}"]:checked`);
-        value = checked ? checked.value : "";
-      } else {
-        value = root.querySelector("[data-cf-value]").value.trim();
-      }
-      if (!value) {
-        errEl.hidden = false;
-        errEl.textContent = "Pick a value first — nothing was sent.";
-        return;
-      }
-      doApprove(id, value, errEl);
-    });
-  }
-
-  function nextTaxonomyVersion(item) {
-    const bump = (v) => {
-      const m = /-v(\d+)$/.exec(v || "");
-      return m ? String(v).replace(/-v\d+$/, `-v${parseInt(m[1], 10) + 1}`) : null;
-    };
-    // Only reuse the known version when it belongs to the same entity family;
-    // a user taxonomy must never seed a product version (or vice versa).
-    const known = loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version) || "";
-    const sameFamily = known.indexOf(`tax-${item.entity_type}-`) === 0 ? known : "";
-    return bump(sameFamily)
-      || `tax-${item.entity_type}-${new Date().toISOString().slice(0, 10)}-v2`;
-  }
-
-  function taxonomyInForce(item) {
-    const known = loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version) || "";
-    return known.indexOf(`tax-${item.entity_type}-`) === 0 ? known : "unknown";
-  }
-
-  function stewardAcceptAsk(id, suggested, btn) {
-    const item = stewardItemById(id);
-    if (!item) {
-      setStatus(`Steward item ${id} not found.`);
-      return;
-    }
-    const prefill = nextTaxonomyVersion(item);
-    const inForce = taxonomyInForce(item);
-    const card = `<div class="f-steward-q">Accept this suggestion?</div>`
-      + `<div class="meta mono">Suggested: ${esc(suggested)}</div>`
-      + ownerLinesHtml(item)
-      + `<div class="meta">Taxonomy in force: <span class="mono">${esc(inForce)}</span></div>`
-      + `<label>New taxonomy version (letters, digits, <span class="mono">._-</span>)`
-      + `<input data-cf-version style="width:100%" value="${esc(prefill)}" /></label>`
-      + `<div class="steward-actions"><button data-cf-yes class="btn-accept" type="button">Accept this suggestion</button>`
-      + `<button data-cf-no type="button">Cancel</button></div>`
-      + `<div class="meta" data-cf-err hidden></div>`;
-    const friendly = btn && btn.closest("#f-answer");
-    const host = friendly ? $("f-answer-body") : (btn ? btn.closest("[data-steward]") : null);
-    if (!host) return;
-    if (!friendly && !confirmStash.has(host)) confirmStash.set(host, host.innerHTML);
-    host.innerHTML = card;
-    const errEl = host.querySelector("[data-cf-err]");
-    host.querySelector("[data-cf-no]").addEventListener("click", () => {
-      if (friendly) {
-        renderFriendly();
-      } else {
-        const h = confirmStash.get(host);
-        confirmStash.delete(host);
-        if (h != null) {
-          host.innerHTML = h;
-          bindStewardActions(host);
-        }
-      }
-    });
-    host.querySelector("[data-cf-yes]").addEventListener("click", () => {
-      const version = host.querySelector("[data-cf-version]").value.trim();
-      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(version)) {
-        errEl.hidden = false;
-        errEl.textContent = "Version must look like tax-user-2026-10-28-v2: letters, digits, . _ - (must not start with . _ -).";
-        return;
-      }
-      doAccept(id, suggested, version, errEl);
-    });
-  }
-
-  async function doAccept(id, action, version, errEl) {
-    try {
-      const payload = await api(`/steward/${id}/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, taxonomy_version: version }),
-      });
-      setStatus(`Taxonomy ${version} created; re-derived. Golden: ${payload.golden ? "published" : "withheld"}.`);
-      feed(`Steward accepted taxonomy suggestion — new version ${version}; re-derived, no hand edit`);
-      dropFriendlySteward(id);
-      loadPending();
-    } catch (error) {
-      errEl.hidden = false;
-      errEl.textContent = `Accept failed (fail-closed): ${error.message}`;
-    }
-  }
-
-  function dropFriendlySteward(id) {
-    if (lastFriendly && lastFriendly.steward_queue) {
-      lastStewardItems = lastStewardItems.filter((s) => s.steward_id !== id);
-      lastFriendly.steward_queue = lastFriendly.steward_queue.filter((s) => s.steward_id !== id);
-      renderSteward(lastStewardItems.length ? lastStewardItems : lastFriendly.steward_queue);
-      renderEscalatedCount(lastFriendly.steward_queue.length);
-      renderFriendly();
-    } else {
-      loadPending();
-    }
-  }
-
-  async function stewardSplit(id) {
-    const payload = await api(`/steward/${id}/split`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ restore_version: 1 }),
-    });
-    setStatus(`Split restored v1 as v${payload.golden_version} (decision ${payload.decision_id}).`);
-    feed(`Steward split identity — restored v1 as v${payload.golden_version}, Decision: ${payload.decision_id}`);
-    dropFriendlySteward(id);
-  }
-
-  function stewardCardHtml(item) {
-    return `
-      <div class="card warn" data-steward="${esc(item.steward_id)}">
-        <h3>${esc(item.attribute)} <span class="muted mono">${esc(item.status)}</span></h3>
-        <div class="meta">owner ${esc(item.owner)} · deputy ${esc(item.deputy || "—")}</div>
-        <div class="meta">deadline <span class="mono">${esc(item.deadline)}</span></div>
-        <div class="meta">fallback: ${esc(item.fallback)}</div>
-        ${item.suggested_action ? `<div class="meta">suggested: <span class="mono">${esc(item.suggested_action)}</span></div>` : ""}
-        <div class="steward-actions">
-          <button class="btn-approve" data-approve="${esc(item.steward_id)}">Approve w/ value…</button>
-          <button class="btn-reject" data-reject="${esc(item.steward_id)}">Reject</button>
-          <button class="btn-split" data-split="${esc(item.steward_id)}">Split to v1</button>
-          ${item.suggested_action ? `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept suggested</button>` : ""}
-        </div>
-      </div>`;
-  }
-
-  function bindStewardActions(root) {
-    root.querySelectorAll("[data-accept]").forEach((btn) => {
-      btn.addEventListener("click", () => stewardAcceptAsk(btn.getAttribute("data-accept"), btn.getAttribute("data-action"), btn));
-    });
-    root.querySelectorAll("[data-reject]").forEach((btn) => {
-      btn.addEventListener("click", () => stewardReject(btn.getAttribute("data-reject")));
-    });
-    root.querySelectorAll("[data-approve]").forEach((btn) => {
-      btn.addEventListener("click", () => stewardApproveAsk(btn.getAttribute("data-approve"), btn));
-    });
-    root.querySelectorAll("[data-split]").forEach((btn) => {
-      btn.addEventListener("click", () => stewardSplit(btn.getAttribute("data-split")));
-    });
-  }
-
-  function renderSteward(items) {
-    pendingAll = items;
-    lastStewardItems = items;
-    renderEscalatedCount(items.length);
-    if (!items.length) {
-      stewardBody.innerHTML = `<div class="card"><span class="muted">Queue empty — nothing escalated.</span></div>`;
-      $("steward-drawer-list").innerHTML = `<div class="card"><span class="muted">No pending steward items. All escalated attributes have been decided.</span></div>`;
-      return;
-    }
-    const first = items[0];
-    const rule = first.rule_fired || first.reason_code || "escalated";
-    stewardBody.innerHTML = `
-      <div class="exception-card" role="alert">
-        <div>⚠ ${items.length} escalation${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} a human — ${esc(first.attribute)} — ${esc(rule)} — Steward Queue (${items.length})</div>
-        <div class="steward-actions" style="margin-top:0">
-          <button id="exception-review" type="button">Review in Steward Queue</button>
-        </div>
-      </div>`;
-    $("exception-review").addEventListener("click", openDrawer);
-    const drawerList = $("steward-drawer-list");
-    drawerList.innerHTML = items.map(stewardCardHtml).join("");
-    bindStewardActions(drawerList);
-  }
-
-  async function loadPending() {
-    try {
-      const data = await api("/steward/pending");
-      if (!lastResolve) renderSteward(data.pending || []);
-    } catch (error) {
-      setStatus(`Steward queue unreadable: ${error.message}`);
-    }
-  }
 
   function renderGraph(payload, highlight) {
     const svg = $("graph-canvas");
@@ -1242,7 +959,7 @@
       const b = pos[e.to_node_id];
       if (!a || !b) return;
       const hl = highlight && (highlight.includes(e.from_node_id) || highlight.includes(e.to_node_id));
-      html += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${edgeColor[e.edge_type] || "#475569"}" stroke-width="${hl ? 3 : 1.2}" stroke-dasharray="${edgeDashed[e.edge_type] || "none"}" opacity="${hl ? 1 : 0.7}"><title>${esc(e.edge_type)}${e.proof ? ": " + esc(e.proof) : ""} (${esc(e.proposer || "?")})</title></line>`;
+      html += `<line data-edge="${esc(e.edge_id || "")}" data-etype="${esc(e.edge_type || "")}"${e.edge_type === "proposed_link" || e.edge_type === "verified_link" ? ' data-walk="1"' : ""} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${edgeColor[e.edge_type] || "#475569"}" stroke-width="${hl ? 3 : 1.2}" stroke-dasharray="${edgeDashed[e.edge_type] || "none"}" opacity="${hl ? 1 : 0.7}"><title>${esc(e.edge_type)}${e.proof ? ": " + esc(e.proof) : ""} (${esc(e.proposer || "?")})</title></line>`;
     });
     nodes.forEach((n) => {
       const p = pos[n.node_id];
@@ -1259,18 +976,74 @@
         const id = g.getAttribute("data-node");
         const node = nodes.find((n) => n.node_id === id);
         $("graph-detail").textContent = JSON.stringify(node, null, 1);
+        highlightGoldenForNode(id);
       });
     });
     return { nodes, edges };
   }
 
-  let lastGraph = { nodes: [], edges: [] };
+  function valueNodeIdFor(entityType, entityId, factId) {
+    return `nd-value-${entityType}-${entityId}-${factId}`;
+  }
 
-  async function loadGraph() {
-    const { entityType, entityId } = currentEntity();
+  function findValueNode(winnerFactId) {
+    const nodes = lastGraph.nodes || [];
+    const scope = lastGraphEntity || currentEntity();
+    const exact = valueNodeIdFor(scope.entityType, scope.entityId, winnerFactId);
+    const hit = nodes.find((n) => n.node_id === exact);
+    if (hit) return hit.node_id;
+    // The golden may belong to a built cluster while the selector still
+    // shows the fixture entity: fall back to suffix match. Node ids always
+    // end with "-" + fact_id, so this stays exact.
+    const suffixed = nodes.find((n) => n.node_id.endsWith(`-${winnerFactId}`));
+    return suffixed ? suffixed.node_id : null;
+  }
+
+  function highlightOnCanvas(winnerFactId) {
+    if (!winnerFactId) return;
+    const valueNode = findValueNode(winnerFactId);
+    if (!valueNode) {
+      setStatus(`No canvas node for ${winnerFactId} — load the graph for its entity first.`);
+      return;
+    }
+    const targets = [valueNode];
+    (lastGraph.edges || []).forEach((e) => {
+      if (e.edge_type === "has_attribute" && e.to_node_id === valueNode) targets.push(e.from_node_id);
+    });
+    renderGraph({ nodes: lastGraph.nodes || [], edges: lastGraph.edges || [] }, targets);
+    const canvas = $("graph-canvas");
+    if (canvas && canvas.scrollIntoView) canvas.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    feed(`Canvas highlight: ${winnerFactId} — source node and its proof edges.`);
+  }
+
+  function highlightGoldenForNode(nodeId) {
+    const golden = (lastFriendly && lastFriendly.golden) || window.__lastGolden || null;
+    if (!golden || !nodeId || !nodeId.startsWith("nd-value-")) return;
+    // Node ids end with "-" + fact_id (fact ids may themselves contain
+    // dashes, so match by suffix, not by splitting segments).
+    const hit = Object.entries(golden.attributes || {}).find(([, v]) =>
+      v && typeof v === "object" && v.winner_fact_id && nodeId.endsWith(`-${v.winner_fact_id}`));
+    if (!hit) return;
+    document.querySelectorAll(".gold-field.f-hit").forEach((el) => el.classList.remove("f-hit"));
+    const row = document.querySelector(`.gold-field[data-g-field="${CSS.escape(hit[0])}"]`);
+    if (row) {
+      row.classList.add("f-hit");
+      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      feed(`Golden highlight: ${hit[0]} — won by ${hit[1].winner_fact_id}, lineage below.`);
+    }
+  }
+
+  let lastGraph = { nodes: [], edges: [] };
+  let lastGraphEntity = null;
+
+  async function loadGraph(entityType, entityId) {
+    const current = currentEntity();
+    const type = entityType || current.entityType;
+    const id = entityId || current.entityId;
     try {
-      const data = await api(`/graph/${entityType}/${entityId}`);
+      const data = await api(`/graph/${type}/${id}`);
       lastGraph = { nodes: data.nodes || [], edges: data.edges || [] };
+      lastGraphEntity = { entityType: type, entityId: id };
       renderGraph(data, null);
       // Pathfinder F1–F5 only applies to the Hidden Connection entity.
       const ids = (data.nodes || []).map((n) => n.node_id || "");
@@ -1369,18 +1142,41 @@
         }),
       });
       lastResolve = payload;
+      await afterBuild(payload, auto);
+    } catch (error) {
+      setStatus(`Build failed (fail-closed): ${error.message}`);
+      if (auto) feed(`Auto build failed (fail-closed): ${error.message} — nothing published`);
+      fState.working = false;
+      renderFStatus();
+      return;
+    }
+    fState.working = false;
+    renderFStatus();
+  }
+
+  // Shared build-result rendering for the manual and Scene 0 builds:
+  // graph + hop replay, golden/engine/mosaic panels, steward queue.
+  async function afterBuild(payload, auto) {
       setStatus(`Build ${payload.decision_id} — verdict: ${payload.verdict} (${payload.splink_status}).`);
       setFriendlyFromBuild(payload);
       markRan();
       renderFriendly();
-      await loadGraph();
-      const first = (payload.goldens || []).find((g) => g.golden_id) || null;
+      // Show the graph of what was just built (first golden's entity), so the
+      // canvas, golden panel and highlight actions all refer to the same run.
+      const firstGolden = (payload.goldens || []).find((g) => g.golden_id) || null;
+      if (firstGolden) {
+        await loadGraph(firstGolden.entity_type, firstGolden.entity_id);
+      } else {
+        await loadGraph();
+      }
+      animateChain();
+      const first = firstGolden;
       if (first) {
         renderGolden(first);
         renderEngine({ ...payload, golden: first, policy_version: payload.policy_version_user });
         renderMosaic({ ...payload, golden: first, proposal: { attributes: {} } });
       }
-      renderSteward(payload.steward_queue || []);
+      MosaicDrawers.renderSteward(drawerCtx, payload.steward_queue || []);
       renderEscalatedCount((payload.steward_queue || []).length);
       renderMatchingEngine(payload.splink);
       if (payload.splink && payload.splink.status === "ok") {
@@ -1397,15 +1193,6 @@
       } else {
         feed(`Manual Build Mosaic (click) — Decision: ${payload.decision_id} — Verdict: ${verdictCap}`);
       }
-    } catch (error) {
-      setStatus(`Build failed (fail-closed): ${error.message}`);
-      if (auto) feed(`Auto build failed (fail-closed): ${error.message} — nothing published`);
-      fState.working = false;
-      renderFStatus();
-      return;
-    }
-    fState.working = false;
-    renderFStatus();
   }
 
   async function uploadFile(auto, fileInput) {
@@ -1471,7 +1258,7 @@
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
-      renderSteward(payload.steward_queue || []);
+      MosaicDrawers.renderSteward(drawerCtx, payload.steward_queue || []);
       renderMosaic(payload);
       renderEscalatedCount((payload.steward_queue || []).length);
       const verdictCap = payload.verdict.charAt(0).toUpperCase() + payload.verdict.slice(1);
@@ -1540,29 +1327,10 @@
     }
   }
 
+  // Explain drawer lives in drawers.js; this thin wrapper keeps existing
+  // in-file call sites working while new code calls MosaicDrawers directly.
   async function explain(decisionId, field) {
-    const data = await api(`/explain/${decisionId}`);
-    $("explain-id").textContent = decisionId;
-    const tree = (data.derivation_tree || []).join("\n");
-    const trace = (data.subagent_trace || []).map((s) =>
-      `▸ ${s.agent || "?"}${s.real_call ? " [REAL]" : " [mock]"} — ${s.output_summary || ""}`).join("\n");
-    const wonder = data.wonder_note ? `Wonder: ${JSON.stringify(data.wonder_note)}\n\n` : "";
-    const head = field ? `Proof for: ${field}\n\n` : "";
-    const text = head
-      + `RULE ${data.rule_fired} · POLICY ${data.policy_version} · TAXONOMY ${data.taxonomy_version || "—"}\n\n`
-      + `DERIVATION TREE\n${tree || "(empty)"}\n\n`
-      + `SUBAGENT TRACE\n${trace || "(none)"}\n\n`
-      + wonder
-      + JSON.stringify(data, null, 1);
-    // Highlight the lineage row(s) for the requested field; the full proof
-    // stays visible (highlighting is in addition, not instead).
-    const key = field ? `"${field}"` : null;
-    $("explain-body").innerHTML = text.split("\n").map((line) =>
-      (key && line.includes(key) ? `<mark class="f-hit">${esc(line)}</mark>` : esc(line))
-    ).join("\n");
-    dialog.showModal();
-    const hit = $("explain-body").querySelector("mark");
-    if (hit) hit.scrollIntoView({ block: "center" });
+    return window.MosaicDrawers.explain(drawerCtx, decisionId, field);
   }
 
   async function loadJobs() {
@@ -1640,6 +1408,167 @@
     }));
   }
 
+  // ---- Scene 0: messy-JSON config proposal ---------------------------------
+  // First-run gate only. Loading the Scene 0 template uploads it (manual,
+  // never auto-run) and renders Scout/Linker proposals plus the in-force
+  // config. Approving pins that config for the next Build — it records the
+  // policy version in force, mints nothing, and publishes nothing. Policies
+  // are baked versioned files; the UI cannot and must not invent versions.
+  const SCENE0_FILE = "scene0-messy.json";
+  const SCENE0_FRAGMENTS = [
+    { source: "salesforce-like", source_id: "sc0-crm-1", attribute: "full_name", value: "Nguyen Van An", authority_rank: 2, event_time: "2026-10-27T09:00:00+07:00", verified: true, ttl_seconds: 3600 },
+    { source: "salesforce-like", source_id: "sc0-crm-2", attribute: "email", value: "an.van@example.com", authority_rank: 2, event_time: "2026-10-27T09:00:00+07:00", verified: true, ttl_seconds: 3600 },
+    { source: "marketplace-like", source_id: "sc0-mkt-1", attribute: "reviewer", value: "A. Nguyen", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
+    { source: "marketplace-like", source_id: "sc0-mkt-2", attribute: "email", value: "an.van@example.com", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
+    { source: "marketplace-like", source_id: "sc0-mkt-3", attribute: "customer_phone", value: "0901234567", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
+  ];
+
+  function scene0ConfigInForce() {
+    const policy = [fState.policyUser, fState.policyProduct].filter(Boolean).join(" / ") || "checking…";
+    const taxonomy = loop.taxonomy || (lastFriendly && lastFriendly.taxonomy_version) || "checking…";
+    return { policy, taxonomy };
+  }
+
+  function renderScene0Config(payload) {
+    const inForce = scene0ConfigInForce();
+    const detected = `${esc(payload.detected_entity_type || "unknown")} (${esc(payload.detected_confidence || "?")})`;
+    const rawAttrs = [...new Set((payload.fragments || []).map((f) => f.attribute))];
+    const links = payload.link_proposals || [];
+    const linkRows = links.length
+      ? links.map((l) => `<div class="cfg-row">Linker proposes: <span class="mono">${esc(l.from_fact_id)} —${esc(l.proof)}→ ${esc(l.to_fact_id)}</span> <span class="tag">${esc(l.proposer || "Muse")}</span></div>`).join("")
+      : `<div class="cfg-row">Linker proposes: no exact-identifier links — nothing claimed.</div>`;
+    $("f-config-body").innerHTML =
+      `<div class="cfg-row"><b>Scout</b> detected: ${detected} — ${payload.fragments_parsed} fragment(s) parsed`
+      + `${(payload.fragments_rejected || []).length ? `, ${(payload.fragments_rejected || []).length} rejected` : ""}. <span class="tag">claim, not a decision</span></div>`
+      + `<div class="cfg-row"><b>Taxonomist</b> will map raw names (${rawAttrs.map((a) => `<span class="mono">${esc(a)}</span>`).join(", ") || "—"}) at build time under taxonomy <span class="mono">${esc(inForce.taxonomy)}</span>. No terms are auto-created. <span class="tag">claim, not a decision</span></div>`
+      + linkRows
+      + `<div class="cfg-row"><b>Config in force</b> — Policy: <span class="mono">${esc(inForce.policy)}</span> · Taxonomy: <span class="mono">${esc(inForce.taxonomy)}</span> (from /health).</div>`;
+    $("f-config-note").textContent = "Approving pins this config for the next Build. It publishes nothing — the engine still has to derive every value.";
+    $("f-config").hidden = false;
+    $("f-config-summary").hidden = true;
+    $("f-config-build").disabled = true;
+    $("f-config-approve").disabled = false;
+    feed("Scene 0 config proposed — Scout/Linker claims rendered, Taxonomist mapping queued for build time. Nothing published.");
+  }
+
+  async function loadScene0() {
+    if (fState.scene0 && fState.scene0.decided) {
+      // Subsequent loads auto-run like any other upload when the loop runs.
+      if (loop.mode === "running") {
+        stageScene0File();
+        const uploaded = await uploadFile(true, $("f-upload-file"));
+        if (uploaded && (window.__uploadedFragments || []).length) {
+          await resolveUpload(true);
+        }
+      } else {
+        setStatus("Loop Paused: Scene 0 already decided — click Upload to run manually.");
+      }
+      return;
+    }
+    stageScene0File();
+    const payload = await uploadFile(false, $("f-upload-file"));
+    if (payload) renderScene0Config(payload);
+  }
+
+  function stageScene0File() {
+    const input = $("f-upload-file");
+    const file = new File([JSON.stringify(SCENE0_FRAGMENTS, null, 1)], SCENE0_FILE, { type: "application/json" });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+  }
+
+  function approveScene0() {
+    const inForce = scene0ConfigInForce();
+    const staged = (window.__uploadedFragments || []).slice();
+    if (!staged.length) {
+      $("f-config-note").textContent = "Nothing staged — upload the Scene 0 file first.";
+      return;
+    }
+    fState.scene0 = {
+      decided: true,
+      approvedAt: new Date().toISOString(),
+      policyVersion: inForce.policy,
+      taxonomyVersion: inForce.taxonomy,
+      entityType: window.__uploadedEntityType || "user",
+      fragments: staged,
+    };
+    $("f-config").hidden = true;
+    const summary = $("f-config-summary");
+    summary.hidden = false;
+    summary.innerHTML = `Config approved — Policy: ${esc(inForce.policy)} — Taxonomy: ${esc(inForce.taxonomy)} — Config approval is not golden approval. `
+      + `<button id="f-config-build2" class="primary" type="button">Build Mosaic</button>`;
+    $("f-config-build2").addEventListener("click", buildScene0);
+    $("f-config-build").disabled = false;
+    feed(`Scene 0 config approved — Policy: ${inForce.policy}. No golden published; the engine has not run yet.`);
+    setStatus("Config approved. Press Build Mosaic — nothing publishes until the engine derives it.");
+  }
+
+  function cancelScene0() {
+    fState.scene0 = null;
+    $("f-config").hidden = true;
+    $("f-config-summary").hidden = true;
+    const input = $("f-upload-file");
+    if (input) input.value = "";
+    window.__uploadedFragments = [];
+    setStatus("Scene 0 cancelled — no config pinned, nothing published.");
+    feed("Scene 0 config discarded by the steward — no config pinned, nothing published.");
+  }
+
+  function scene0Documents() {
+    const staged = (fState.scene0 && fState.scene0.fragments) || [];
+    const entityType = (fState.scene0 && fState.scene0.entityType) || window.__uploadedEntityType || "user";
+    const bySource = {};
+    staged.forEach((f) => {
+      (bySource[f.source] = bySource[f.source] || []).push(f);
+    });
+    return Object.entries(bySource).map(([source, frags], i) => ({
+      document_id: `SC0-${i + 1}`,
+      entity_type: entityType,
+      source,
+      synthetic: true,
+      fields: Object.fromEntries(frags.map((f) => [f.attribute, {
+        value: f.value, authority_rank: f.authority_rank, event_time: f.event_time,
+        verified: f.verified, ttl_seconds: f.ttl_seconds,
+      }])),
+    }));
+  }
+
+  async function buildScene0() {
+    if (!fState.scene0 || !fState.scene0.decided) {
+      setStatus("Approve the Scene 0 config first — Build runs only on pinned config.");
+      return;
+    }
+    const note = $("f-config-note");
+    const summary = $("f-config-summary");
+    // 2-second visual pause: config approval must visibly precede any golden,
+    // proving approval alone publishes nothing.
+    if (note) note.textContent = "Config approved — proving no golden publishes without the engine…";
+    fState.working = true;
+    renderFStatus();
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const documents = scene0Documents();
+      const payload = await api("/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          work_id: `ui-scene0-${Date.now()}`,
+          idempotency_key: `ui-scene0-${Date.now()}`,
+          dataset: { documents },
+        }),
+      });
+      await afterBuild(payload, false);
+      feed(`Scene 0 built — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}. Config approval published nothing; the engine did.`);
+    } catch (error) {
+      setStatus(`Scene 0 build failed (fail-closed): ${error.message}`);
+      feed(`Scene 0 build failed (fail-closed): ${error.message} — nothing published`);
+    }
+    if (fState.scene0) fState.scene0.done = true;
+    fState.working = false;
+    renderFStatus();
+  }
+
   async function enqueueCurrentView() {
     const documents = currentViewDocuments();
     if (!documents.length) {
@@ -1659,6 +1588,31 @@
     } catch (error) {
       setStatus(`Enqueue failed (fail-closed): ${error.message}`);
     }
+  }
+
+  // Stepwise dashed-to-solid green link transition. Walks the link edges in
+  // document order, lighting each one green before moving on; capped so the
+  // animation always finishes. Pure presentation: the derivation already
+  // happened, this only replays its order on the canvas.
+  function animateChain(done) {
+    const lines = [...document.querySelectorAll('#graph-canvas line[data-walk="1"]')];
+    const steps = lines.slice(0, 14);
+    if (!steps.length) {
+      if (done) done();
+      return;
+    }
+    feed(`Chain replay: ${steps.length} link hop(s) — dashed proposal to solid verified green.`);
+    let i = 0;
+    const step = () => {
+      if (i >= steps.length) {
+        if (done) done();
+        return;
+      }
+      steps[i].classList.add("lit");
+      i += 1;
+      setTimeout(step, 300);
+    };
+    setTimeout(step, 250);
   }
 
   function renderMosaic(payload) {    mosaic.innerHTML = "";
@@ -1704,6 +1658,33 @@
     }
   }
 
+  // Context shared with drawers.js. Drawers never touch app state directly:
+  // reads go through getters, writes through setters, rendering and API
+  // through the callbacks below. Anything not listed here is unreachable
+  // from drawer code by construction.
+  const drawerCtx = {
+    $,
+    api,
+    feed,
+    setStatus,
+    activeFragments,
+    fragmentForAttribute,
+    renderFriendly,
+    setFriendlyFromResolve,
+    renderEngine,
+    renderMosaic,
+    renderEscalatedCount,
+    stewardBody,
+    dialog,
+    loop,
+    get lastResolve() { return lastResolve; },
+    set lastResolve(v) { lastResolve = v; },
+    get lastStewardItems() { return lastStewardItems; },
+    setLastStewardItems(v) { lastStewardItems = v; },
+    setPendingAll(v) { pendingAll = v; },
+    get lastFriendly() { return lastFriendly; },
+  };
+
   entitySel.addEventListener("change", onEntityChange);
   $("jobs-refresh").addEventListener("click", loadJobs);
   $("jobs-enqueue-view").addEventListener("click", enqueueCurrentView);
@@ -1734,7 +1715,7 @@
   $("downstream-search").addEventListener("click", () => askDownstream("search"));
   $("pause-btn").addEventListener("click", toggleLoop);
   $("f-pause").addEventListener("click", toggleLoop);
-  $("f-loop-review").addEventListener("click", openDrawer);
+  $("f-loop-review").addEventListener("click", () => MosaicDrawers.openDrawer());
   $("f-try-answer").addEventListener("click", () => resolve(false));
   $("f-upload-scroll").addEventListener("click", () => {
     $("f-upload").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1752,6 +1733,10 @@
     $("f-loop-more-btn").textContent = more.hidden ? "See what it did by itself" : "Hide";
   });
   $("f-try-example").addEventListener("click", () => resolve(false));
+  $("f-scene0").addEventListener("click", loadScene0);
+  $("f-config-approve").addEventListener("click", approveScene0);
+  $("f-config-build").addEventListener("click", buildScene0);
+  $("f-config-cancel").addEventListener("click", cancelScene0);
   $("f-upload-btn").addEventListener("click", async () => {
     await uploadFile(false, $("f-upload-file"));
     if ((window.__uploadedFragments || []).length) {
@@ -1768,9 +1753,9 @@
       await resolveUpload(true);
     }
   });
-  $("steward-open").addEventListener("click", openDrawer);
-  $("drawer-close").addEventListener("click", closeDrawer);
-  $("drawer-scrim").addEventListener("click", closeDrawer);
+  $("steward-open").addEventListener("click", () => MosaicDrawers.openDrawer());
+  $("drawer-close").addEventListener("click", () => MosaicDrawers.closeDrawer());
+  $("drawer-scrim").addEventListener("click", () => MosaicDrawers.closeDrawer());
   $("feed-toggle-inline").addEventListener("click", () => {
     const list = $("feed-list");
     const hidden = list.style.display === "none";
@@ -1778,7 +1763,7 @@
     $("feed-toggle-inline").textContent = hidden ? "Activity feed: shown below" : "Activity feed: hidden";
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeDrawer();
+    if (event.key === "Escape") MosaicDrawers.closeDrawer();
   });
 
   renderLoop();
@@ -1786,11 +1771,11 @@
   renderFriendly();
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();
-  window.setInterval(refreshHealth, 10000);
+  window.setInterval(refreshHealth, 5000);
   loadJobs();
   window.setInterval(loadJobs, 10000);
   loadEntities()
     .catch(() => {})
     .finally(() => loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`)));
-  loadPending();
+  MosaicDrawers.loadPending(drawerCtx);
 })();
