@@ -379,6 +379,14 @@
     const f = lastFriendly;
     const needs = (f.steward_queue || []).length;
     const { entityId } = currentEntity();
+    let downstreamLine = "";
+    if (fState.downstream) {
+      const d = fState.downstream;
+      const who = d.agent === "search" ? "Search" : "OTP";
+      downstreamLine = d.answer === "golden"
+        ? `<div class="f-field">Step 3: Safe to act — ${esc(who)} sent to ${esc(d.value)}.</div>`
+        : `<div class="f-field">Step 3: Downstream stopped — Needs a human before sending ${esc(who === "Search" ? "results" : "OTP")}.</div>`;
+    }
     // Engine-down card: red stop state with an inline restore action.
     if (loop.engineDown) {
       box.classList.add("stop");
@@ -395,14 +403,6 @@
         renderFAnswer();
       });
       return;
-    }
-    let downstreamLine = "";
-    if (fState.downstream) {
-      const d = fState.downstream;
-      const who = d.agent === "search" ? "Search" : "OTP";
-      downstreamLine = d.answer === "golden"
-        ? `<div class="f-field">Step 3: Safe to act — ${esc(who)} sent to ${esc(d.value)}.</div>`
-        : `<div class="f-field">Step 3: Downstream stopped — Needs a human before sending ${esc(who === "Search" ? "results" : "OTP")}.</div>`;
     }
     if (needs > 0) {
       box.classList.add("need");
@@ -719,6 +719,14 @@
     if (fState.activeEntity) return fState.activeEntity;
     const [entityType, entityId] = entitySel.value.split("/");
     return { entityType, entityId };
+  }
+
+  // Programmatic entity switch (Scenario Chips, demo buttons): the selector
+  // alone does not fire onEntityChange, so clear the built-entity override
+  // here — otherwise the next run derives under a stale entity id.
+  function switchEntity(value) {
+    entitySel.value = value;
+    fState.activeEntity = null;
   }
 
   async function loadEntities() {
@@ -1663,7 +1671,7 @@
 
   async function act1() {
     setScenario("act1");
-    entitySel.value = "user/P-001";
+    switchEntity("user/P-001");
     await loadFragments();
     window.MosaicChat.add({
       role: "downstream",
@@ -1727,7 +1735,7 @@
 
   async function act3() {
     setScenario("act3");
-    entitySel.value = "user/P-001";
+    switchEntity("user/P-001");
     ticketBox.checked = true;
     await loadFragments();
     window.MosaicChat.add({
@@ -1740,7 +1748,7 @@
 
   async function act4() {
     setScenario("act4");
-    entitySel.value = "product/prod-001";
+    switchEntity("product/prod-001");
     await loadFragments();
     // The T1 beat needs a genuinely unknown term: inject an unverified
     // marketplace fragment carrying "Gaming Chair" (not a taxonomy term),
@@ -2658,7 +2666,7 @@
     feed("Demo: trust-engine started (DEMO ONLY) — retry with the same key to prove the same decision id.");
   });
   $("demo-ticket").addEventListener("click", async () => {
-    entitySel.value = "user/P-001";
+    switchEntity("user/P-001");
     ticketBox.checked = true;
     await loadFragments();
     await resolve(true);
