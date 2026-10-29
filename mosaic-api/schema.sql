@@ -183,3 +183,20 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status
   ON jobs(status, next_run_at);
+
+-- Export audit log: one row per dataset download (who exported what, when,
+-- in which scope and format). Read-only w.r.t. trust state: exports never
+-- create goldens, decisions, or steward items.
+CREATE TABLE IF NOT EXISTS export_log (
+  export_id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT,
+  format TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  record_count INTEGER NOT NULL DEFAULT 0,
+  note TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_export_log_created
+  ON export_log(created_at);

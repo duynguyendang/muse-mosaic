@@ -140,6 +140,56 @@ def test_demo_controls_and_badges_exist():
         assert handler in src, handler
 
 
+def test_user_first_surface_ids_exist():
+    """User-First v1.0 surfaces: how-it-works, Scene 0 modal, export modal."""
+    html_ids = _html_ids()
+    for ref in (
+        "f-how-it-works",
+        "how-dialog",
+        "how-log",
+        "scene0-modal",
+        "scene0-modal-body",
+        "scene0-modal-yes",
+        "scene0-modal-change",
+        "scene0-modal-no",
+        "export-modal",
+        "f-export-batch",
+        "f-export-record",
+        "export-warning",
+        "export-cancel",
+        "export-download",
+        "f-mosaic-tag",
+    ):
+        assert ref in html_ids, ref
+    src = (WEB / "app.js").read_text(encoding="utf-8")
+    for handler in (
+        "openExport",
+        "downloadExport",
+        "restoreEngineAndRetry",
+        "hopChainFromProposals",
+        "plainFieldSentence",
+    ):
+        assert handler in src, handler
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    assert "Clean, trustworthy records from scattered data." in html
+    assert "No, do not use this plan" in html
+    assert "⬇ Export" in html
+
+
+def test_plain_language_regressions_absent():
+    """Copy that was replaced by plain language must not come back."""
+    for name in ("app.js", "index.html"):
+        src = (WEB / name).read_text(encoding="utf-8")
+        for banned in (
+            "Muse suggests, the engine checks",
+            "Would publish the neighbour as",
+            "Manglekit did not merge the neighbour",
+            "Trust-engine is stopped. No new golden record can be published",
+            "Same decision id returned. No double derivation.",
+        ):
+            assert banned not in src, f"{name} still contains: {banned[:60]}"
+
+
 def test_drawer_and_chat_surface_ids_exist():
     html_ids = _html_ids()
     for ref in (

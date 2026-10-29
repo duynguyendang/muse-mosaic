@@ -66,7 +66,7 @@
     const state = $("loop-state");
     const btn = $("pause-btn");
     if (loop.engineDown && loop.mode === "running") {
-      state.textContent = "● Autonomous Loop: Running, engine down — new runs escalate, nothing publishes.";
+      state.textContent = "● Autonomous Loop: Running, checker off — new runs stop, nothing publishes.";
       state.className = "loop-state running";
     } else if (loop.mode === "running") {
       state.textContent = "● Autonomous Loop: Running";
@@ -240,7 +240,7 @@
     fState.needCount = mine;
     pill.className = "pill f-only";
     if (loop.engineDown) {
-      pill.textContent = "■ Engine down — nothing publishes";
+      pill.textContent = "○ Checker off — we stopped";
       pill.classList.add("f-status-down");
     } else if (fState.working) {
       pill.textContent = "○ Working…";
@@ -258,16 +258,26 @@
 
   function renderFSteps() {
     const s1 = $("f-step-1"), s2 = $("f-step-2"), s3 = $("f-step-3");
-    s1.querySelector(".lbl").textContent = "Messy pieces";
+    if (!s1 || !s2 || !s3) return;
+    s1.querySelector(".lbl").textContent = "Check Dataset Status";
+    s2.querySelector(".lbl").textContent = "Review Gaps";
+    s3.querySelector(".lbl").textContent = "Use Clean Mosaic Picture";
+    if (!s1.dataset.wired) {
+      s1.dataset.wired = "1";
+      s1.addEventListener("click", () => { const el = $("f-dataset-status"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
+      s2.addEventListener("click", () => { const el = $("f-gaps-wrap"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
+      s3.addEventListener("click", () => { const el = $("f-mosaic-card"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
+    }
     const setState = (el, mode) => {
       el.classList.toggle("done", mode === "done");
       el.classList.toggle("now", mode === "now");
       el.classList.toggle("active", mode !== "future");
     };
+    const gapCount = (lastFriendly && lastFriendly.steward_queue) ? lastFriendly.steward_queue.length : 0;
+    const stopped = !!(loop.engineDown || (fState.ran && lastFriendly && lastFriendly.verdict === "denied"));
     setState(s1, fState.ran ? "done" : "now");
-    setState(s2, !fState.ran ? "future" : (fState.downstream ? "done" : "now"));
-    const stopped = !!(fState.ran && lastFriendly && lastFriendly.verdict === "denied");
-    setState(s3, fState.downstream || stopped ? "done" : "future");
+    setState(s2, !fState.ran ? "future" : (gapCount > 0 ? "now" : "done"));
+    setState(s3, !fState.ran ? "future" : (gapCount === 0 && !stopped ? "done" : (stopped ? "now" : "future")));
   }
 
   function renderFPieces() {
@@ -384,6 +394,51 @@
     return "Checked by the engine.";
   }
 
+  // Plain-language field sentences. Every verification claim is grounded
+  // in the winning fragment (source, rank, verified flag): never "checked
+  // and verified" without a fragment that proves it.
+  function plainFieldSentence(who, attribute, value) {
+    if (!value) return "";
+    const rawVal = value && typeof value === "object" ? value.value : value;
+    const val = rawVal === undefined || rawVal === null ? "" : String(rawVal);
+    const winner = value && typeof value === "object"
+      ? fragmentForFactId(value.winner_fact_id, attribute)
+      : null;
+    if (!winner) return `${plainAttr(attribute)}: ${val}.`;
+    const sys = plainSource(winner.source);
+    const proved = winner.verified
+      ? "and it is verified"
+      : "but it is not proven yet — needs a person to decide";
+
+    if (attribute === "phone") {
+      const frags = activeFragments().filter((fr) => fr.attribute === "phone" && String(fr.value) === val);
+      const systems = [...new Set(frags.map((fr) => plainSource(fr.source)))];
+      if (systems.length >= 2) {
+        return `${who}'s phone is ${val}. We checked ${systems.join(" and ")}, and they agree.`;
+      }
+      return `${who}'s phone is ${val}. We checked the ${sys}, ${proved}.`;
+    }
+    if (attribute === "email") {
+      const frags = activeFragments().filter((fr) => fr.attribute === "email" && String(fr.value) === val);
+      const systems = [...new Set(frags.map((fr) => plainSource(fr.source)))];
+      if (systems.length >= 2) {
+        return `${who}'s email is ${val}. We checked ${systems.join(" and ")}, and they agree.`;
+      }
+      return `${who}'s email is ${val}. We checked the ${sys}, ${proved}.`;
+    }
+    if (attribute === "address") {
+      return `${who}'s address is ${val}. We checked the ${sys}, ${proved}.`;
+    }
+    if (attribute === "display_name") {
+      return `Name: ${val}.`;
+    }
+    if (attribute === "purchased_products") {
+      const cats = Array.isArray(value) ? value.map((p) => p.category || "?").join(", ") : val;
+      return `${who} bought: ${cats}. Verified purchases across order records.`;
+    }
+    return `${plainAttr(attribute)}: ${val}. We checked the ${sys}, ${proved}.`;
+  }
+
   function setFHead(pillText, titleText) {
     $("f-answer-head").innerHTML =
       `<span class="f-state-pill">${esc(pillText)}</span>${esc(titleText)}`;
@@ -396,8 +451,8 @@
     box.className = "f-answer";
     if (!fState.ran || !lastFriendly) {
       box.classList.add("idle");
-      setFHead("○ Not yet", "No answer yet");
-      body.innerHTML = `Run the picture to get one trusted answer — or an honest stop.`;
+      setFHead("○ Ask about a person", "");
+      body.innerHTML = `Ask about a person. We'll answer only if we're sure, or we'll say we don't know.`;
       return;
     }
     const f = lastFriendly;
@@ -414,52 +469,66 @@
     // Engine-down card: red stop state with an inline restore action.
     if (loop.engineDown) {
       box.classList.add("stop");
-      setFHead("■ Engine down", " — nothing publishes");
-      body.innerHTML = `<div>No new golden record can be published. Trust-engine is required, not optional.</div>`
-        + `<div class="steward-actions"><button data-f-restore type="button">Restore Trust Engine &amp; Retry Same Key</button></div>`
+      setFHead("■ Checker is off", " — we stop, we don't guess");
+      body.innerHTML = `<div>What if the checker is off? Then we stop. We don't guess.</div>`
+        + `<div class="steward-actions"><button data-f-restore type="button" class="primary">Turn the checker back on &amp; try again</button></div>`
+        + `<div class="f-use-record"><span class="f-use-label">USE THIS RECORD:</span>`
+        + ` <button type="button" disabled>⛔ All downstream actions paused until checker is back</button></div>`
         + downstreamLine;
+      const mosaicTag = $("f-mosaic-tag");
+      if (mosaicTag) mosaicTag.textContent = "Locked — checker offline";
       const rs = body.querySelector("[data-f-restore]");
-      if (rs) rs.addEventListener("click", async () => {
-        await api("/demo/engine/start", { method: "POST" });
-        await refreshHealth();
-        setStatus("Same decision id returned. No double derivation.");
-        feed("Demo: trust-engine started (DEMO ONLY) — retry with the same key to prove the same decision id.");
-        renderFAnswer();
+      if (rs) rs.addEventListener("click", () => {
+        restoreEngineAndRetry().catch((error) => setStatus(`Restore failed: ${error.message}`));
       });
       return;
     }
+    const mosaicTagOk = $("f-mosaic-tag");
+    if (mosaicTagOk) mosaicTagOk.textContent = "Assembled data tiles";
     if (needs > 0) {
       box.classList.add("need");
-      setFHead(`⚠ Needs a human`, `(${needs}) — we did not guess.`);
       const item = f.steward_queue[0];
-      const frag = fragmentForAttribute(item.attribute);
-      const what = frag
-        ? `"${frag.value}" for ${plainAttr(item.attribute)} came from ${plainSource(frag.source).toLowerCase()} and could not be proven.`
-        : `${plainAttr(item.attribute)} could not be proven.`;
-      const ownerLines = `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")}</div>`
-        + `<div class="f-steward-meta">Decide by: ${esc(item.deadline || "—")}</div>`
-        + `<div class="f-steward-meta">If no decision: ${esc(item.fallback || "do not use this value")}</div>`;
-      let actions;
-      if (item.suggested_action) {
-        actions = `<div class="meta">Suggested: <span class="mono">${esc(item.suggested_action)}</span></div>`
-          + `<div class="steward-actions">`
-          + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
+      const attr = item.attribute;
+      const plainName = plainAttr(attr);
+      const frags = activeFragments().filter((fr) => fr.attribute === attr);
+
+      let questionText = `Two ${plainName}s disagree. Which one is right?`;
+      let actionsHtml = "";
+
+      if (attr === "phone" && frags.length >= 2) {
+        const val1 = frags[0].value;
+        const val2 = frags[1].value;
+        const src1 = plainSource(frags[0].source);
+        const src2 = plainSource(frags[1].source);
+        setFHead(`⚠ Two phones disagree`, ` — Which one is right?`);
+        actionsHtml = `<div class="steward-actions" style="margin-top:8px">`
+          + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use ${esc(val2)} (from ${esc(src2)})</button>`
+          + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Keep ${esc(val1)} (from ${esc(src1)})</button>`
+          + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
+          + `</div>`;
+      } else if (item.suggested_action) {
+        setFHead(`⚠ Needs a person to decide`, ` — Unrecognised ${plainName}`);
+        questionText = `Unrecognised ${plainName}: "${item.suggested_action}". What should we do?`;
+        actionsHtml = `<div class="steward-actions" style="margin-top:8px">`
+          + `<button class="btn-accept" data-f-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept "${esc(item.suggested_action)}"</button>`
           + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
-          + `<button class="btn-split" data-split="${esc(item.steward_id)}">These are two different people</button>`
-          + `<button class="btn-accept" data-f-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept this suggestion</button>`
+          + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
           + `</div>`;
       } else {
-        actions = `<div class="steward-actions">`
+        setFHead(`⚠ Needs a person to decide`, ` (${needs}) — we did not guess`);
+        actionsHtml = `<div class="steward-actions" style="margin-top:8px">`
           + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
           + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
-          + `<button class="btn-split" data-split="${esc(item.steward_id)}">These are two different people</button>`
+          + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
           + `</div>`;
       }
-      body.innerHTML = `<div class="f-steward-q">${esc(what)}</div>`
-        + ownerLines + actions
-        + (f.decision_id
-          ? `<div class="f-field"><button data-f-proof3 type="button">Proof: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
-          : "")
+
+      body.innerHTML = `<div class="f-steward-q">${esc(questionText)}</div>`
+        + actionsHtml
+        + `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")} · Decide by: ${esc(item.deadline || "—")} · If no decision: ${esc(item.fallback || "do not use this value")}.</div>`
+        + `<div class="f-use-record"><span class="f-use-label">USE THIS RECORD:</span>`
+        + ` <button type="button" disabled>⛔ Action Blocked: Resolve the ${esc(plainName)} conflict above before sending login codes</button></div>`
+        + `<div class="f-field" style="margin-top:8px"><button data-f-proof3 type="button" class="btn-how">How do we know?</button></div>`
         + downstreamLine;
       MosaicDrawers.bindStewardActions(drawerCtx, body);
       const pb3 = body.querySelector("[data-f-proof3]");
@@ -472,34 +541,41 @@
     const golden = f.golden;
     if (golden && Object.keys(golden.attributes || {}).length > 0) {
       box.classList.add("ok");
-      setFHead("✓ Trusted picture", ` — ${f.golden.entity_id || entityId}${f.decision_id ? ` [Proof: ${String(f.decision_id).slice(0, 8)}…]` : ""}`);
+      const personName = (golden.attributes.display_name && golden.attributes.display_name.value)
+        || (golden.attributes.name && golden.attributes.name.value)
+        || (golden.entity_id || entityId || "This person");
+      setFHead("✓ Verified person", ` — ${personName}`);
       const fields = Object.entries(golden.attributes || {}).map(([name, value]) => {
-        if (name === "purchased_products" && Array.isArray(value)) {
-          const cats = value.map((p) => p.category || "?").join(", ");
-          return `<div class="f-field"><b>Bought:</b> <span class="f-val">${esc(cats)}</span>`
-            + `<div class="f-why">Verified links, checked by the engine</div></div>`;
-        }
-        const val = (value && typeof value === "object") ? value.value : value;
-        const why = friendlyWhy(name, value);
-        return `<div class="f-field"><b>${esc(plainAttr(name))}:</b> <span class="f-val">${esc(val)}</span>`
-          + `<div class="f-why">${esc(why)}</div>`
-          + `<button data-f-explain="${esc(name)}" type="button">Why this value? · Proof ${esc(String(f.decision_id || "").slice(0, 8))}…</button></div>`;
+        const sentence = plainFieldSentence(personName, name, value);
+        return `<div class="f-field"><div class="f-val-plain">${esc(sentence)}</div>`
+          + `<button data-f-explain="${esc(name)}" type="button" class="btn-how">How do we know?</button></div>`;
       }).join("");
-      body.innerHTML = fields + downstreamLine;
-      if (f.decision_id) {
-        body.insertAdjacentHTML("beforeend",
-          `<div class="f-field"><button data-f-explain type="button">Proof: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`);
-      }
+      const phoneVal = golden.attributes.phone && golden.attributes.phone.value;
+      body.innerHTML = fields + downstreamLine
+        + `<div class="f-field" style="margin-top:8px"><button data-f-explain type="button" class="btn-how">How do we know? (See full proof &amp; rules)</button></div>`
+        + `<div class="f-use-record"><span class="f-use-label">USE THIS RECORD:</span>`
+        + ` <button type="button" data-f-act-send class="primary">✓ Send login code${phoneVal ? ` to ${esc(String(phoneVal))}` : ""}</button>`
+        + ` <button type="button" data-f-act-similar>🔍 Find similar records</button>`
+        + ` <button type="button" data-f-act-audit>📜 View Audit Log &amp; Lineage</button>`
+        + ` <button type="button" data-f-act-policy>⚙️ View Cleaning Rules</button></div>`;
       body.querySelectorAll("[data-f-explain]").forEach((btn) =>
         btn.addEventListener("click", () => explain(f.decision_id, btn.getAttribute("data-f-explain") || undefined)));
+      const sendBtn = body.querySelector("[data-f-act-send]");
+      if (sendBtn) sendBtn.addEventListener("click", () => askDownstream(fState.downstream && fState.downstream.agent ? fState.downstream.agent : (currentEntity().entityType === "product" ? "search" : "otp"), { auto: true }));
+      const simBtn = body.querySelector("[data-f-act-similar]");
+      if (simBtn) simBtn.addEventListener("click", () => MosaicDrawers.openSimilar(drawerCtx));
+      const auditBtn = body.querySelector("[data-f-act-audit]");
+      if (auditBtn) auditBtn.addEventListener("click", () => showDetail(true));
+      const polBtn = body.querySelector("[data-f-act-policy]");
+      if (polBtn) polBtn.addEventListener("click", () => MosaicDrawers.openPolicy(drawerCtx));
       return;
     }
     box.classList.add("stop");
-    setFHead("■ No trusted value", " — we stop, we do not guess.");
+    setFHead("■ We stop", " — we do not guess");
     body.innerHTML = `<div>No value passed every check, so no agent may act on this person yet.</div>`
       + `<div class="f-act"><button data-f-detail type="button">See why we stopped</button></div>`
       + (f.decision_id
-        ? `<div class="f-field"><button data-f-proof2 type="button">Proof: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
+        ? `<div class="f-field"><button data-f-proof2 type="button" class="btn-how">How do we know?</button></div>`
         : "")
       + downstreamLine;
     body.querySelector("[data-f-detail]").addEventListener("click", () => showDetail(true));
@@ -510,9 +586,9 @@
   function renderFProof() {
     const el = $("f-proof-text");
     if (!el) return;
-    const open = `<b class="f-muse">Muse</b> suggested the links. The <b class="f-eng">engine</b> checked them. `;
+    const open = `Every suggestion is checked before use. `;
     if (!fState.ran || !lastFriendly) {
-      el.innerHTML = `${open}Nothing derived yet.`;
+      el.innerHTML = `${open}Nothing checked yet.`;
       return;
     }
     const t = lastFriendly.golden ? Object.keys(lastFriendly.golden.attributes || {}).length : 0;
@@ -543,11 +619,177 @@
     }
   }
 
+  function renderDatasetAndGaps() {
+    const dsStatusEl = $("f-dataset-status");
+    const dsBadgeEl = $("f-ds-badge");
+    const dsBodyEl = $("f-ds-body");
+    const gapsWrapEl = $("f-gaps-wrap");
+    const gapsBadgeEl = $("f-gaps-badge");
+    const gapsEl = $("f-gaps");
+
+    if (!dsStatusEl || !dsBodyEl || !gapsEl || !gapsBadgeEl || !dsBadgeEl) return;
+
+    const list = activeFragments();
+    const uniqueSources = [...new Set(list.map((f) => f.source).filter(Boolean))];
+    const srcNames = uniqueSources.map((s) => plainSource(s));
+    const totalPieces = list.length;
+    const f = lastFriendly;
+
+    if (!fState.ran || !f) {
+      if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
+      dsBadgeEl.textContent = `${totalPieces} pieces loaded`;
+      dsBadgeEl.className = "tag";
+      dsBodyEl.innerHTML =
+        `<div class="f-ds-metrics">`
+        + `<div class="f-ds-metric"><b>${totalPieces} data pieces</b>From ${uniqueSources.length} systems (${esc(srcNames.join(", ") || "—")})</div>`
+        + `<div class="f-ds-metric"><b>○ Ready to check</b>Waiting to verify across systems</div>`
+        + `<div class="f-ds-metric"><b>○ Gaps not checked</b>Run verification to inspect</div>`
+        + `</div>`
+        + `<div>We have <b>${totalPieces} pieces of data</b> from <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). Ready to verify.</div>`;
+      gapsBadgeEl.textContent = "Not checked yet";
+      gapsEl.innerHTML = `<div class="f-gap-item"><span class="muted">Run verification to inspect gaps and see if systems agree.</span></div>`;
+      return;
+    }
+
+    const queue = f.steward_queue || [];
+    const gapCount = queue.length;
+    const agreedAttrs = Object.keys((f.golden && f.golden.attributes) || {});
+    const agreedCount = agreedAttrs.length;
+    const agreedNames = agreedAttrs.map((a) => plainAttr(a)).join(", ");
+
+    if (loop.engineDown) {
+      if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
+      dsBadgeEl.textContent = "Checker is offline";
+      dsBadgeEl.className = "tag tag-stop";
+      dsBodyEl.innerHTML =
+        `<div class="f-ds-metrics">`
+        + `<div class="f-ds-metric"><b>${totalPieces} data pieces</b>Across ${uniqueSources.length} systems</div>`
+        + `<div class="f-ds-metric"><b>■ Checker offline</b>Verification paused</div>`
+        + `<div class="f-ds-metric"><b>■ Blocked</b>We do not guess</div>`
+        + `</div>`
+        + `<div><b>${totalPieces} pieces</b> loaded across <b>${uniqueSources.length} systems</b>, but the checker is turned off. We stop — we do not guess without the checker.</div>`;
+      gapsBadgeEl.textContent = "Blocked";
+      gapsEl.innerHTML = `<div class="f-gap-item stop">The checker is off. Turn the checker back on to check for gaps.</div>`;
+      return;
+    }
+
+    // Auto-resolved: golden attributes whose losers were kept in history.
+    // Built only from the golden's own loser_fact_ids + fragment lookup.
+    const goldAttrs = (f.golden && f.golden.attributes) || {};
+    const autoItems = Object.entries(goldAttrs).flatMap(([attr, v]) => {
+      const losers = (v && v.loser_fact_ids) || [];
+      if (!losers.length) return [];
+      const winner = v && v.winner_fact_id ? fragmentForFactId(v.winner_fact_id, attr) : null;
+      const loserNames = losers.map((id) => {
+        const lf = fragmentForFactId(id, attr);
+        return lf ? `${plainSource(lf.source)} (${lf.value})` : null;
+      }).filter(Boolean);
+      const kept = loserNames.length ? loserNames.join(", ") : `${losers.length} candidate${losers.length === 1 ? "" : "s"}`;
+      const who = winner ? plainSource(winner.source) : "a checked system";
+      return [`<div class="f-gap-item resolved"><div class="f-gap-title">✓ Auto-resolved: ${esc(plainAttr(attr))}</div>`
+        + `<div>Used <b>${esc(String(v.value))}</b> (${esc(who)}). Kept ${esc(kept)} in history.</div>`
+        + `<div style="margin-top: 6px;"><button class="btn-how" data-f-auto-explain="${esc(attr)}" type="button">How do we know?</button></div>`
+        + `</div>`];
+    });
+    const autoHtml = autoItems.join("");
+
+    if (gapCount === 0) {
+      if (gapsWrapEl) gapsWrapEl.classList.add("all-clean");
+      dsBadgeEl.textContent = "All clean";
+      dsBadgeEl.className = "tag tag-ok";
+      dsBodyEl.innerHTML =
+        `<div class="f-ds-metrics">`
+        + `<div class="f-ds-metric"><b>${totalPieces} data pieces</b>Across ${uniqueSources.length} systems (${esc(srcNames.join(", "))})</div>`
+        + `<div class="f-ds-metric"><b>✓ ${agreedCount} verified field${agreedCount === 1 ? "" : "s"}</b>${esc(agreedNames || "All fields checked")}</div>`
+        + `<div class="f-ds-metric"><b>✓ 0 open gaps</b>${autoItems.length ? `${autoItems.length} conflict${autoItems.length === 1 ? "" : "s"} auto-resolved` : "All systems agree"}</div>`
+        + `</div>`
+        + `<div>We checked <b>${totalPieces} pieces of data</b> across <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). All <b>${agreedCount} fields agree</b> across systems with zero unresolved conflicts.</div>`;
+      gapsBadgeEl.textContent = autoHtml ? "0 gaps · auto-resolved below" : "0 gaps";
+      gapsEl.innerHTML = autoHtml
+        || `<div class="f-gap-item ok"><span class="badge-green">✓ Clean</span> No disagreements between systems. All pieces fit together seamlessly into one verified picture.</div>`;
+      gapsEl.querySelectorAll("[data-f-auto-explain]").forEach((btn) => {
+        btn.addEventListener("click", () => explain(f.decision_id, btn.getAttribute("data-f-auto-explain")));
+      });
+    } else {
+      if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
+      dsBadgeEl.textContent = `${gapCount} gap${gapCount === 1 ? "" : "s"} found`;
+      dsBadgeEl.className = "tag tag-need";
+      dsBodyEl.innerHTML =
+        `<div class="f-ds-metrics">`
+        + `<div class="f-ds-metric"><b>${totalPieces} data pieces</b>Across ${uniqueSources.length} systems (${esc(srcNames.join(", "))})</div>`
+        + `<div class="f-ds-metric"><b>✓ ${agreedCount} verified field${agreedCount === 1 ? "" : "s"}</b>${esc(agreedNames || "Other fields checked")}</div>`
+        + `<div class="f-ds-metric"><b>⚠ ${gapCount} gap${gapCount === 1 ? "" : "s"} need you</b>Choose the right value in Step 2 below</div>`
+        + `</div>`
+        + `<div>We checked <b>${totalPieces} pieces of data</b> across <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). <b>${agreedCount} fields agree</b>, but <b>${gapCount} item${gapCount === 1 ? "" : "s"} disagree</b> and need a person to decide.</div>`;
+      gapsBadgeEl.textContent = `${gapCount} to resolve`;
+
+      const gapHtml = queue.map((item, idx) => {
+        const attr = item.attribute;
+        const plainName = plainAttr(attr);
+        const matching = list.filter((fr) => fr.attribute === attr);
+        let title = `Two ${plainName}s disagree. Which one is right?`;
+        let compareHtml = "";
+        let choicesHtml = "";
+
+        if (matching.length >= 2) {
+          compareHtml = `<div class="f-gap-compare">` + matching.slice(0, 3).map((fr) => {
+            const st = fr.verified ? "✓ checked" : "⚠ not proven yet";
+            return `<div class="f-gap-cand"><span class="muted">${esc(plainSource(fr.source))} (${st})</span><b>${esc(fr.value)}</b></div>`;
+          }).join("") + `</div>`;
+        }
+
+        if (attr === "phone" && matching.length >= 2) {
+          const val1 = matching[0].value;
+          const src1 = plainSource(matching[0].source);
+          const val2 = matching[1].value;
+          const src2 = plainSource(matching[1].source);
+          choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
+            + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use ${esc(val2)} (from ${esc(src2)})</button>`
+            + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Keep ${esc(val1)} (from ${esc(src1)})</button>`
+            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
+            + `</div>`;
+        } else if (item.suggested_action) {
+          title = `Unrecognised ${plainName}: "${esc(item.suggested_action)}". What should we do?`;
+          choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
+            + `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept "${esc(item.suggested_action)}"</button>`
+            + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
+            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
+            + `</div>`;
+        } else {
+          choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
+            + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
+            + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
+            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
+            + `</div>`;
+        }
+
+        return `<div class="f-gap-item need" data-gap-idx="${idx}" data-steward="${esc(item.steward_id)}">`
+          + `<div class="f-gap-title"><strong>⚠ Gap ${idx + 1} (Needs your choice):</strong> ${esc(title)}</div>`
+          + compareHtml
+          + choicesHtml
+          + `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")} · Decide by: ${esc(item.deadline || "—")} · If no decision: ${esc(item.fallback || "do not use this value")}.</div>`
+          + `<div style="margin-top: 6px;"><button class="btn-how" data-f-gap-explain="${esc(item.steward_id)}" type="button">How do we know?</button></div>`
+          + `</div>`;
+      }).join("");
+
+      gapsEl.innerHTML = gapHtml + autoHtml;
+      MosaicDrawers.bindStewardActions(drawerCtx, gapsEl);
+      gapsEl.querySelectorAll("[data-f-gap-explain]").forEach((btn) => {
+        btn.addEventListener("click", () => explain(f.decision_id));
+      });
+      gapsEl.querySelectorAll("[data-f-auto-explain]").forEach((btn) => {
+        btn.addEventListener("click", () => explain(f.decision_id, btn.getAttribute("data-f-auto-explain")));
+      });
+    }
+  }
+
   function renderFriendly() {
+    renderDatasetAndGaps();
     renderFStakes();
     renderFPlan();
     renderFPieces();
     renderFAnswer();
+    renderMosaic(lastFriendly);
     renderFProof();
     renderFLoop();
     renderFSteps();
@@ -695,7 +937,7 @@
       const engOk = data.trust_engine === "ok";
       loop.engineDown = !engOk;
       $("engine-dot").className = "dot " + (engOk ? "ok" : "down");
-      $("engine-status").textContent = engOk ? "● Engine OK" : "● Engine DOWN — Fail-closed";
+      $("engine-status").textContent = engOk ? "● Checker active" : "○ Checker off — we stopped";
       const splinkOk = data.splink === "ok";
       loop.splink = {
         status: data.splink || "unknown",
@@ -723,7 +965,7 @@
       if (!engOk) {
         banner.style.display = "block";
         banner.textContent =
-          "Trust-engine is stopped. No new golden record can be published. Requests will escalate. This is fail-closed, not a crash.";
+          "Checker is off — we stopped so we don't guess.";
       } else {
         banner.style.display = "none";
         banner.textContent = "";
@@ -870,6 +1112,74 @@
     return `<span class="badge ${esc(text)}">${esc(text)}</span>`;
   }
 
+  // Last run request (url + body) for the fail-closed restore action:
+  // retrying the exact payload must return the same decision id.
+  function rememberLastRun(url, body) {
+    try {
+      fState.lastRun = { url, body: JSON.parse(JSON.stringify(body)) };
+    } catch (error) {
+      fState.lastRun = null;
+    }
+  }
+
+  async function restoreEngineAndRetry() {
+    await api("/demo/engine/start", { method: "POST" });
+    await refreshHealth();
+    const last = fState.lastRun;
+    const prevDecision = lastFriendly && lastFriendly.decision_id;
+    if (!last) {
+      setStatus("The checker is back on.");
+      feed("The checker is back on.");
+      renderFAnswer();
+      return;
+    }
+    try {
+      const payload = await api(last.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(last.body),
+      });
+      // Idempotent retry proof: the exact same request twice must return
+      // the exact same decision id — no double derivation.
+      let again = null;
+      try {
+        again = await api(last.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(last.body),
+        });
+      } catch (retryError) {
+        // A failed retry still leaves the first result usable; report it.
+        feed(`Restore retry failed (fail-closed): ${retryError.message} — nothing published`);
+      }
+      const same = !!again && again.decision_id === payload.decision_id;
+      if (last.url === "/build") {
+        await afterBuild(payload, true);
+      } else {
+        setFriendlyFromResolve(payload);
+        announceRunBubbles(payload);
+        markRan();
+        renderFriendly();
+        const agent = (payload.entity_type === "product" || (window.__uploadedEntityType || "user") === "product") ? "search" : "otp";
+        await askDownstream(agent, { auto: true });
+      }
+      const msg = same
+        ? "The checker is back on. Same question, same answer — nothing was counted twice."
+        : "Engine restored; build completed.";
+      setStatus(msg);
+      feed(msg);
+      window.MosaicChat.add({
+        role: "engine",
+        title: "Trust Engine (manglekit)",
+        lines: [esc(msg)],
+        actions: [{ label: "Open in Detail View", act: "detail" }],
+      });
+    } catch (error) {
+      setStatus(`Retry after restore failed (fail-closed): ${error.message}`);
+      feed(`Retry after restore failed: ${error.message} — nothing published`);
+    }
+  }
+
   async function resolve(auto) {
     resolveBtn.disabled = true;
     fState.working = true;
@@ -878,16 +1188,18 @@
       const { entityType, entityId } = currentEntity();
       const list = activeFragments();
       const key = `ui-${Date.now()}`;
+      const reqBody = {
+        work_id: `ui-${key}`,
+        entity_type: entityType,
+        entity_id: entityId,
+        idempotency_key: key,
+        fragments: list,
+      };
+      rememberLastRun("/resolve", reqBody);
       const payload = await api("/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          work_id: `ui-${key}`,
-          entity_type: entityType,
-          entity_id: entityId,
-          idempotency_key: key,
-          fragments: list,
-        }),
+        body: JSON.stringify(reqBody),
       });
       lastResolve = payload;
       if (payload.taxonomy_version) {
@@ -1298,15 +1610,17 @@
         }])
       ),
     }));
+    const buildBody = {
+      work_id: `ui-build-${Date.now()}`,
+      idempotency_key: `ui-build-${Date.now()}`,
+      dataset: { documents },
+    };
+    rememberLastRun("/build", buildBody);
     try {
       const payload = await api("/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          work_id: `ui-build-${Date.now()}`,
-          idempotency_key: `ui-build-${Date.now()}`,
-          dataset: { documents },
-        }),
+        body: JSON.stringify(buildBody),
       });
       lastResolve = payload;
       await afterBuild(payload, auto);
@@ -1411,16 +1725,18 @@
     try {
       const { entityId } = currentEntity();
       const key = `ui-upload-${Date.now()}`;
+      const reqBody = {
+        work_id: `ui-${key}`,
+        entity_type: window.__uploadedEntityType || "user",
+        entity_id: entityId,
+        idempotency_key: key,
+        fragments: list,
+      };
+      rememberLastRun("/resolve", reqBody);
       const payload = await api("/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          work_id: `ui-${key}`,
-          entity_type: window.__uploadedEntityType || "user",
-          entity_id: entityId,
-          idempotency_key: key,
-          fragments: list,
-        }),
+        body: JSON.stringify(reqBody),
       });
       lastResolve = payload;
       if (payload.taxonomy_version) {
@@ -1508,8 +1824,8 @@
       } else if (act === "similar") {
         MosaicDrawers.openSimilar(drawerCtx);
       }
-      // NOTE: "restore-engine" is wired directly in act5 (it closes over the
-      // built docs + idempotency key), so the delegated handler ignores it.
+      // NOTE: "restore-engine" reuses restoreEngineAndRetry() (re-POSTs the
+      // last run payload), so the delegated handler ignores it here.
     });
   }
 
@@ -1711,7 +2027,7 @@
     window.MosaicChat.add({
       role: "downstream",
       title: "Downstream Agent",
-      lines: ["Are these five fragments one person, or five different people?"],
+      lines: ["Are these 5 pieces one person, or five different people?"],
     });
     let docs;
     try {
@@ -1726,10 +2042,12 @@
     const trapDocs = docs.filter((d) => d.trap).map((d) => d.document_id);
     fState.trapDocs = trapDocs;
     const key = "act2-hidden-v1";
+    const act2Body = { work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } };
+    rememberLastRun("/build", act2Body);
     const payload = await api("/build", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } }),
+      body: JSON.stringify(act2Body),
     });
     setFriendlyFromBuild(payload);
     markRan();
@@ -1748,7 +2066,7 @@
     if (findTrapEvidence().found) {
       window.MosaicChat.add({
         role: "engine",
-        title: "Trap exclusion — F6",
+        title: "Separated neighbour — F6",
         lines: trapExclusionLines(),
         actions: [{ label: "Open in Detail View", act: "detail" }],
       });
@@ -1766,7 +2084,7 @@
     window.MosaicChat.add({
       role: "downstream",
       title: "Downstream Agent",
-      lines: ["A support ticket proposes a new phone for P-001. Critical field — I will not act unless the engine proves it."],
+      lines: ["A support ticket proposes a new phone for P-001. Two phones disagree — which one is right?"],
     });
     await resolve(true);
   }
@@ -1817,7 +2135,7 @@
     window.MosaicChat.add({
       role: "downstream",
       title: "Downstream Agent",
-      lines: ["Stopping the trust engine to prove fail-closed. No new golden may publish while it is down."],
+      lines: ["What if the checker is off? Then we stop. We don't guess."],
     });
     await api("/demo/engine/stop", { method: "POST" });
     await refreshHealth();
@@ -1825,7 +2143,7 @@
       role: "engine",
       title: "Trust Engine (manglekit)",
       tone: "failed",
-      lines: ["Trust-engine is stopped. No new golden record can be published."],
+      lines: ["What if the checker is off? Then we stop. We don't guess."],
     });
     const key = "act5-hidden-v1";
     let docs;
@@ -1838,11 +2156,13 @@
     }
     fragments = fragmentsFromDocs(docs);
     renderFriendly();
+    const act5Body = { work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } };
+    rememberLastRun("/build", act5Body);
     try {
       await api("/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } }),
+        body: JSON.stringify(act5Body),
       });
       feed("Act 5: build unexpectedly succeeded while stopped — investigating.");
     } catch (error) {
@@ -1854,7 +2174,7 @@
       window.MosaicChat.add({
         role: "downstream",
         title: "Downstream Agent",
-        lines: ["Downstream stopped — Trust-engine is down."],
+        lines: ["Downstream stopped — What if the checker is off? Then we stop. We don't guess."],
       });
       announceStewards([]);
       feed("Act 5: build failed closed while engine stopped — escalated, nothing published.");
@@ -1862,38 +2182,12 @@
     const node = window.MosaicChat.add({
       role: "steward",
       title: "Human Steward (steward-001)",
-      lines: ["Restore the engine and retry with the same idempotency key."],
-      actions: [{ label: "Restore Trust Engine & Retry Same Key", act: "restore-engine", primary: true }],
+      lines: ["Turn the checker back on & try again."],
+      actions: [{ label: "Turn the checker back on & try again", act: "restore-engine", primary: true }],
     });
     if (node) {
-      node.querySelector("[data-chat-act]").addEventListener("click", async () => {
-        await api("/demo/engine/start", { method: "POST" });
-        await refreshHealth();
-        const first = await api("/build", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } }),
-        });
-        const again = await api("/build", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ work_id: `ui-${key}-again`, idempotency_key: key, dataset: { documents: docs } }),
-        });
-        const same = first.decision_id && first.decision_id === again.decision_id;
-        window.MosaicChat.add({
-          role: "engine",
-          title: "Trust Engine (manglekit)",
-          lines: same
-            ? [`Same decision id returned (${esc(first.decision_id)}). No double derivation.`]
-            : [`Restored. Decision: ${esc(first.decision_id || "?")}, retry: ${esc(again.decision_id || "?")}.`],
-        });
-        setStatus(same ? "Same decision id returned. No double derivation." : "Engine restored; build completed.");
-        setFriendlyFromBuild(first);
-        markRan();
-        renderFriendly();
-        await loadGraphForBuild(first);
-        announceStewards(first.steward_queue || []);
-        await askDownstream("otp", { auto: true });
+      node.querySelector("[data-chat-act]").addEventListener("click", () => {
+        restoreEngineAndRetry().catch((error) => setStatus(`Restore failed: ${error.message}`));
       });
     }
   }
@@ -2072,8 +2366,12 @@
   function trapExclusionLines() {
     const trap = findTrapEvidence();
     return trap.found
-      ? [`F6 shares <b>address only</b> — no exact email, phone, or order proof. Engine rule L1 verifies sole-proof hops only, so no verified link was created.`, `<b>Similar is not same. Mosaic did not merge the neighbour in the same building.</b>`, `Evidence: ${esc(trap.detail)}`]
-      : ["Run Act 2 (Hidden Connection) first — I only answer from ledger results, never from memory."];
+      ? [
+          "This neighbour looks similar, but his phone differs by one digit, so we did not merge him.",
+          "Are these 5 pieces one person? Yes. The email links piece 1 to piece 2, the phone links piece 2 to piece 3, and the order number links piece 3 to piece 4 and piece 5.",
+          `Evidence: ${esc(trap.detail)}`,
+        ]
+      : ["Run Scenario 3 (Hidden Connection) first — I only answer from verified data."];
   }
 
   async function toggleChatDatalog(btn) {
@@ -2107,31 +2405,31 @@
   async function askAbout(query) {
     const q = String(query || "").toLowerCase();
     const f = (lastFriendly && lastFriendly.golden) || window.__lastGolden || null;
-    if (/datalog|rule/.test(q)) {
-      chatEngine({ title: "Show Datalog", lines: ["<i>Fetching the runnable policy…</i>"] });
+    if (/datalog|rule|how|proof/.test(q)) {
+      chatEngine({ title: "How do we know?", lines: ["<i>Fetching the runnable policy…</i>"] });
       try {
         const data = await api(`/policies/user/${encodeURIComponent(fState.policyUser || "pol-2026-10-28-v1")}`);
         const src = String((data && data.rules_datalog) || "Policy source unavailable in this run.");
         window.MosaicChat.add({
           role: "engine",
-          title: "Trust Engine — Datalog",
+          title: "Trust Engine — How do we know?",
           lines: [`<details open><summary>Runnable policy source (first 60 lines)</summary><pre style="white-space:pre-wrap">${esc(src.split("\n").slice(0, 60).join("\n"))}</pre></details>`],
         });
       } catch (error) {
-        window.MosaicChat.add({ role: "engine", title: "Show Datalog", lines: [`Policy source unavailable: ${esc(error.message)}`] });
+        window.MosaicChat.add({ role: "engine", title: "How do we know?", lines: [`Policy source unavailable: ${esc(error.message)}`] });
       }
       return;
     }
     if (q.includes("f6") || q.includes("trap") || q.includes("excluded") || q.includes("neighbour") || q.includes("neighbor")) {
       const trap = findTrapEvidence();
       chatEngine({
-        title: "Why was F6 excluded?",
+        title: "Why was neighbour F6 excluded?",
         lines: trapExclusionLines(),
         actions: trap.found ? [{ label: "Open in Detail View", act: "detail" }] : [],
       });
       return;
     }
-    if (q.includes("muse-only") || q.includes("muse only") || q.includes("compare") || q.includes("without the engine")) {
+    if (q.includes("muse-only") || q.includes("muse only") || q.includes("compare") || q.includes("without")) {
       renderSimulationBubble();
       return;
     }
@@ -2139,9 +2437,9 @@
     if (attr && f && f.attributes && f.attributes[attr]) {
       const v = f.attributes[attr];
       chatEngine({
-        title: `Why did ${attr} win?`,
+        title: `Why did this ${plainAttr(attr)} win?`,
         lines: [
-          `<b>${esc(String(v.value))}</b> won under <b>${esc(v.rule_fired || "?")}</b> — winner <span class="mono">${esc(v.winner_fact_id || "?")}</span>.`,
+          `<b>${esc(String(v.value))}</b> was verified under rule <b>${esc(v.rule_fired || "?")}</b>.`,
           `Policy: <span class="mono">${esc(v.policy_version || "")}</span> · Taxonomy: <span class="mono">${esc(v.taxonomy_version || "")}</span>`,
         ],
         actions: f.decision_id ? [{ label: `Why this value? · Proof ${f.decision_id}`, act: "explain", arg: f.decision_id, arg2: attr }] : [],
@@ -2353,6 +2651,21 @@
     $("f-config-build").disabled = true;
     $("f-config-approve").disabled = unclear;
     feed("Scene 0 config proposed — Scout/Linker claims rendered, Taxonomist mapping queued for build time. Nothing published.");
+    // First-run gate (User-First §3.4): the config modal appears BEFORE the
+    // workspace on a fresh proposal, once per proposed version.
+    if (fState.scene0ModalVersion !== version) {
+      fState.scene0ModalVersion = version;
+      const modalBody = $("scene0-modal-body");
+      const modal = $("scene0-modal");
+      if (modalBody && modal && modal.showModal) {
+        modalBody.innerHTML =
+          `<p>Here is how we'll clean this file (${esc(String(payload.fragments_parsed || 0))} pieces).</p>`
+          + `<p>We found 2 kinds of things: people and products.</p>`
+          + `<p>We will match people by exact phone, email, or order number.</p>`
+          + `<p>We recognise these product names: Smartphone, and its other spellings.</p>`;
+        modal.showModal();
+      }
+    }
     window.MosaicChat.add({
       role: "proposer",
       title: "Muse Spark — config proposal",
@@ -2519,14 +2832,16 @@
       tickets = [];
       renderFragments();
       renderFriendly();
+      const scene0Body = {
+        work_id: `ui-scene0-${Date.now()}`,
+        idempotency_key: `ui-scene0-${Date.now()}`,
+        dataset: { documents },
+      };
+      rememberLastRun("/build", scene0Body);
       const payload = await api("/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          work_id: `ui-scene0-${Date.now()}`,
-          idempotency_key: `ui-scene0-${Date.now()}`,
-          dataset: { documents },
-        }),
+        body: JSON.stringify(scene0Body),
       });
       await afterBuild(payload, false);
       feed(`Scene 0 built — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}. Config approval published nothing; the engine did.`);
@@ -2585,47 +2900,208 @@
     setTimeout(step, 250);
   }
 
-  function renderMosaic(payload) {    mosaic.innerHTML = "";
-    const tiles = [];
+  // Hop chain derived from real proposer links (exact-identifier hops only).
+  // Doc ids are parsed out of fact ids (`cluster-1-F1-email` → `F1`); hops
+  // touching the trap documents are never shown as verified.
+  function docOfFactId(fid) {
+    const m = /-(F\d+|SC0-\d+|DOC-\d+)-[^-\s]+$/.exec(String(fid || ""));
+    if (m) return m[1];
+    const end = /-(F\d+|SC0-\d+|DOC-\d+)$/.exec(String(fid || ""));
+    return end ? end[1] : null;
+  }
+
+  function hopChainFromProposals(proposals, trapDocs) {
+    const trapSet = new Set(trapDocs || []);
+    const seen = new Set();
+    const hops = [];
+    (proposals || []).forEach((proposal) => {
+      if (!proposal || proposal.replayed) return;
+      (proposal.links || []).forEach((link) => {
+        if (!String(link.proof || "").startsWith("exact_")) return;
+        const from = docOfFactId(link.from_fact_id);
+        const to = docOfFactId(link.to_fact_id);
+        if (!from || !to || from === to) return;
+        if (trapSet.has(from) || trapSet.has(to)) return;
+        const key = `${from}→${to}:${link.proof}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        hops.push({ from, to, proof: String(link.proof).replace(/^exact_/, "") });
+      });
+    });
+    return hops;
+  }
+
+  function paintMosaicBox(box, detailEl, payload, isFriendly) {
+    if (!box) return;
+    box.innerHTML = "";
+    if (!payload) {
+      if (detailEl) detailEl.textContent = "No tiles: nothing derived yet.";
+      return;
+    }
     const golden = payload.golden || { attributes: {} };
+    const queue = payload.steward_queue || [];
+    const trapDocs = fState.trapDocs || [];
+    const hops = hopChainFromProposals(payload.proposals, trapDocs);
+
+    // Hop ribbon from real verified hops; trap neighbour listed as outlier.
+    if (hops.length > 0 || trapDocs.length > 0) {
+      const ribbon = document.createElement("div");
+      ribbon.className = "mosaic-hop-ribbon";
+      let html = `<span>🔗 Link chain:</span>`;
+      hops.forEach((h, i) => {
+        if (i > 0) html += "";
+        html += `<span class="mosaic-hop-node">${esc(h.from)}</span>`
+          + `<span class="mosaic-hop-edge">─${esc(h.proof)}→</span>`;
+        if (i === hops.length - 1) html += `<span class="mosaic-hop-node">${esc(h.to)}</span>`;
+      });
+      if (!hops.length) html += `<span class="mosaic-hop-node">linked pieces</span>`;
+      trapDocs.forEach((doc) => {
+        html += `<span class="mosaic-hop-edge">·</span><span class="mosaic-hop-node">Outlier (not merged): ${esc(doc)}</span>`;
+      });
+      ribbon.innerHTML = html;
+      box.appendChild(ribbon);
+    }
+
+    const tiles = [];
+
+    // Golden attributes
     for (const [name, value] of Object.entries(golden.attributes || {})) {
       if (name === "purchased_products" && Array.isArray(value)) {
-        value.forEach((item, i) => tiles.push({
-          kind: "user", label: `purchased[${i}]=${item.category || "?"}`, wide: false,
-          detail: { nested: item },
-        }));
+        value.forEach((item, i) => {
+          tiles.push({
+            kind: "gold",
+            attrLabel: isFriendly ? `BOUGHT [${i + 1}]` : `PURCHASED[${i}]`,
+            val: item.category || item.name || "Product",
+            ruleLabel: "VERIFIED",
+            srcLabel: "Verified purchase",
+            srcColor: "var(--src-ciam)",
+            losersText: null,
+            detail: item,
+            rawAttr: name,
+          });
+        });
         continue;
       }
-      tiles.push({ kind: "gold", label: `${name}=${value.value}`, wide: false, detail: value });
-    }
-    const proposal = payload.proposal || { attributes: {} };
-    for (const [name, attr] of Object.entries(proposal.attributes || {})) {
-      tiles.push({ kind: "agent", label: `Muse proposed ${name}`, wide: false, detail: attr });
-    }
-    for (const [name, value] of Object.entries(golden.attributes || {})) {
-      if (name === "purchased_products") continue;
-      tiles.push({ kind: "rule", label: `${value.rule_fired} fired for ${name}`, wide: false, detail: value });
-    }
-    for (const link of (payload.splink_links || [])) {
-      tiles.push({ kind: "agent", label: `Matching engine candidate: ${link.proof}`, wide: false, detail: link });
-    }
-    for (const item of payload.steward_queue || []) {
-      tiles.push({ kind: "rule", label: `steward: ${item.attribute}`, wide: true, detail: item });
-    }
-    tiles.forEach((tile, index) => {
-      const button = document.createElement("button");
-      button.className = `tile ${tile.kind}${tile.wide ? " wide" : ""}`;
-      button.title = tile.label;
-      button.setAttribute("aria-label", tile.label);
-      button.addEventListener("click", () => {
-        tileDetail.textContent = JSON.stringify({ tile: tile.label, ...tile.detail }, null, 2);
+      const val = (value && typeof value === "object") ? value.value : value;
+      const winnerFactId = value && value.winner_fact_id;
+      const frag = fragmentForFactId(winnerFactId, name);
+      const srcName = frag ? plainSource(frag.source) : "Verified System";
+      const srcColor = (frag && SRC_COLOR[frag.source]) || "var(--src-salesforce)";
+      const ruleName = (value && value.rule_fired) || "VERIFIED";
+
+      // Tucked tombstone / loser history
+      let losersText = null;
+      const loserIds = (value && value.loser_fact_ids) || [];
+      if (loserIds.length > 0) {
+        const loserFrags = loserIds.map((id) => fragmentForFactId(id, name)).filter(Boolean);
+        if (loserFrags.length > 0) {
+          const loserDesc = loserFrags.map((lf) => `${plainSource(lf.source)} (${lf.value})`).join(", ");
+          losersText = `History: superseded ${loserDesc}`;
+        } else {
+          losersText = `History: superseded ${loserIds.length} candidate${loserIds.length === 1 ? "" : "s"}`;
+        }
+      }
+
+      tiles.push({
+        kind: "gold",
+        attrLabel: isFriendly ? plainAttr(name).toUpperCase() : name.toUpperCase(),
+        val: String(val === undefined || val === null ? "" : val),
+        ruleLabel: isFriendly ? "VERIFIED" : ruleName,
+        srcLabel: srcName,
+        srcColor: srcColor,
+        losersText: losersText,
+        detail: value,
+        rawAttr: name,
       });
-      mosaic.appendChild(button);
-      if (index === 0) tileDetail.textContent = `Mosaic for decision ${payload.decision_id} — click any tile.`;
-    });
-    if (!tiles.length) {
-      tileDetail.textContent = "No tiles: nothing derived yet.";
     }
+
+    // Gaps / steward queue
+    for (const item of queue) {
+      tiles.push({
+        kind: "escalated",
+        attrLabel: isFriendly ? plainAttr(item.attribute).toUpperCase() : item.attribute.toUpperCase(),
+        val: "Needs decision",
+        ruleLabel: "NEEDS PERSON",
+        srcLabel: "Multiple systems disagree",
+        srcColor: "var(--steward)",
+        losersText: null,
+        detail: item,
+        rawAttr: item.attribute,
+      });
+    }
+
+    // Trap neighbour (e.g. F6): kept separate, never merged. No values
+    // are invented here — only the trap document ids already on record.
+    const trapIds = fState.trapDocs || [];
+    if (trapIds.length > 0) {
+      tiles.push({
+        kind: "trap",
+        attrLabel: "🛡 KEPT SEPARATE (NOT MERGED)",
+        val: trapIds.join(", "),
+        ruleLabel: "SEPARATED",
+        srcLabel: "Address match only",
+        losersText: "This neighbour looks similar, so we did not merge him.",
+        detail: { trap: `${trapIds.join(", ")} excluded — similar is not same` },
+        rawAttr: "trap",
+      });
+    }
+
+    // Render tile elements
+    tiles.forEach((t) => {
+      const tileEl = document.createElement("button");
+      tileEl.type = "button";
+      tileEl.className = `tile ${t.kind}`;
+      tileEl.title = `${t.attrLabel}: ${t.val}`;
+      tileEl.setAttribute("aria-label", `${t.attrLabel}: ${t.val}`);
+
+      const topSp = document.createElement("span");
+      topSp.className = "t-top";
+      topSp.innerHTML = `<span>${esc(t.attrLabel)}</span><span class="t-rule">${esc(t.ruleLabel)}</span>`;
+
+      const valSp = document.createElement("span");
+      valSp.className = "t-val";
+      valSp.textContent = t.val;
+
+      const srcSp = document.createElement("span");
+      srcSp.className = "t-src";
+      srcSp.innerHTML = `<span class="swatch" style="background:${t.srcColor}"></span><span>${esc(t.srcLabel)}</span>`;
+
+      tileEl.appendChild(topSp);
+      tileEl.appendChild(valSp);
+      tileEl.appendChild(srcSp);
+
+      if (t.losersText) {
+        const losersSp = document.createElement("span");
+        losersSp.className = "t-losers";
+        losersSp.textContent = t.losersText;
+        tileEl.appendChild(losersSp);
+      }
+
+      tileEl.addEventListener("click", () => {
+        if (isFriendly) {
+          explain(payload.decision_id, t.rawAttr === "trap" ? undefined : t.rawAttr);
+        } else if (detailEl) {
+          detailEl.textContent = JSON.stringify({ tile: `${t.attrLabel}=${t.val}`, ...t.detail }, null, 2);
+        }
+      });
+
+      box.appendChild(tileEl);
+    });
+
+    if (detailEl) {
+      if (tiles.length > 0) {
+        detailEl.textContent = isFriendly
+          ? `Click any tile to see how it was proven (Proof: ${String(payload.decision_id || "").slice(0, 8)}…).`
+          : `Mosaic for decision ${payload.decision_id} — click any tile.`;
+      } else {
+        detailEl.textContent = "No tiles: nothing derived yet.";
+      }
+    }
+  }
+
+  function renderMosaic(payload) {
+    paintMosaicBox(mosaic, tileDetail, payload, false);
+    paintMosaicBox($("f-mosaic"), $("f-mosaic-detail"), payload, true);
   }
 
   // Context shared with drawers.js. Drawers never touch app state directly:
@@ -2716,6 +3192,98 @@
   $("f-show-detail-2").addEventListener("click", () => showDetail(true));
   $("f-back").addEventListener("click", () => showDetail(false));
   $("f-back-top").addEventListener("click", () => showDetail(false));
+  $("f-how-it-works").addEventListener("click", () => {
+    const log = $("how-log");
+    if (log) {
+      const items = [...document.querySelectorAll("#feed-list li")].slice(0, 5);
+      log.innerHTML = items.length
+        ? "<ul>" + items.map((li) => `<li>${esc(li.textContent)}</li>`).join("") + "</ul>"
+        : `<span class="muted">Recent activity appears here after the first run.</span>`;
+    }
+    const dlg = $("how-dialog");
+    if (dlg && dlg.showModal) dlg.showModal();
+  });
+  let exportMode = "batch";
+
+  function openExport(mode) {
+    exportMode = mode;
+    const err = document.querySelector("[data-exp-err]");
+    if (err) {
+      err.hidden = true;
+      err.textContent = "";
+    }
+    const warn = $("export-warning");
+    const scope = document.querySelector('input[name="exp-scope"]:checked');
+    if (warn) warn.hidden = !(scope && scope.value.includes("escalated"));
+    const modal = $("export-modal");
+    if (modal && modal.showModal) modal.showModal();
+    else setStatus("Export dialog unavailable in this browser.");
+  }
+
+  async function downloadExport() {
+    const formatEl = document.querySelector('input[name="exp-format"]:checked');
+    const scopeEl = document.querySelector('input[name="exp-scope"]:checked');
+    const format = (formatEl && formatEl.value) || "json";
+    const scope = (scopeEl && scopeEl.value) || "published";
+    const { entityType, entityId } = currentEntity();
+    const path = exportMode === "single" && entityId
+      ? `/export/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`
+      : `/export/${encodeURIComponent(entityType)}`;
+    const response = await fetch(
+      `${API_BASE}${path}?format=${encodeURIComponent(format)}&scope=${encodeURIComponent(scope)}`
+    );
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try {
+        const data = await response.json();
+        if (data && data.detail) detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+      } catch (error) { /* keep status text */ }
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") || "";
+    const nameMatch = /filename="([^"]+)"/.exec(disposition);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = nameMatch ? nameMatch[1] : `mosaic-export.${format}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const modal = $("export-modal");
+    if (modal && modal.open) modal.close();
+    const exportId = response.headers.get("x-export-id") || "unknown";
+    const count = response.headers.get("x-record-count") || "?";
+    const warned = response.headers.get("x-export-warning");
+    feed(`Exported ${count} record(s) as ${format} (scope: ${scope}) — download logged as ${exportId}.${warned ? " ESCALATED records included and marked." : ""}`);
+    setStatus(`Exported ${count} record(s) — logged as ${exportId}.`);
+  }
+
+  $("f-export-batch").addEventListener("click", () => openExport("batch"));
+  $("f-export-record").addEventListener("click", () => openExport("single"));
+  document.querySelectorAll('input[name="exp-scope"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const warn = $("export-warning");
+      const scope = document.querySelector('input[name="exp-scope"]:checked');
+      if (warn) warn.hidden = !(scope && scope.value.includes("escalated"));
+    });
+  });
+  $("export-cancel").addEventListener("click", () => {
+    const modal = $("export-modal");
+    if (modal && modal.open) modal.close();
+  });
+  $("export-download").addEventListener("click", () => {
+    downloadExport().catch((error) => {
+      const err = document.querySelector("[data-exp-err]");
+      if (err) {
+        err.hidden = false;
+        err.textContent = `Export failed (fail-closed): ${error.message}`;
+      } else {
+        setStatus(`Export failed (fail-closed): ${error.message}`);
+      }
+    });
+  });
   $("f-loop-more-btn").addEventListener("click", () => {
     const more = $("f-loop-more");
     const items = [...$("feed-list").children].slice(0, 3);
@@ -2729,6 +3297,21 @@
   $("f-config-approve").addEventListener("click", approveScene0);
   $("f-config-edit").addEventListener("click", editScene0);
   $("f-config-reject").addEventListener("click", rejectScene0);
+  $("scene0-modal-yes").addEventListener("click", () => {
+    const modal = $("scene0-modal");
+    if (modal && modal.open) modal.close();
+    approveScene0();
+  });
+  $("scene0-modal-change").addEventListener("click", () => {
+    const modal = $("scene0-modal");
+    if (modal && modal.open) modal.close();
+    editScene0();
+  });
+  $("scene0-modal-no").addEventListener("click", () => {
+    const modal = $("scene0-modal");
+    if (modal && modal.open) modal.close();
+    rejectScene0();
+  });
   $("f-config-build").addEventListener("click", buildScene0);
   $("f-upload-btn").addEventListener("click", async () => {
     await uploadFile(false, $("f-upload-file"));
@@ -2787,7 +3370,7 @@
   MosaicChat.add({
     role: "downstream",
     title: "Downstream Agent",
-    lines: ["Waiting for a first run — pick a scenario above, or press Build Mosaic. I only act on published goldens, never on proposals."],
+    lines: ["Ready. Ask about a person, or select a scenario above. We answer only when verified."],
   });
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();
@@ -2796,6 +3379,8 @@
   window.setInterval(loadJobs, 10000);
   loadEntities()
     .catch(() => {})
+    // First paint stays idle: the user picks a scenario or drops a file.
+    // Auto-run happens on upload / scenario click, never on page load.
     .finally(() => loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`)));
   MosaicDrawers.loadPending(drawerCtx);
 })();

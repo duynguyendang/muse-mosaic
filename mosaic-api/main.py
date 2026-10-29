@@ -31,6 +31,7 @@ from routes import demo as demo_routes
 from routes import downstream as downstream_routes
 from routes import entities as entities_routes
 from routes import explain as explain_routes
+from routes import export as export_routes
 from routes import golden as golden_routes
 from routes import graph as graph_routes
 from routes import health as health_routes
@@ -116,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ingest_routes,
         golden_routes,
         explain_routes,
+        export_routes,
         steward_routes,
         similar_routes,
         build_routes,

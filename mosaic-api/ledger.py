@@ -326,6 +326,19 @@ def fetch_agent_traces(database_path: str | Path, decision_id: str) -> list[dict
     return traces
 
 
+def fetch_tombstones_for_golden(database_path: str | Path, golden_id: str) -> list[dict[str, Any]]:
+    """Return tombstone rows kept in history under one golden record."""
+    connection = connect(database_path)
+    try:
+        rows = connection.execute(
+            "SELECT * FROM tombstones WHERE survivor_golden_id = ? ORDER BY tombstone_id",
+            (golden_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [dict(row) for row in rows]
+
+
 # ---------------------------------------------------------------------------
 # Background jobs (autonomy): durable, idempotent build runs.
 # ---------------------------------------------------------------------------
