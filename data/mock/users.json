@@ -15,7 +15,7 @@
           "authority_rank": 2,
           "event_time": "2026-10-27T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "sap-like",
@@ -25,7 +25,7 @@
           "authority_rank": 1,
           "event_time": "2026-10-26T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "ciam-like",
@@ -35,7 +35,7 @@
           "authority_rank": 3,
           "event_time": "2026-10-27T08:30:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "salesforce-like",
@@ -45,7 +45,7 @@
           "authority_rank": 2,
           "event_time": "2026-10-27T09:00:00+07:00",
           "verified": false,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "sap-like",
@@ -55,7 +55,7 @@
           "authority_rank": 1,
           "event_time": "2026-10-26T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 172800
+          "ttl_seconds": 7776000
         },
         {
           "source": "salesforce-like",
@@ -65,7 +65,7 @@
           "authority_rank": 2,
           "event_time": "2026-10-27T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "sap-like",
@@ -75,7 +75,7 @@
           "authority_rank": 3,
           "event_time": "2026-10-26T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "ciam-like",
@@ -85,7 +85,7 @@
           "authority_rank": 1,
           "event_time": "2026-10-27T08:30:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "salesforce-like",
@@ -95,7 +95,7 @@
           "authority_rank": 2,
           "event_time": "2026-10-27T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "sap-like",
@@ -105,7 +105,7 @@
           "authority_rank": 3,
           "event_time": "2026-10-26T09:00:00+07:00",
           "verified": true,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         },
         {
           "source": "ciam-like",
@@ -115,7 +115,7 @@
           "authority_rank": 3,
           "event_time": "2026-10-27T08:30:00+07:00",
           "verified": false,
-          "ttl_seconds": 3600
+          "ttl_seconds": 7776000
         }
       ]
     }

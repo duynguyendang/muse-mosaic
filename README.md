@@ -26,7 +26,7 @@ field, and a visible fail-closed boundary everywhere a guess could leak in.
 
 ## Proven twice: synthetic suite + real dirty data
 
-**1. Synthetic correctness gate — 121 tests passing** (`python3 -m pytest -q`):
+**1. Synthetic correctness gate — 143 tests passing** (121 core pipeline + 22 jobs/inbox/analyser from the parallel jobs workstream) (`python3 -m pytest -q`):
 G-01..G-21 user rules (G21: agreeing display_name publishes under v2) plus C1, P-01..P-06 product rules plus T1, H-01..H-03
 hidden-connection chain/trap, S-01..S-05 matching-engine tests against the
 *live* service (S-04 with the service down, S-05 with a malformed response),
@@ -77,7 +77,7 @@ done, checkpoint gate open; steps 9–11 remain). What the system does today:
 | Data Graph (SQLite) | Implemented | Source + Derived layers, proposed vs verified links, Pathfinder, blast radius, orphan/stale/duplicate analysers |
 | Publisher + ledger + nested golden + structure gate | Implemented | Gated writes, whole-document validation, nested `purchased_products` assembly, idempotent replay, steward approve/reject/split/Accept |
 | Mosaic UI | Implemented | Graph canvas, builder panel with sub-agent trace + Matching Engine status (version from /health, clusters/pairs/weights per build), engine panel with derivation tree, structured golden panel, upload, downstream two-answer demo, steward actions incl. Accept |
-| 35 assertions across 34 cases (G + P + H + S) + service | **Passing** | G-01..G-20, P-01..P-06 + taxonomy T1, H-01..H-03 chain/trap, S-01..S-05 matching-engine against the live service (S-04 with the service down, S-05 malformed response fail-closed) — all through the real derive path, not a mock |
+| 35 assertions across 34 cases (G + P + H + S) + service | **Passing** | G-01..G-21, P-01..P-06 + taxonomy T1, H-01..H-03 chain/trap, S-01..S-05 matching-engine against the live service (S-04 with the service down, S-05 malformed response fail-closed) — all through the real derive path, not a mock |
 | Kill-service, idempotency, split/rollback, structure | **Passing** | Full-stack tests against a live trust-engine |
 | Single-container subprocess fallback | **Partial: Splink in-process only** | `mosaic-api/splink_local.py` runs the verbatim matching logic in-process behind the same match interface when `MATCHING_ENGINE_URL` is empty (Liskov parity-tested). The Go service still shells out to the pinned mkit binary; a Python mkit-subprocess fallback for derive is not implemented, so the engine container is still required. |
 
@@ -157,7 +157,7 @@ muse-mosaic/
 └── tests/
     ├── conftest.py        # mkit build, trust-engine + API fixtures
     ├── test_contract.py   # contracts, DDL, mg<->json, fail-closed API
-    ├── test_rules_user.py # G-01..G-20 (+C1 unit) through live mkit
+    ├── test_rules_user.py # G-01..G-21 (+C1 unit) through live mkit
     ├── test_rules_product.py # P-01..P-06 + T1 through live mkit
     ├── test_hidden.py     # H-01..H-03 chain/trap through live mkit
     ├── test_splink.py     # S-01..S-05 vs live/stub service (S-04 down, S-05 malformed) + mismatch + Liskov
@@ -358,14 +358,14 @@ P-04; unknown terms escalate via T1).
 Current run:
 
 ```text
-121 passed
+143 passed
 ```
 
 - `test_contract.py` — fact/golden/graph contracts, policy + taxonomy coherence
   (incl. `.mg` matrix == JSON matrix, L1/C1/C2/T1 wired), synthetic fixture
   shape, DDL gate columns, fail-closed API behaviour with the engine down,
   manglekit version pin coherence.
-- `test_rules_user.py` — G-01..G-20 through a live trust-engine (`mkit eval`,
+- `test_rules_user.py` — G-01..G-21 through a live trust-engine (`mkit eval`,
   three queries per derive), incl. a C1 exact-tie unit case.
 - `test_rules_product.py` — P-01..P-06 + T1 unknown-term escalation.
 - `test_hidden.py` — H-01..H-03: chain publishes with verified links, broken
