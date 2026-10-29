@@ -122,4 +122,5 @@ def test_build_response_carries_proposer_bundles(api_client):
     assert first["entity_type"] == "user"
     assert "attributes" in first and isinstance(first["attributes"], dict)
     assert isinstance(first.get("trace", []), list)
+    assert isinstance(first.get("subagent_trace", []), list)
     assert isinstance(first.get("links", []), list)

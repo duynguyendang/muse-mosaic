@@ -21,7 +21,11 @@ class TrustEngineError(RuntimeError):
 
 
 async def derive(
-    settings: Settings, request: DeriveRequest, *, timeout_seconds: float = 20.0, engine_killed: bool = False
+    settings: Settings,
+    request: DeriveRequest,
+    *,
+    timeout_seconds: float = 20.0,
+    engine_killed: bool = False,
 ) -> DeriveResponse:
     """POST /derive and validate the response against the derive contract."""
     if engine_killed:

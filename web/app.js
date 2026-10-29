@@ -156,6 +156,8 @@
   }
 
   function setFriendlyFromResolve(payload) {
+    const sim = $("f-simulation");
+    if (sim) sim.hidden = true;
     lastFriendly = {
       verdict: payload.verdict,
       golden: payload.golden || null,
@@ -173,6 +175,15 @@
 
   function setFriendlyFromBuild(payload) {
     const first = (payload.goldens || []).find((g) => g.golden_id) || null;
+    const sim = $("f-simulation");
+    if (sim) sim.hidden = true;
+    if (first && first.entity_type && first.entity_id) {
+      fState.activeEntity = { entityType: first.entity_type, entityId: first.entity_id };
+    }
+    if (payload.taxonomy_version) {
+      loop.taxonomy = payload.taxonomy_version;
+      renderTaxonomyBadge();
+    }
     lastFriendly = {
       verdict: payload.verdict,
       golden: first,
@@ -180,7 +191,7 @@
       conflicts: payload.conflicts || [],
       decision_id: payload.decision_id,
       policy_version: payload.policy_version_user,
-      taxonomy_version: payload.taxonomy,
+      taxonomy_version: payload.taxonomy_version || payload.taxonomy || (first && first.taxonomy_version) || loop.taxonomy,
     };
     fState.splinkPairs = (payload.splink && payload.splink.pairs) || [];
     fState.ran = true;
@@ -284,10 +295,19 @@
           survive = ` <span class="tag">✕ Excluded Trap</span>`;
         } else {
           const golden = lastFriendly && lastFriendly.golden && lastFriendly.golden.attributes;
-          const field = golden && golden[f.attribute];
+          const matchFactId = (fid) => fid && f.source_id && (fid === f.source_id || fid.endsWith(`-${f.source_id}`));
+          const byFactId = golden && Object.values(golden).find((v) =>
+            v && typeof v === "object" && (
+              matchFactId(v.winner_fact_id) || (v.loser_fact_ids || []).some(matchFactId)
+            )
+          );
+          const field = byFactId || (golden && golden[f.attribute]);
           if (field && typeof field === "object" && field.value != null) {
             const rule = field.rule_fired || "R1";
-            survive = String(field.value) === String(f.value)
+            const isWin = byFactId
+              ? matchFactId(field.winner_fact_id)
+              : String(field.value) === String(f.value);
+            survive = isWin
               ? ` <span class="tag">✓ Winner · ${esc(rule)}</span>`
               : ` <span class="tag">Tombstone → Survivor · ${esc(rule)}</span>`;
           } else {
@@ -344,7 +364,11 @@
     const winner = fragmentForFactId(value.winner_fact_id, attribute);
     if (!winner) return "Checked by the engine.";
     const src = plainSource(winner.source);
-    const sameAttr = activeFragments().filter((f) => f.attribute === attribute);
+    const loserSet = new Set(value.loser_fact_ids || []);
+    const sameAttr = activeFragments().filter((f) =>
+      f.attribute === attribute
+      || (f.source_id && [...loserSet].some((id) => id === f.source_id || id.endsWith(`-${f.source_id}`)))
+    );
     const newer = sameAttr.filter(
       (f) => Date.parse(f.event_time) > Date.parse(winner.event_time)
     );
@@ -354,8 +378,8 @@
     if (winner.authority_rank === 1) {
       return `${src} wins because it is trusted for ${attrPlain}.${evenThough}`;
     }
-    if (winner.verified && !newer.length) {
-      return `${src} wins because it is the newest proven value.`;
+    if (winner.verified) {
+      return `${src} wins because it is proven for ${attrPlain}.${evenThough}`;
     }
     return "Checked by the engine.";
   }
@@ -776,6 +800,8 @@
     fState.downstream = null;
     fState.activeEntity = null;
     lastFriendly = null;
+    const sim = $("f-simulation");
+    if (sim) sim.hidden = true;
     if (entitySel.value === "custom") {
       defineCustomEntity().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
       return;
@@ -881,7 +907,6 @@
         if (firstConflict) {
           feed(`${firstConflict.attribute} escalated — ${firstConflict.rule_fired} — steward item created, loop continued on other fields`);
         }
-        await askDownstream(entityType === "product" ? "search" : "otp", { auto: true });
       } else {
         feed(`Manual run (click) — Decision: ${payload.decision_id} — Verdict: ${verdictCap}`);
       }
@@ -890,6 +915,7 @@
       announceRunBubbles(payload);
       markRan();
       renderFriendly();
+      await askDownstream(entityType === "product" ? "search" : "otp", { auto: true });
     } catch (error) {
       setStatus(`Resolve failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto run failed (fail-closed): ${error.message} — nothing published`);
@@ -1307,13 +1333,11 @@
       renderFriendly();
       // Show the graph of what was just built (first golden's entity), so the
       // canvas, golden panel and highlight actions all refer to the same run.
-      const firstGolden = (payload.goldens || []).find((g) => g.golden_id) || null;
-      if (firstGolden) {
-        await loadGraph(firstGolden.entity_type, firstGolden.entity_id);
-      } else {
-        await loadGraph();
-      }
+      // loadGraphForBuild also pins fState.activeEntity, so the downstream
+      // check below queries the built entity, not a stale fixture id.
+      await loadGraphForBuild(payload);
       animateChain();
+      const firstGolden = (payload.goldens || []).find((g) => g.golden_id) || null;
       const first = firstGolden;
       if (first) {
         renderGolden(first);
@@ -1416,7 +1440,6 @@
         if (firstConflict) {
           feed(`${firstConflict.attribute} escalated — ${firstConflict.rule_fired} — steward item created, loop continued on other fields`);
         }
-        await askDownstream((window.__uploadedEntityType || "user") === "product" ? "search" : "otp", { auto: true });
       } else {
         feed(`Manual upload resolve (click) — Decision: ${payload.decision_id} — Verdict: ${verdictCap}`);
       }
@@ -1425,6 +1448,7 @@
       announceRunBubbles(payload);
       markRan();
       renderFriendly();
+      await askDownstream((window.__uploadedEntityType || "user") === "product" ? "search" : "otp", { auto: true });
     } catch (error) {
       setStatus(`Upload resolve failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto run failed (fail-closed): ${error.message} — nothing published`);
@@ -1497,7 +1521,7 @@
     if (!proposal) return ["<i>No proposal recorded for this run.</i>"];
     const lines = [];
     const byAgent = {};
-    (proposal.subagent_trace || []).forEach((s) => { byAgent[s.agent || "?"] = s; });
+    (proposal.subagent_trace || proposal.trace || []).forEach((s) => { byAgent[s.agent || "?"] = s; });
     if (byAgent.Scout) lines.push(`<b>Scout:</b> ${esc(byAgent.Scout.output_summary || "cleaned the fragments")}`);
     if (byAgent.Linker) lines.push(`<b>Linker:</b> ${esc(byAgent.Linker.output_summary || "proposed links")}`);
     if (byAgent.Cluster) lines.push(`<b>Cluster:</b> ${esc(byAgent.Cluster.output_summary || "proposed clusters")}`);
@@ -1672,6 +1696,7 @@
   async function act1() {
     setScenario("act1");
     switchEntity("user/P-001");
+    ticketBox.checked = false;
     await loadFragments();
     window.MosaicChat.add({
       role: "downstream",
@@ -1749,6 +1774,7 @@
   async function act4() {
     setScenario("act4");
     switchEntity("product/prod-001");
+    ticketBox.checked = false;
     await loadFragments();
     // The T1 beat needs a genuinely unknown term: inject an unverified
     // marketplace fragment carrying "Gaming Chair" (not a taxonomy term),
@@ -2359,7 +2385,13 @@
     }
     stageScene0File();
     const payload = await uploadFile(false, $("f-upload-file"));
-    if (payload) renderScene0Config(payload);
+    if (payload) {
+      fragments = (payload.fragments || []).map((f) => Object.assign({}, f, { _uploaded: true }));
+      tickets = [];
+      renderFragments();
+      renderFriendly();
+      renderScene0Config(payload);
+    }
   }
 
   function stageScene0File() {
@@ -2483,6 +2515,10 @@
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       const documents = scene0Documents();
+      fragments = fragmentsFromDocs(documents);
+      tickets = [];
+      renderFragments();
+      renderFriendly();
       const payload = await api("/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

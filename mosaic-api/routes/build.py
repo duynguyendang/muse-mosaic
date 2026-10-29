@@ -400,6 +400,7 @@ async def _build_one_cluster(
                 for link in links
             ],
             "trace": _json_safe(trace if isinstance(trace, list) else []),
+            "subagent_trace": proposal.model_dump(mode="json").get("subagent_trace", []),
             "new_terms": [
                 term.model_dump(mode="json") if hasattr(term, "model_dump") else term
                 for term in (proposal.new_terms or [])
