@@ -1,0 +1,1054 @@
+<USER_REQUEST>
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Muse Mosaic — Interactive Multi-Agent Protocol &amp; Live Trusted Picture</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-tertiary-fixed-variant": "#004b73",
+            "surface-container-high": "#dce9ff",
+            "surface-tint": "#565e74",
+            "error-container": "#ffdad6",
+            "secondary-fixed": "#85f8c4",
+            "on-error-container": "#93000a",
+            "error": "#ba1a1a",
+            "on-primary-fixed-variant": "#3f465c",
+            "on-background": "#0b1c30",
+            "primary-fixed-dim": "#bec6e0",
+            "secondary": "#006c4a",
+            "secondary-fixed-dim": "#68dba9",
+            "surface": "#f8f9ff",
+            "on-primary": "#ffffff",
+            "surface-bright": "#f8f9ff",
+            "background": "#f8f9ff",
+            "on-secondary": "#ffffff",
+            "on-surface-variant": "#45464d",
+            "outline": "#76777d",
+            "outline-variant": "#c6c6cd",
+            "tertiary-fixed-dim": "#93ccff",
+            "inverse-surface": "#213145",
+            "on-surface": "#0b1c30",
+            "surface-variant": "#d3e4fe",
+            "surface-dim": "#cbdbf5",
+            "on-secondary-fixed": "#002114",
+            "primary-container": "#131b2e",
+            "on-secondary-fixed-variant": "#005137",
+            "surface-container": "#e5eeff",
+            "on-primary-container": "#7c839b",
+            "surface-container-lowest": "#ffffff",
+            "secondary-container": "#82f5c1",
+            "inverse-primary": "#bec6e0",
+            "tertiary": "#000000",
+            "on-primary-fixed": "#131b2e",
+            "surface-container-low": "#eff4ff",
+            "tertiary-fixed": "#cce5ff",
+            "on-tertiary-container": "#188ace",
+            "on-tertiary-fixed": "#001d31",
+            "surface-container-highest": "#d3e4fe",
+            "on-error": "#ffffff",
+            "on-tertiary": "#ffffff",
+            "on-secondary-container": "#00714e",
+            "primary": "#000000",
+            "tertiary-container": "#001d31",
+            "primary-fixed": "#dae2fd",
+            "inverse-on-surface": "#eaf1ff"
+          },
+          fontFamily: {
+            "body-lg": ["Geist", "sans-serif"],
+            "code-sm": ["JetBrains Mono", "monospace"],
+            "headline-lg": ["Geist", "sans-serif"],
+            "code-md": ["JetBrains Mono", "monospace"],
+            "headline-sm": ["Geist", "sans-serif"],
+            "label-sm": ["JetBrains Mono", "monospace"],
+            "body-md": ["Geist", "sans-serif"],
+            "headline-md": ["Geist", "sans-serif"],
+            "label-md": ["JetBrains Mono", "monospace"],
+            "body-sm": ["Geist", "sans-serif"],
+            "display-lg": ["Geist", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 2px;
+    }
+    .mosaic-pattern {
+      background-image: radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 0);
+      background-size: 12px 12px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-on-surface antialiased font-body-md text-[13px] leading-[18px] min-h-screen selection:bg-slate-200">
+<!-- 1. HEADER (Clean & Informative) -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+<div class="max-w-[1400px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
+<!-- Left: Brand mark + Tagline -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2">
+<!-- 4 colored mosaic dots -->
+<div class="grid grid-cols-2 gap-0.5 w-5 h-5 p-0.5 bg-slate-900 rounded-sm">
+<span class="w-1.5 h-1.5 rounded-[1px] bg-emerald-400"></span>
+<span class="w-1.5 h-1.5 rounded-[1px] bg-sky-400"></span>
+<span class="w-1.5 h-1.5 rounded-[1px] bg-amber-400"></span>
+<span class="w-1.5 h-1.5 rounded-[1px] bg-rose-400"></span>
+</div>
+<span class="font-headline-sm font-semibold tracking-tight text-slate-900 text-base">Muse Mosaic</span>
+</div>
+<span class="h-4 w-px bg-slate-200 hidden sm:inline"></span>
+<span class="text-xs text-slate-500 hidden xl:inline">Many fragments, one trusted picture, with proof for every piece.</span>
+</div>
+<!-- Center/Right Badges & Controls -->
+<div class="flex items-center gap-2 flex-wrap justify-end">
+<!-- Entity Selector dropdown -->
+<div class="relative inline-block">
+<select class="pl-2.5 pr-7 py-1 text-xs font-mono font-medium bg-slate-100 border border-slate-200 rounded text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer" id="entity-select">
+<option value="user">Entity: User — P-001</option>
+<option value="product">Entity: Product — prod-001</option>
+</select>
+</div>
+<!-- Policy badge -->
+<span class="hidden md:inline-flex items-center px-2 py-1 rounded text-[11px] font-mono bg-slate-50 border border-slate-200 text-slate-600">
+<span class="text-slate-400 mr-1">Policy:</span>pol-2026-10-27-v1
+        </span>
+<!-- Taxonomy badge -->
+<span class="hidden lg:inline-flex items-center px-2 py-1 rounded text-[11px] font-mono bg-slate-50 border border-slate-200 text-slate-600">
+<span class="text-slate-400 mr-1">Taxonomy:</span>tax-user-2026-10-27-v1
+        </span>
+<!-- Engine Status Pill -->
+<button class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono font-medium bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 transition-colors" id="engine-status-pill" onclick="toggleEngineStatus()" title="Click to test fail-closed">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="engine-indicator-dot"></span>
+<span id="engine-status-text">● Engine OK</span>
+</button>
+<!-- Steward Queue pill -->
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-medium bg-amber-50 border border-amber-200 text-amber-800">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          Steward Queue (1)
+        </span>
+<!-- View Mode Toggle button -->
+<button class="px-2.5 py-1 text-xs font-medium rounded border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 transition-colors flex items-center gap-1 shadow-xs" id="btn-toggle-view" onclick="toggleDetailView()">
+<span class="material-symbols-outlined text-[14px]">tune</span>
+<span id="view-mode-label">Show how it was decided</span>
+</button>
+<!-- Autonomous Loop pause -->
+<button class="px-2 py-1 text-xs font-mono rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors hidden sm:flex items-center gap-1" id="btn-pause-loop" onclick="toggleLoopPause()" title="Pause autonomous background reconciliations">
+<span class="material-symbols-outlined text-[13px]">pause</span>
+<span>Pause Loop</span>
+</button>
+</div>
+</div>
+</header>
+<!-- 2. STEP STRIP (Always Visible, 3 steps) -->
+<section class="bg-white border-b border-slate-200 px-4 py-2">
+<div class="max-w-[1400px] mx-auto flex items-center justify-between text-xs">
+<div class="flex items-center gap-2 sm:gap-6 w-full max-w-4xl">
+<!-- Step 1 -->
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[11px] font-mono font-semibold flex items-center justify-center">1</span>
+<span class="font-medium text-slate-600 hidden xs:inline">Messy pieces</span>
+<span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1 rounded">3 fragments</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-sm">arrow_forward</span>
+<!-- Step 2 -->
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-mono font-semibold flex items-center justify-center">2</span>
+<span class="font-semibold text-emerald-900">Trusted picture</span>
+<span class="text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded">Datalog Active</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-sm">arrow_forward</span>
+<!-- Step 3 -->
+<div class="flex items-center gap-2">
+<span class="w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-mono font-semibold flex items-center justify-center">3</span>
+<span class="font-medium text-slate-800">What you can do (or why we stop)</span>
+<span class="text-[10px] font-mono text-emerald-700 bg-emerald-100 px-1 rounded">OTP Dispatched</span>
+</div>
+</div>
+<div class="hidden md:flex items-center gap-2 text-[11px] font-mono text-slate-500">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span>Deterministic Verification in force</span>
+</div>
+</div>
+</section>
+<!-- 3. 4-ACT SCENARIO BAR (6 interactive story chips in sequence) -->
+<section class="bg-slate-100/80 border-b border-slate-200 px-4 py-2 overflow-x-auto custom-scroll">
+<div class="max-w-[1400px] mx-auto flex items-center gap-2 min-w-max">
+<span class="text-[11px] font-mono uppercase font-bold text-slate-400 mr-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">auto_stories</span> Scenarios:
+      </span>
+<button class="scenario-chip px-2.5 py-1 rounded text-xs font-medium border bg-white border-slate-200 text-slate-700 hover:border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs" id="chip-scene0" onclick="setScenario('scene0')">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+<span>1. Scene 0: Clean Messy JSON</span>
+</button>
+<button class="scenario-chip px-2.5 py-1 rounded text-xs font-semibold border bg-slate-900 border-slate-900 text-white shadow-xs transition-all flex items-center gap-1.5" id="chip-act1" onclick="setScenario('act1')">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+<span>2. Act 1: Send OTP (Authority vs Recency)</span>
+<span class="text-[9px] font-mono uppercase bg-slate-700 text-emerald-300 px-1 rounded">Active</span>
+</button>
+<button class="scenario-chip px-2.5 py-1 rounded text-xs font-medium border bg-white border-slate-200 text-slate-700 hover:border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs" id="chip-act2" onclick="setScenario('act2')">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+<span>3. Act 2: Connect 6 Hidden Pieces (F1–F6 Trap)</span>
+</button>
+<button class="scenario-chip px-2.5 py-1 rounded text-xs font-medium border bg-white border-slate-200 text-slate-700 hover:border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs" id="chip-act3" onclick="setScenario('act3')">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+<span>4. Act 3: Inject Unverified Support Ticket</span>
+</button>
+<button class="scenario-chip px-2.5 py-1 rounded text-xs font-medium border bg-white border-slate-200 text-slate-700 hover:border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs" id="chip-act4" onclick="setScenario('act4')">
+<span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+<span>5. Act 4: Search 'Gaming Chair' (Taxonomy Accept)</span>
+</button>
+<button class="scenario-chip px-2.5 py-1 rounded text-xs font-medium border bg-white border-rose-200 text-rose-800 hover:bg-rose-50 transition-all flex items-center gap-1.5 shadow-2xs" id="chip-act5" onclick="setScenario('act5')">
+<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+<span>6. Act 5: Stop Trust Engine (Fail-Closed Test)</span>
+</button>
+</div>
+</section>
+<!-- MAIN VIEWPORT CONTAINER -->
+<main class="max-w-[1400px] mx-auto px-4 py-4 space-y-4">
+<!-- 4. SPLIT-SCREEN FRIENDLY DEFAULT VIEW -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start" id="split-view-container">
+<!-- LEFT COLUMN: LIVE MULTI-AGENT PROTOCOL CHAT -->
+<section class="bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col h-[760px]">
+<!-- Chat Header -->
+<div class="p-3 border-b border-slate-200 bg-slate-50/70 rounded-t-lg flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-700">forum</span>
+<h2 class="font-headline-sm font-semibold text-slate-900 text-sm">Live Multi-Agent Protocol Chat</h2>
+</div>
+<!-- Sub-toggle tab -->
+<div class="flex items-center bg-slate-200/80 p-0.5 rounded text-xs font-medium">
+<button class="px-2 py-0.5 rounded bg-white text-slate-900 shadow-2xs" id="tab-chat" onclick="switchLeftTab('chat')">💬 Protocol Chat</button>
+<button class="px-2 py-0.5 rounded text-slate-600 hover:text-slate-900" id="tab-sources" onclick="switchLeftTab('sources')">📋 Source Pieces (3)</button>
+</div>
+</div>
+<p class="text-[11px] text-slate-500 leading-tight">
+            Every message is backed by a real proposer trace, Datalog derivation, or ledger decision — never a free-form chatbot.
+          </p>
+</div>
+<!-- Tab 1: Protocol Chat Transcript Stream -->
+<div class="flex-1 p-3 overflow-y-auto custom-scroll space-y-3" id="panel-protocol-chat">
+<!-- VOICE 1: Downstream Agent [SYNTHETIC] -->
+<div class="flex items-start gap-2.5">
+<div class="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-sm shadow-xs">
+              🤖
+            </div>
+<div class="flex-1 bg-slate-100 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800">
+<div class="flex items-center justify-between mb-1">
+<span class="font-semibold text-slate-900">Downstream Agent (Auth Service)</span>
+<span class="text-[10px] font-mono px-1.5 py-0.5 bg-slate-200 rounded text-slate-600">SYNTHETIC CONSUMER</span>
+</div>
+<p>Requesting verified contact phone for <span class="font-mono font-semibold">User P-001</span> to dispatch login OTP challenge.</p>
+<div class="text-[10px] font-mono text-slate-400 mt-1">req_id: auth-otp-9281 • TTL: 300s • Scope: identity.verify</div>
+</div>
+</div>
+<!-- VOICE 2: Proposers (Muse Spark + Matching Engine) [REAL · CLAIM, NOT A FACT] -->
+<div class="flex items-start gap-2.5">
+<div class="w-7 h-7 rounded-full bg-sky-100 text-sky-700 border border-sky-300 flex items-center justify-center shrink-0 text-sm shadow-xs">
+              🧠
+            </div>
+<div class="flex-1 bg-[#EFF6FF] border border-dashed border-sky-300 rounded-lg p-2.5 text-xs text-sky-950">
+<div class="flex items-center justify-between mb-1.5">
+<span class="font-semibold text-sky-900">Proposers: Muse Spark + Matching Engine</span>
+<span class="text-[10px] font-mono px-1.5 py-0.5 bg-sky-200/80 text-sky-900 rounded font-medium">REAL · CLAIM, NOT A FACT</span>
+</div>
+<p class="text-sky-900 mb-2">Clustering &amp; candidate inference complete for entity P-001:</p>
+<div class="space-y-1.5 text-[11px] font-mono">
+<div class="bg-white/80 p-1.5 rounded border border-sky-200">
+<span class="text-sky-700 font-semibold">• Scout:</span> Normalized 3 fragments for P-001 (mapped <code>sdt</code> → <code>phone</code>, <code>addr</code> → <code>address</code>).
+                </div>
+<div class="bg-white/80 p-1.5 rounded border border-sky-200">
+<span class="text-sky-700 font-semibold">• Linker + Splink:</span> Matched DOC-1..3 (exact email <code>an.nguyen@example.com</code>, deterministic telephone matches). Match prob: 0.94.
+                </div>
+<div class="bg-white/80 p-1.5 rounded border border-amber-300 text-amber-950">
+<span class="text-amber-700 font-semibold">• Critic:</span> Flagged Phone Conflict:
+                  <div class="mt-0.5 text-[10px] pl-2 border-l-2 border-amber-400">
+                    Candidate A: <code>+84 90 999 9999</code> (Newer, unverified sales lead)<br/>
+                    Candidate B: <code>+84 90 123 4567</code> (Older, verified SAP-like R1)
+                  </div>
+</div>
+</div>
+<div class="mt-2 text-[10px] text-sky-700 italic">Notice: Proposer claims have no publishing authority. Handed to trust engine.</div>
+</div>
+</div>
+<!-- VOICE 3: Trust Engine — manglekit [REAL · DETERMINISTIC DATALOG] -->
+<div class="flex items-start gap-2.5">
+<div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center justify-center shrink-0 text-sm shadow-xs">
+              ⚖️
+            </div>
+<div class="flex-1 bg-[#F0FDF4] border-2 border-emerald-500 rounded-lg p-3 text-xs text-emerald-950 shadow-xs">
+<div class="flex items-center justify-between mb-1.5">
+<div class="flex items-center gap-1.5">
+<span class="font-semibold text-emerald-950">Trust Engine — manglekit</span>
+<span class="text-[10px] font-mono px-1 py-0.2 bg-emerald-200 text-emerald-900 rounded font-semibold">dec-001</span>
+</div>
+<span class="text-[10px] font-mono px-1.5 py-0.5 bg-emerald-200 text-emerald-900 rounded font-semibold">REAL · DETERMINISTIC DATALOG</span>
+</div>
+<p class="font-medium text-slate-800">
+                Verified cluster P-001 (<span class="text-emerald-700 font-semibold">10/10 axiomatic checks passed</span>).
+              </p>
+<div class="my-2 p-2 bg-white rounded border border-emerald-200 text-xs">
+<div class="font-semibold text-emerald-900 flex items-center gap-1">
+<span class="material-symbols-outlined text-emerald-600 text-sm">verified</span>
+                  Phone resolution outcome:
+                </div>
+<div class="font-mono text-slate-800 mt-1">
+<code>+84 90 123 4567</code> <span class="text-emerald-700 font-bold">WINS</span> under Rule R1 (Authority precedence).
+                </div>
+<div class="text-[11px] text-slate-500 mt-0.5">
+                  SAP-like Rank 1 beats Salesforce-like Rank 2. Loser (+84 90 999 9999) retained safely as <span class="font-semibold text-slate-700">Tombstone</span>.
+                </div>
+</div>
+<!-- Interactive Proof Actions inside Bubble -->
+<div class="flex items-center gap-2 pt-1">
+<button class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-mono font-medium flex items-center gap-1 shadow-2xs" onclick="openProofDrawer('dec-001')">
+<span class="material-symbols-outlined text-[13px]">verified_user</span>
+<span>Why this value? · Proof dec-001</span>
+</button>
+<button class="px-2 py-1 bg-white hover:bg-slate-50 border border-emerald-300 text-emerald-900 rounded text-[11px] font-mono flex items-center gap-1" onclick="openDatalogModal()">
+<span class="material-symbols-outlined text-[13px]">code</span>
+<span>Show Datalog rule</span>
+</button>
+</div>
+</div>
+</div>
+<!-- VOICE 4: Human Steward [STEWARD · EXCEPTION ONLY] -->
+<div class="flex items-start gap-2.5">
+<div class="w-7 h-7 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center justify-center shrink-0 text-sm shadow-xs">
+              👤
+            </div>
+<div class="flex-1 bg-amber-50/60 border border-dashed border-amber-400 rounded-lg p-2.5 text-xs text-amber-950">
+<div class="flex items-center justify-between mb-1">
+<span class="font-semibold text-amber-900">Human Steward Queue</span>
+<span class="text-[10px] font-mono px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-medium">STEWARD · EXCEPTION ONLY</span>
+</div>
+<p class="text-slate-700">
+                Incident #ESC-884: Ticket phone discrepancy (+84 91 999 8888 from Zendesk). Engine withheld unverified claims pending human boundary verification.
+              </p>
+<!-- Interactive Steward Buttons (3 strictly) -->
+<div class="grid grid-cols-3 gap-2 mt-2 pt-1 border-t border-amber-200">
+<button class="py-1 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 rounded text-[11px] font-mono font-medium text-center" onclick="alert('Steward confirmed value as secondary verified contact.')">
+                  Use this value
+                </button>
+<button class="py-1 bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 rounded text-[11px] font-mono font-medium text-center" onclick="alert('Steward rejected unverified claim. Kept as tombstone.')">
+                  Do not use it
+                </button>
+<button class="py-1 bg-slate-900 hover:bg-slate-800 text-white rounded text-[11px] font-mono font-medium text-center" onclick="alert('Split cluster invoked: Disentangled P-001 from P-002.')">
+                  Different people
+                </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Tab 2: Source Pieces Panel (Hidden by default) -->
+<div class="hidden flex-1 p-3 overflow-y-auto custom-scroll space-y-2 text-xs" id="panel-source-pieces">
+<div class="p-2.5 bg-slate-50 border border-slate-200 rounded">
+<div class="flex items-center justify-between font-mono text-[11px] text-slate-500 mb-1">
+<span>FRAGMENT #1 (SAP-like ERP)</span>
+<span class="text-emerald-700 font-semibold">Authoritative Rank 1</span>
+</div>
+<pre class="bg-white p-2 rounded border border-slate-200 font-mono text-[11px] text-slate-800 overflow-x-auto">{"id": "SAP-9011", "customer_name": "An Nguyen", "phone": "+84901234567", "status": "CONFIRMED_ACCOUNT"}</pre>
+</div>
+<div class="p-2.5 bg-slate-50 border border-slate-200 rounded">
+<div class="flex items-center justify-between font-mono text-[11px] text-slate-500 mb-1">
+<span>FRAGMENT #2 (Salesforce CRM)</span>
+<span class="text-slate-600">Commercial Rank 2</span>
+</div>
+<pre class="bg-white p-2 rounded border border-slate-200 font-mono text-[11px] text-slate-800 overflow-x-auto">{"lead_id": "SFDC-4402", "name": "Nguyen Van An", "dien_thoai": "+84909999999", "lead_stage": "DEMO_REQUESTED"}</pre>
+</div>
+<div class="p-2.5 bg-slate-50 border border-slate-200 rounded">
+<div class="flex items-center justify-between font-mono text-[11px] text-slate-500 mb-1">
+<span>FRAGMENT #3 (CIAM Okta ID)</span>
+<span class="text-emerald-700 font-semibold">Authoritative Rank 1</span>
+</div>
+<pre class="bg-white p-2 rounded border border-slate-200 font-mono text-[11px] text-slate-800 overflow-x-auto">{"sub": "usr_9981a", "email": "an.nguyen@example.com", "mfa_enrolled": true, "sdt": "+84901234567"}</pre>
+</div>
+</div>
+<!-- Bottom Guided Command Bar with Quick Questions -->
+<div class="p-2.5 border-t border-slate-200 bg-slate-50 rounded-b-lg">
+<div class="text-[10px] font-mono uppercase text-slate-400 font-semibold mb-1.5 flex items-center justify-between">
+<span>Guided Protocol Inquiries</span>
+<span class="text-slate-500">Click to inspect logic</span>
+</div>
+<div class="flex flex-wrap gap-1.5">
+<button class="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-mono text-slate-700 transition-colors shadow-2xs" onclick="runCommand('why-phone')">
+              Why did this phone win?
+            </button>
+<button class="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-mono text-slate-700 transition-colors shadow-2xs" onclick="runCommand('why-f6')">
+              Why was F6 excluded?
+            </button>
+<button class="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-mono text-slate-700 transition-colors shadow-2xs" onclick="openDatalogModal()">
+              Show Datalog proof
+            </button>
+<button class="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded text-[11px] font-mono text-amber-900 transition-colors shadow-2xs" onclick="runCommand('compare-muse')">
+              Compare with Muse-only
+            </button>
+</div>
+</div>
+</section>
+<!-- RIGHT COLUMN: WHAT YOU CAN SAFELY USE (LIVE TRUSTED PICTURE) -->
+<section class="space-y-4">
+<!-- Answer Card -->
+<div class="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm">
+<div class="flex items-center justify-between pb-2.5 border-b border-slate-200">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+<h3 class="font-headline-sm font-semibold text-slate-900 text-sm">✓ Trusted picture — P-001</h3>
+</div>
+<div class="flex items-center gap-1.5 font-mono text-[11px]">
+<span class="px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded font-medium">Proof: dec-001</span>
+<span class="text-slate-400">•</span>
+<span class="text-slate-500">pol-2026-10-27-v1</span>
+</div>
+</div>
+<!-- Live Attributes Table -->
+<div class="mt-3 space-y-2 text-xs">
+<!-- Phone -->
+<div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+<div class="flex items-center gap-2 truncate">
+<span class="font-mono text-slate-400 w-16 uppercase text-[10px]">Phone</span>
+<span class="font-mono font-bold text-slate-900 text-[13px]">+84 90 123 4567</span>
+<span class="text-emerald-700 text-[11px] hidden sm:inline">(Payment system won · SAP-like Rank 1, R1)</span>
+</div>
+<button class="text-[11px] font-mono text-emerald-800 hover:text-emerald-950 underline shrink-0 ml-2" onclick="openProofDrawer('phone')">
+                [How do we know?]
+              </button>
+</div>
+<!-- Email -->
+<div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+<div class="flex items-center gap-2 truncate">
+<span class="font-mono text-slate-400 w-16 uppercase text-[10px]">Email</span>
+<span class="font-mono font-bold text-slate-900 text-[13px] truncate">an.nguyen@example.com</span>
+<span class="text-sky-700 text-[11px] hidden sm:inline">(Login system won · CIAM-like Rank 1, R1)</span>
+</div>
+<button class="text-[11px] font-mono text-sky-800 hover:text-sky-950 underline shrink-0 ml-2" onclick="openProofDrawer('email')">
+                [How do we know?]
+              </button>
+</div>
+<!-- Address -->
+<div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+<div class="flex items-center gap-2 truncate">
+<span class="font-mono text-slate-400 w-16 uppercase text-[10px]">Address</span>
+<span class="font-mono font-bold text-slate-900 text-[13px] truncate">123 Le Loi, D1, HCMC</span>
+<span class="text-slate-600 text-[11px] hidden sm:inline">(Billing Ledger won · SAP-like Rank 1, R1)</span>
+</div>
+<button class="text-[11px] font-mono text-slate-700 hover:text-slate-900 underline shrink-0 ml-2" onclick="openProofDrawer('address')">
+                [How do we know?]
+              </button>
+</div>
+</div>
+</div>
+<!-- MOSAIC PICTURE GRID (#f-mosaic) -->
+<div class="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm" id="f-mosaic">
+<div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-700">dashboard_customize</span>
+<h4 class="font-headline-sm font-semibold text-slate-900 text-xs uppercase tracking-wider">Assembled Mosaic Canvas</h4>
+</div>
+<span class="text-[11px] font-mono text-slate-500">3 Verified Tiles • 1 Tombstone</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+<!-- Tile 1: Phone -->
+<div class="border-2 border-emerald-500 bg-white rounded p-2.5 relative shadow-xs">
+<div class="flex items-center justify-between mb-1">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="font-mono text-[10px] text-slate-500 uppercase">TELEPHONE</span>
+</div>
+<span class="text-[10px] font-mono px-1 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold">✓ R1</span>
+</div>
+<div class="font-mono font-bold text-slate-900 text-xs">+84 90 123 4567</div>
+<div class="text-[10px] text-slate-500 mt-0.5">Source: SAP-ERP (Rank 1)</div>
+<!-- Tucked Tombstone sub-strip -->
+<div class="mt-2 pt-1 border-t border-dashed border-slate-200 text-[10px] font-mono text-slate-500 bg-slate-50 -mx-1 px-1 rounded-b">
+<span class="text-slate-400">↳ Tombstone:</span> Sales system <code>+84909999999</code>
+</div>
+</div>
+<!-- Tile 2: Email -->
+<div class="border border-sky-300 bg-white rounded p-2.5 relative shadow-xs">
+<div class="flex items-center justify-between mb-1">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-sky-500"></span>
+<span class="font-mono text-[10px] text-slate-500 uppercase">IDENTITY</span>
+</div>
+<span class="text-[10px] font-mono px-1 py-0.2 bg-sky-100 text-sky-800 rounded font-bold">✓ R1</span>
+</div>
+<div class="font-mono font-bold text-slate-900 text-xs truncate">an.nguyen@corp</div>
+<div class="text-[10px] text-slate-500 mt-0.5 truncate">Source: CIAM Okta IdP</div>
+<!-- Sub-strip -->
+<div class="mt-2 pt-1 border-t border-slate-100 text-[10px] font-mono text-sky-700">
+<span>Verified SAML Assertion</span>
+</div>
+</div>
+<!-- Tile 3: Address -->
+<div class="border border-slate-300 bg-white rounded p-2.5 relative shadow-xs">
+<div class="flex items-center justify-between mb-1">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-slate-600"></span>
+<span class="font-mono text-[10px] text-slate-500 uppercase">LOCATION</span>
+</div>
+<span class="text-[10px] font-mono px-1 py-0.2 bg-slate-100 text-slate-700 rounded font-bold">✓ R1</span>
+</div>
+<div class="font-mono font-bold text-slate-900 text-xs truncate">123 Le Loi, D1</div>
+<div class="text-[10px] text-slate-500 mt-0.5">Source: Billing Ledger</div>
+<!-- Sub-strip -->
+<div class="mt-2 pt-1 border-t border-slate-100 text-[10px] font-mono text-slate-500">
+<span>Physical Proof Verified</span>
+</div>
+</div>
+</div>
+</div>
+<!-- STEP 3: DOWNSTREAM CONSEQUENCE CARD (COMPLETED) -->
+<div class="bg-emerald-50/70 border-2 border-emerald-500 rounded-lg p-3 text-xs shadow-xs">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-emerald-700 text-lg mt-0.5">check_circle</span>
+<div class="flex-1">
+<div class="font-bold text-emerald-950 flex items-center justify-between">
+<span>✓ Safe to act: Downstream Dispatch Executed</span>
+<span class="text-[10px] font-mono bg-emerald-200/70 text-emerald-900 px-1.5 py-0.2 rounded">HTTP 200 OK</span>
+</div>
+<p class="text-emerald-900 mt-0.5 leading-relaxed">
+                OTP agent called <code class="bg-white/80 px-1 py-0.2 rounded border border-emerald-300 text-emerald-950">GET /golden/user/P-001</code> (Decision: <code class="font-bold">dec-001</code>) and sent authentication OTP to <code class="font-bold">+84901234567</code>.
+              </p>
+<div class="mt-2 flex items-center gap-3 text-[10px] font-mono text-emerald-800">
+<span>Latency: 42ms</span>
+<span>•</span>
+<span>Rule Precedence: Strict Authority (R1)</span>
+<span>•</span>
+<span>Fail-closed: Armed</span>
+</div>
+</div>
+</div>
+</div>
+<!-- ANNOTATED SOURCE PIECES WITH SURVIVORSHIP BADGES -->
+<div class="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm space-y-2">
+<div class="flex items-center justify-between pb-1.5 border-b border-slate-100">
+<span class="font-headline-sm font-semibold text-slate-900 text-xs uppercase tracking-wider">Survivorship &amp; Lineage Audit</span>
+<span class="text-[11px] font-mono text-slate-400">4 Fragments Evaluated</span>
+</div>
+<div class="space-y-1.5 text-xs">
+<!-- 1. Winner -->
+<div class="p-2 rounded bg-emerald-50/40 border border-emerald-200 flex items-center justify-between">
+<div class="flex items-center gap-2 truncate">
+<span class="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                  ✓ Winner · R1
+                </span>
+<span class="font-semibold text-slate-900">Payment system:</span>
+<span class="font-mono text-slate-800">Phone +84901234567</span>
+</div>
+<span class="text-[11px] text-slate-500 font-mono shrink-0 ml-2">SAP-like, Rank 1, verified</span>
+</div>
+<!-- 2. Tombstone -->
+<div class="p-2 rounded bg-slate-50 border border-slate-200 flex items-center justify-between">
+<div class="flex items-center gap-2 truncate">
+<span class="bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-mono px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                  Tombstone → Survivor · R1
+                </span>
+<span class="font-semibold text-slate-700">Sales system:</span>
+<span class="font-mono text-slate-500 line-through">+84909999999</span>
+</div>
+<span class="text-[11px] text-slate-500 font-mono shrink-0 ml-2">Salesforce, Rank 2, unverified</span>
+</div>
+<!-- 3. CIAM -->
+<div class="p-2 rounded bg-sky-50/40 border border-sky-200 flex items-center justify-between">
+<div class="flex items-center gap-2 truncate">
+<span class="bg-sky-100 text-sky-900 border border-sky-300 text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                  ✓ Winner · R1
+                </span>
+<span class="font-semibold text-slate-900">CIAM Identity:</span>
+<span class="font-mono text-slate-800">Email an.nguyen@example.com</span>
+</div>
+<span class="text-[11px] text-slate-500 font-mono shrink-0 ml-2">Rank 1, verified Okta</span>
+</div>
+<!-- 4. Excluded Trap -->
+<div class="p-2 rounded bg-rose-50/40 border border-rose-200 flex items-center justify-between">
+<div class="flex items-center gap-2 truncate">
+<span class="bg-rose-100 text-rose-900 border border-rose-300 text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
+                  ✕ Excluded Trap
+                </span>
+<span class="font-semibold text-slate-900">Neighbour Binh:</span>
+<span class="font-mono text-slate-700">Phone +84901234568</span>
+</div>
+<span class="text-[11px] text-rose-800 font-mono shrink-0 ml-2">Address match only, excluded by L1</span>
+</div>
+</div>
+</div>
+<!-- ACT 2 SIMULATION COMPARISON BOX (Toggleable/Simulated) -->
+<div class="bg-amber-50/30 border border-dashed border-amber-300 rounded-lg p-3 text-xs" id="sim-comparison-box">
+<div class="flex items-center justify-between mb-1.5">
+<span class="font-mono text-[10px] uppercase font-bold text-amber-900">Counterfactual Simulation: Muse Spark vs Trust Engine</span>
+<span class="text-[10px] font-mono bg-white px-1.5 py-0.2 rounded border border-amber-200 text-amber-800">Act 2 Boundary Check</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+<div class="p-2 bg-rose-50 border border-rose-200 rounded">
+<div class="font-bold text-rose-900">WITHOUT TRUST ENGINE (LLM/Probabilistic only):</div>
+<p class="text-rose-800 mt-0.5">Hallucinated transitive link via matching apartment address string. Would combine Binh + An and send private OTP to neighbour!</p>
+</div>
+<div class="p-2 bg-emerald-50 border border-emerald-200 rounded">
+<div class="font-bold text-emerald-900">WITH TRUST ENGINE (Axiomatic Datalog Rule L1):</div>
+<p class="text-emerald-800 mt-0.5">Address match without distinct tax ID or primary key strictly rejected. Golden record preserved correctly with cryptographic proof.</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- 5. PROOF STRIP & AUTONOMOUS LOOP FOOTER -->
+<section class="bg-white border border-slate-200 rounded-lg p-3 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-600">verified</span>
+<span class="text-slate-700 font-medium">Muse suggested the links. The engine checked them.</span>
+<button class="font-mono text-emerald-800 hover:text-emerald-950 underline font-semibold ml-1" onclick="openProofDrawer('dec-001')">
+          [Show how it was decided]
+        </button>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+<span class="text-slate-600">Mosaic is watching: it cleaned <strong class="text-slate-900 font-mono">12</strong> by itself, <strong class="text-amber-800 font-mono">1</strong> needs you.</span>
+<button class="font-mono text-slate-800 hover:text-slate-950 underline ml-1" onclick="toggleDetailView()">
+          [See what it did by itself]
+        </button>
+</div>
+</section>
+<!-- 6. DETAIL VIEW SECTION (Collapsible / Toggleable Expert Console) -->
+<div class="hidden space-y-4 pt-2 border-t-2 border-slate-200" id="detail-view-console">
+<!-- Console Header Bar -->
+<div class="flex items-center justify-between bg-slate-900 text-white p-3 rounded-lg shadow-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-emerald-400">terminal</span>
+<span class="font-headline-sm font-semibold text-sm">Deep Audit Console — Protocol, Engine Axioms &amp; Sub-Agent Traces</span>
+</div>
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="text-emerald-400">● Live Solvers Connected</span>
+<button class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" onclick="toggleDetailView()">Close Deep Audit</button>
+</div>
+</div>
+<!-- Autonomous loop telemetry -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+<div class="bg-white p-2.5 rounded border border-slate-200">
+<div class="text-slate-400 text-[10px]">LOOP CADENCE</div>
+<div class="text-slate-900 font-bold text-sm mt-0.5">250ms polling</div>
+<div class="text-emerald-600 text-[10px]">Deterministic steady-state</div>
+</div>
+<div class="bg-white p-2.5 rounded border border-slate-200">
+<div class="text-slate-400 text-[10px]">CLAIMS PROCESSED</div>
+<div class="text-slate-900 font-bold text-sm mt-0.5">142 fragments</div>
+<div class="text-slate-500 text-[10px]">100% memory parsed</div>
+</div>
+<div class="bg-white p-2.5 rounded border border-slate-200">
+<div class="text-slate-400 text-[10px]">DATALOG PROVER</div>
+<div class="text-emerald-700 font-bold text-sm mt-0.5">0 axiom violations</div>
+<div class="text-emerald-600 text-[10px]">Manglekit v4.2</div>
+</div>
+<div class="bg-white p-2.5 rounded border border-slate-200">
+<div class="text-slate-400 text-[10px]">STEWARD INTERVENTION</div>
+<div class="text-amber-800 font-bold text-sm mt-0.5">1 item in review</div>
+<div class="text-amber-600 text-[10px]">Zendesk phone claim</div>
+</div>
+</div>
+<!-- Split: 5 Sub-Agents vs 10 Invariants Checklist -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<!-- Left: 5 Sub-Agent Traces (Muse Spark + Splink) -->
+<div class="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm space-y-3">
+<div class="flex items-center justify-between pb-2 border-b border-slate-200">
+<div>
+<h4 class="font-headline-sm font-semibold text-slate-900 text-sm">5 Sub-Agent Inferences (Muse Spark)</h4>
+<p class="text-[11px] text-slate-500">Probabilistic heuristic discovery stack</p>
+</div>
+<span class="text-[10px] font-mono px-2 py-0.5 bg-sky-100 text-sky-800 rounded font-semibold uppercase">PROPOSERS</span>
+</div>
+<div class="space-y-1.5 text-xs font-mono">
+<div class="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+<div>
+<span class="font-bold text-slate-900">1. Scout:</span>
+<span class="text-slate-600 ml-1">Heuristic discovery over raw JSON</span>
+</div>
+<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Claim (0.87)</span>
+</div>
+<div class="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+<div>
+<span class="font-bold text-slate-900">2. Linker:</span>
+<span class="text-slate-600 ml-1">Exact phone / email key indexing</span>
+</div>
+<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Claim (0.94)</span>
+</div>
+<div class="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+<div>
+<span class="font-bold text-slate-900">3. Cluster:</span>
+<span class="text-slate-600 ml-1">Graph closure across P-001 nodes</span>
+</div>
+<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Claim (High)</span>
+</div>
+<div class="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+<div>
+<span class="font-bold text-slate-900">4. Taxonomist:</span>
+<span class="text-slate-600 ml-1">Attribute normalization: sdt → phone</span>
+</div>
+<span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Claim (0.92)</span>
+</div>
+<div class="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+<div>
+<span class="font-bold text-slate-900">5. Critic:</span>
+<span class="text-slate-600 ml-1">Contradiction scan (SAP vs Zendesk)</span>
+</div>
+<span class="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">Flagged</span>
+</div>
+</div>
+<div class="p-2 bg-slate-100 border border-slate-300 rounded text-center text-[11px] font-mono text-slate-700">
+            SPLINK ENGINE INDICATOR: CANDIDATE, NOT A FACT (Muse suggests, only Datalog publishes).
+          </div>
+</div>
+<!-- Right: Engine 10-Point Axiomatic Checklist -->
+<div class="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm space-y-3">
+<div class="flex items-center justify-between pb-2 border-b border-slate-200">
+<div>
+<h4 class="font-headline-sm font-semibold text-slate-900 text-sm">Deterministic Invariants (Trust Engine)</h4>
+<p class="text-[11px] text-slate-500">Axiomatic Datalog proofs via manglekit</p>
+</div>
+<span class="text-[10px] font-mono px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold uppercase">10/10 PASS</span>
+</div>
+<div class="grid grid-cols-2 gap-2 text-xs font-mono">
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">1. Authority</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">2. Verified</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">3. Event time</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">4. TTL</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">5. Critical</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">6. Link proof</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">7. Idempotency</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">8. Policy</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">9. Taxonomy</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+<div class="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded">
+<span class="text-slate-800">10. Structure</span>
+<span class="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
+</div>
+</div>
+<div class="text-[11px] text-slate-500 italic">
+            Solver conclusion: <strong class="text-emerald-800">Phone B wins under Rule R1</strong> (SAP Rank 1 authoritative override).
+          </div>
+</div>
+</div>
+<!-- Graph Canvas in Detail Mode -->
+<div class="bg-white border border-slate-200 rounded-lg p-3.5 shadow-sm">
+<div class="flex items-center justify-between pb-2 border-b border-slate-200">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-800">hub</span>
+<span class="font-headline-sm font-semibold text-slate-900 text-sm">Data Graph Canvas (Topology of Entities &amp; Edges)</span>
+</div>
+<div class="flex items-center gap-2 font-mono text-xs">
+<span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-600">Nodes: 6</span>
+<span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-600">Edges: 5</span>
+</div>
+</div>
+<div class="py-3 overflow-x-auto custom-scroll">
+<div class="min-w-[980px] p-3 bg-slate-50/70 border border-slate-200 rounded-lg">
+<div class="grid grid-cols-6 gap-2.5">
+<!-- Tile F1 -->
+<div class="bg-white border-2 border-emerald-500 rounded p-2 text-xs shadow-2xs">
+<div class="flex items-center justify-between text-[10px] font-mono mb-1">
+<span>Hop: F1</span>
+<span class="bg-emerald-100 text-emerald-800 px-1 rounded font-bold">Winner</span>
+</div>
+<div class="font-bold text-slate-900">Phone B</div>
+<div class="font-mono text-emerald-800 text-[11px]">+84 90 123 4567</div>
+<div class="text-slate-400 text-[10px] mt-1">source: SAP (R1)</div>
+</div>
+<!-- Tile F2 -->
+<div class="bg-white border border-slate-300 border-dashed rounded p-2 text-xs opacity-75">
+<div class="flex items-center justify-between text-[10px] font-mono mb-1">
+<span>Hop: F2</span>
+<span class="bg-slate-100 text-slate-600 px-1 rounded">Tombstone</span>
+</div>
+<div class="font-bold text-slate-700">Phone A</div>
+<div class="font-mono text-slate-400 line-through text-[11px]">+84 98 765 4321</div>
+<div class="text-slate-400 text-[10px] mt-1">source: Salesforce</div>
+</div>
+<!-- Tile F3 -->
+<div class="bg-white border border-sky-300 rounded p-2 text-xs shadow-2xs">
+<div class="flex items-center justify-between text-[10px] font-mono mb-1">
+<span>Hop: F3</span>
+<span class="bg-sky-100 text-sky-800 px-1 rounded">Linked</span>
+</div>
+<div class="font-bold text-slate-900">Email C</div>
+<div class="font-mono text-sky-900 text-[11px] truncate">an.nguyen@corp</div>
+<div class="text-slate-400 text-[10px] mt-1">source: Okta IdP</div>
+</div>
+<!-- Tile F4 -->
+<div class="bg-white border border-sky-300 rounded p-2 text-xs shadow-2xs">
+<div class="flex items-center justify-between text-[10px] font-mono mb-1">
+<span>Hop: F4</span>
+<span class="bg-sky-100 text-sky-800 px-1 rounded">Linked</span>
+</div>
+<div class="font-bold text-slate-900">Address D</div>
+<div class="font-mono text-slate-800 text-[11px] truncate">123 Le Loi, D1</div>
+<div class="text-slate-400 text-[10px] mt-1">source: Billing Ledger</div>
+</div>
+<!-- Tile F5 -->
+<div class="bg-amber-50/70 border-2 border-amber-400 rounded p-2 text-xs shadow-2xs">
+<div class="flex items-center justify-between text-[10px] font-mono mb-1">
+<span>Hop: F5</span>
+<span class="bg-amber-100 text-amber-900 px-1 rounded font-bold">Escalated</span>
+</div>
+<div class="font-bold text-amber-950">Ticket Phone X</div>
+<div class="font-mono text-amber-900 text-[11px]">+84 91 999 8888</div>
+<div class="text-slate-500 text-[10px] mt-1">source: Zendesk</div>
+</div>
+<!-- Tile F6 -->
+<div class="bg-white border border-slate-300 rounded p-2 text-xs">
+<div class="flex items-center justify-between text-[10px] font-mono mb-1">
+<span>Fragment</span>
+<span class="bg-slate-100 text-slate-500 px-1 rounded">Unlinked</span>
+</div>
+<div class="font-bold text-slate-800">Token F6</div>
+<div class="font-mono text-slate-400 text-[11px] truncate">anon_cookie_99a</div>
+<div class="text-slate-400 text-[10px] mt-1">source: Web Cookie</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- 7. AUDIT TELEMETRY STRIP AT VERY BOTTOM -->
+<footer class="bg-white border border-slate-200 rounded p-2.5 text-center font-mono text-[11px] text-slate-500 shadow-2xs">
+<span class="text-emerald-700 font-semibold">REAL:</span> Meta API call, mosaic-api, trust-engine, ledger, graph, UI
+      <span class="mx-2 text-slate-300">|</span>
+<span class="text-slate-600 font-semibold">SYNTHETIC:</span> sources, ticket, steward, OTP downstream
+    </footer>
+</main>
+<!-- MODAL / DRAWER: VISUAL PROOF CERTIFICATE -->
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="proof-drawer">
+<div class="bg-white border border-slate-200 rounded-lg shadow-xl max-w-2xl w-full p-4 space-y-3">
+<div class="flex items-center justify-between pb-2 border-b border-slate-200">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-emerald-600">verified</span>
+<h3 class="font-headline-sm font-semibold text-slate-900 text-base">Visual Proof Certificate — Decision dec-001</h3>
+</div>
+<button class="text-slate-400 hover:text-slate-700 text-sm font-bold" onclick="closeProofDrawer()">✕</button>
+</div>
+<div class="space-y-2 text-xs">
+<div class="bg-slate-50 p-2.5 rounded border border-slate-200 font-mono">
+<div class="text-slate-400 text-[10px]">DERIVATION CHAIN</div>
+<div class="text-slate-900 font-semibold mt-0.5">winner(Phone, "+84901234567") :- claim(Phone, "+84901234567", sap_erp, r1), authoritative(sap_erp, 1).</div>
+</div>
+<div class="grid grid-cols-2 gap-2 font-mono text-[11px]">
+<div class="p-2 border border-slate-200 rounded">
+<span class="text-slate-400 block">POLICY APPLIED</span>
+<span class="text-slate-900 font-semibold">pol-2026-10-27-v1</span>
+</div>
+<div class="p-2 border border-slate-200 rounded">
+<span class="text-slate-400 block">AXIOMS VERIFIED</span>
+<span class="text-emerald-700 font-semibold">10 of 10 Passed</span>
+</div>
+<div class="p-2 border border-slate-200 rounded">
+<span class="text-slate-400 block">CRYPTOGRAPHIC HASH</span>
+<span class="text-slate-900">0x8b73fe...021</span>
+</div>
+<div class="p-2 border border-slate-200 rounded">
+<span class="text-slate-400 block">PUBLISHING ENGINE</span>
+<span class="text-slate-900">manglekit (Datalog v4.2)</span>
+</div>
+</div>
+<p class="text-slate-600 text-xs">
+          This value was selected because under Rule R1, verified source systems with Rank 1 priority strictly override newer, unverified claims from commercial CRMs or ticketing systems.
+        </p>
+</div>
+<div class="pt-2 border-t border-slate-200 flex justify-end gap-2">
+<button class="px-3 py-1 bg-slate-900 text-white rounded text-xs font-mono" onclick="closeProofDrawer()">Close Proof</button>
+</div>
+</div>
+</div>
+<!-- MODAL: DATALOG RULE INSPECTOR -->
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4" id="datalog-modal">
+<div class="bg-white border border-slate-200 rounded-lg shadow-xl max-w-xl w-full p-4 space-y-3 font-mono">
+<div class="flex items-center justify-between pb-2 border-b border-slate-200">
+<span class="font-bold text-sm text-slate-900">Datalog Invariant Code — Rule R1</span>
+<button class="text-slate-400 hover:text-slate-700 text-sm" onclick="closeDatalogModal()">✕</button>
+</div>
+<pre class="bg-slate-900 text-emerald-400 p-3 rounded text-xs overflow-x-auto">% Rule R1: Authoritative Survivorship Override
+survivor_attribute(Entity, Attr, Val) :-
+    claim(Entity, Attr, Val, SourceA, RankA),
+    verified(SourceA, true),
+    not exists (
+        claim(Entity, Attr, OtherVal, SourceB, RankB),
+        verified(SourceB, true),
+        RankB &lt; RankA
+    ).
+
+% Tombstone Retention
+tombstone_attribute(Entity, Attr, LoserVal) :-
+    claim(Entity, Attr, LoserVal, _, _),
+    survivor_attribute(Entity, Attr, WinnerVal),
+    LoserVal \= WinnerVal.
+      </pre>
+<div class="flex justify-end">
+<button class="px-3 py-1 bg-slate-900 text-white rounded text-xs" onclick="closeDatalogModal()">Close</button>
+</div>
+</div>
+</div>
+<!-- JAVASCRIPT: INTERACTIVE STATE LOGIC -->
+<script>
+    let detailViewOpen = false;
+    let engineOnline = true;
+    let loopPaused = false;
+
+    function toggleDetailView() {
+      detailViewOpen = !detailViewOpen;
+      const consoleEl = document.getElementById('detail-view-console');
+      const labelEl = document.getElementById('view-mode-label');
+      if (detailViewOpen) {
+        consoleEl.classList.remove('hidden');
+        labelEl.innerText = 'Hide how it was decided';
+        consoleEl.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        consoleEl.classList.add('hidden');
+        labelEl.innerText = 'Show how it was decided';
+      }
+    }
+
+    function toggleEngineStatus() {
+      engineOnline = !engineOnline;
+      const dot = document.getElementById('engine-indicator-dot');
+      const text = document.getElementById('engine-status-text');
+      const pill = document.getElementById('engine-status-pill');
+
+      if (engineOnline) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        text.innerText = '● Engine OK';
+        pill.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono font-medium bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 transition-colors';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+        text.innerText = '● Engine DOWN — Fail-closed';
+        pill.className = 'inline-flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono font-medium bg-rose-100 border border-rose-300 text-rose-900 hover:bg-rose-200 transition-colors';
+        alert('Fail-Closed Active: Downstream golden dispatch halted instantly! No claims published without deterministic proof.');
+      }
+    }
+
+    function toggleLoopPause() {
+      loopPaused = !loopPaused;
+      const btn = document.getElementById('btn-pause-loop');
+      if (loopPaused) {
+        btn.innerHTML = '<span class="material-symbols-outlined text-[13px]">play_arrow</span><span>Resume Loop</span>';
+        btn.classList.add('bg-amber-100', 'border-amber-300', 'text-amber-900');
+      } else {
+        btn.innerHTML = '<span class="material-symbols-outlined text-[13px]">pause</span><span>Pause Loop</span>';
+        btn.classList.remove('bg-amber-100', 'border-amber-300', 'text-amber-900');
+      }
+    }
+
+    function switchLeftTab(tab) {
+      const chatPanel = document.getElementById('panel-protocol-chat');
+      const srcPanel = document.getElementById('panel-source-pieces');
+      const btnChat = document.getElementById('tab-chat');
+      const btnSrc = document.getElementById('tab-sources');
+
+      if (tab === 'chat') {
+        chatPanel.classList.remove('hidden');
+        srcPanel.classList.add('hidden');
+        btnChat.className = 'px-2 py-0.5 rounded bg-white text-slate-900 shadow-2xs';
+        btnSrc.className = 'px-2 py-0.5 rounded text-slate-600 hover:text-slate-900';
+      } else {
+        chatPanel.classList.add('hidden');
+        srcPanel.classList.remove('hidden');
+        btnSrc.className = 'px-2 py-0.5 rounded bg-white text-slate-900 shadow-2xs';
+        btnChat.className = 'px-2 py-0.5 rounded text-slate-600 hover:text-slate-900';
+      }
+    }
+
+    function setScenario(scId) {
+      // Clear active style on all chips
+      const chips = document.querySelectorAll('.scenario-chip');
+      chips.forEach(c => {
+        c.className = 'scenario-chip px-2.5 py-1 rounded text-xs font-medium border bg-white border-slate-200 text-slate-700 hover:border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs';
+      });
+
+      const activeChip = document.getElementById('chip-' + scId);
+      if (activeChip) {
+        activeChip.className = 'scenario-chip px-2.5 py-1 rounded text-xs font-semibold border bg-slate-900 border-slate-900 text-white shadow-xs transition-all flex items-center gap-1.5';
+      }
+
+      if (scId === 'act5') {
+        if (engineOnline) toggleEngineStatus();
+      } else if (!engineOnline && scId !== 'act5') {
+        toggleEngineStatus();
+      }
+    }
+
+    function runCommand(cmd) {
+      if (cmd === 'why-phone') {
+        openProofDrawer('dec-001');
+      } else if (cmd === 'why-f6') {
+        alert('Fragment F6 was excluded because it only holds an unverified tracking cookie without linked identity proofs.');
+      } else if (cmd === 'compare-muse') {
+        const box = document.getElementById('sim-comparison-box');
+        box.classList.remove('hidden');
+        box.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function openProofDrawer(id) {
+      document.getElementById('proof-drawer').classList.remove('hidden');
+    }
+
+    function closeProofDrawer() {
+      document.getElementById('proof-drawer').classList.add('hidden');
+    }
+
+    function openDatalogModal() {
+      document.getElementById('datalog-modal').classList.remove('hidden');
+    }
+
+    function closeDatalogModal() {
+      document.getElementById('datalog-modal').classList.add('hidden');
+    }
+  </script>
+</body></html>
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-29T15:43:50+07:00.
+</ADDITIONAL_METADATA>

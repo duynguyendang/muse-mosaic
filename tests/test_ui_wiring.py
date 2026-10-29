@@ -159,6 +159,7 @@ def test_user_first_surface_ids_exist():
         "export-cancel",
         "export-download",
         "f-mosaic-tag",
+        "f-viewing",
     ):
         assert ref in html_ids, ref
     src = (WEB / "app.js").read_text(encoding="utf-8")
@@ -174,6 +175,8 @@ def test_user_first_surface_ids_exist():
     assert "Clean, trustworthy records from scattered data." in html
     assert "No, do not use this plan" in html
     assert "⬇ Export" in html
+    assert "How we'll clean this file" in html
+    assert "This approves how we clean, not the final answer" in html
 
 
 def test_plain_language_regressions_absent():

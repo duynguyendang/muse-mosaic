@@ -3,7 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Muse Mosaic — trusted merge demo</title>
+    <title>Muse Mosaic — Interactive Multi-Agent Protocol &amp; Live Trusted Picture</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
       :root {
         color-scheme: light;
@@ -40,28 +44,49 @@
         min-height: 100vh;
         background: var(--bg);
         color: var(--text);
-        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-        font-size: 14px;
+        font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-size: 13.5px;
         line-height: 1.5;
+        selection-background-color: #E2E8F0;
+      }
+      .mono, code, pre {
+        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+        font-size: 16px;
+        line-height: 1;
+        vertical-align: middle;
       }
       :focus-visible { outline: 3px solid #1D4ED8; outline-offset: 2px; }
       header {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
+        justify-content: space-between;
         gap: 10px 14px;
-        padding: 12px 24px;
+        padding: 10px 24px;
         border-bottom: 1px solid var(--line);
         background: var(--panel);
         position: sticky;
         top: 0;
-        z-index: 5;
+        z-index: 10;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       }
-      .brand h1 { margin: 0; font-size: 20px; font-weight: 700; }
-      .brand span { color: var(--muted); font-size: 13px; }
+      .brand h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A; }
+      .brand span { color: var(--muted); font-size: 12.5px; }
+      .scenario-chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+        border: 1px solid #CBD5E1; background: #fff; color: #334155;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.15s ease; cursor: pointer;
+      }
+      .scenario-chip:hover { border-color: #94A3B8; color: #0F172A; }
+      .scenario-chip.active { background: #0F172A; color: #fff; border-color: #0F172A; }
+      .chip-dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; shrink: 0; }
       .pill {
         display: inline-flex; align-items: center; gap: 7px;
-        padding: 5px 10px; border-radius: 999px;
+        padding: 4px 10px; border-radius: 999px;
         border: 1px solid var(--line); background: var(--panel);
         font-size: 12px; color: var(--body);
       }
@@ -650,7 +675,16 @@
   <body class="friendly">
     <header>
       <div class="brand">
-        <h1>Muse Mosaic</h1>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <!-- 4 colored mosaic dots in a 2x2 grid (UX 2.4) -->
+          <div style="display:grid;grid-template-columns:repeat(2, 6px);gap:2.5px;padding:3.5px;background:#0F172A;border-radius:4px;">
+            <span style="width:6px;height:6px;border-radius:1px;background:#34D399;"></span>
+            <span style="width:6px;height:6px;border-radius:1px;background:#38BDF8;"></span>
+            <span style="width:6px;height:6px;border-radius:1px;background:#FBBF24;"></span>
+            <span style="width:6px;height:6px;border-radius:1px;background:#FB7185;"></span>
+          </div>
+          <h1>Muse Mosaic</h1>
+        </div>
         <span>Clean, trustworthy records from scattered data.</span>
       </div>
       <div class="hdr-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
@@ -660,7 +694,10 @@
         <span class="pill detail-only"><span id="api-dot" class="dot"></span><span id="api-status">mosaic-api: checking…</span></span>
         <span class="pill detail-only"><span id="splink-dot" class="dot"></span><span id="splink-status">matching engine: checking…</span></span>
         <button class="pill badge-btn detail-only" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
-        <button class="f-only" id="f-show-detail" type="button">Show how it was decided</button>
+        <button class="f-only" id="f-show-detail" type="button" style="display:inline-flex;align-items:center;gap:4px;">
+          <span class="material-symbols-outlined" style="font-size:15px">tune</span>
+          <span id="view-mode-label">Show how it was decided</span>
+        </button>
         <button class="detail-only" id="f-back" type="button">Back to simple view</button>
       </div>
       <!-- Hidden technical holders for test contract & background state -->
@@ -678,7 +715,10 @@
     <main>
       <div id="friendly">
         <div class="f-steps" aria-label="Three-step user workflow">
-          <strong style="color:#0F172A;margin-right:4px">Workflow:</strong>
+          <strong style="color:#0F172A;margin-right:4px;display:inline-flex;align-items:center;gap:4px">
+            <span class="material-symbols-outlined" style="font-size:15px">timeline</span>
+            Workflow:
+          </strong>
           <span class="step active" id="f-step-1" title="Jump to Step 1: Dataset Status"><span class="n">1</span> <span class="lbl">Check Dataset Status</span></span>
           <span class="arrow">→</span>
           <span class="step" id="f-step-2" title="Jump to Step 2: Review Gaps"><span class="n">2</span> <span class="lbl">Review Gaps</span></span>
@@ -687,13 +727,16 @@
         </div>
 
         <div class="f-scenarios" id="f-scenario-bar" aria-label="Demo scenario chips">
-          <span class="muted" style="align-self:center;font-weight:700;margin-right:4px">Try a scenario:</span>
-          <button type="button" data-act="scene0">Clean messy JSON file</button>
-          <button type="button" data-act="act1">Customer with 2 phones</button>
-          <button type="button" data-act="act2">Connect 5 pieces (+ neighbour trap)</button>
-          <button type="button" data-act="act3">Unverified support ticket conflict</button>
-          <button type="button" data-act="act4">Product with new category</button>
-          <button type="button" data-act="act5">Test when checker is offline</button>
+          <span class="muted" style="align-self:center;font-weight:700;margin-right:6px;display:inline-flex;align-items:center;gap:4px">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#64748B">auto_stories</span>
+            Scenarios:
+          </span>
+          <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Clean messy JSON file</button>
+          <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer with 2 phones</button>
+          <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span>Connect 5 pieces (+ neighbour trap)</button>
+          <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span>Unverified support ticket conflict</button>
+          <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span>Product with new category</button>
+          <button type="button" data-act="act5" class="scenario-chip"><span class="chip-dot" style="background:#FB7185"></span>Test when checker is offline</button>
         </div>
 
         <div class="f-cols">
@@ -725,6 +768,7 @@
             <div class="f-mosaic-card" id="f-mosaic-card" role="region" aria-label="Step 3: Clean mosaic picture and verified answer">
               <div class="f-mosaic-head">
                 <strong id="f-mosaic-title"><span class="f-step-badge">Step 3</span>Clean mosaic picture — Ready to safely use</strong>
+                <div class="f-viewing" id="f-viewing"></div>
                 <span><span class="tag" id="f-mosaic-tag">Assembled data tiles</span>
                 <button type="button" id="f-export-record" class="btn-how" title="Download this record with proof">⬇ Export</button></span>
               </div>
@@ -750,34 +794,40 @@
 
           <!-- SUPPORTING RIGHT SIDEBAR (5fr): Input Source Pieces + Ask Questions + Upload/Rules -->
           <div>
-            <div class="f-side-box">
-              <div class="f-side-head">
-                <span>📋 Input pieces — What each system gave us</span>
-                <span class="tag">Raw sources</span>
+            <div class="f-side-box" style="display:flex;flex-direction:column;">
+              <div class="f-side-head" style="margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="material-symbols-outlined" style="font-size:18px;color:#0F172A">forum</span>
+                  <span id="tab-card-title">Live Multi-Agent Protocol Chat</span>
+                </div>
+                <div class="f-tab-group" style="display:inline-flex;background:#E2E8F0;padding:2px;border-radius:8px;font-size:11.5px;font-weight:600">
+                  <button type="button" id="tab-btn-chat" class="f-tab-btn active" style="padding:4px 10px;border-radius:6px;border:none;background:#fff;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer">💬 Protocol Chat</button>
+                  <button type="button" id="tab-btn-pieces" class="f-tab-btn" style="padding:4px 10px;border-radius:6px;border:none;background:transparent;color:#475569;cursor:pointer">📋 Source Pieces</button>
+                </div>
               </div>
-              <div class="f-side-sub">Compare the raw pieces from each system against the verified Mosaic picture on the left.</div>
-              <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
-            </div>
+              <div class="f-side-sub" id="tab-card-sub" style="margin-bottom:10px">Every message is backed by a real proposer trace, Datalog derivation, or ledger decision.</div>
 
-            <div class="f-side-box">
-              <div class="f-side-head">
-                <span>💬 Ask about this person</span>
-                <span class="tag">Backed by real proof &amp; ledger</span>
+              <!-- Tab 1: Protocol Chat Stream -->
+              <div id="f-chat-panel" style="display:flex;flex-direction:column;">
+                <div class="f-chat-input" id="f-chat-input-bar" style="margin-top:0;margin-bottom:10px">
+                  <button type="button" data-q="phone">Why this phone?</button>
+                  <button type="button" data-q="F6">Why not neighbour F6?</button>
+                  <button type="button" data-q="datalog">How do we know?</button>
+                  <button type="button" data-q="muse-only">Without checker</button>
+                  <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, how" />
+                </div>
+                <div id="f-chat-stream" aria-live="polite"></div>
               </div>
-              <div class="f-side-sub">Click a quick question below or type an attribute to inspect why a value won or why a neighbour was separated.</div>
-              <div class="f-chat-input" id="f-chat-input-bar" style="margin-top:0;margin-bottom:10px">
-                <button type="button" data-q="phone">Why this phone?</button>
-                <button type="button" data-q="F6">Why not neighbour F6?</button>
-                <button type="button" data-q="datalog">How do we know?</button>
-                <button type="button" data-q="muse-only">Without checker</button>
-                <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, how" />
+
+              <!-- Tab 2: Raw Source Pieces -->
+              <div id="f-pieces-panel" style="display:none;flex-direction:column;">
+                <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
               </div>
-              <div id="f-chat-stream" aria-live="polite"></div>
             </div>
 
             <div class="f-upload" id="f-upload">
-              <p><b>Drop JSON files here, or click to choose files. JSON only in v1.</b> — we will show you one trusted picture, or tell you honestly when we cannot.</p>
-              <label class="check">Your JSON file <input type="file" id="f-upload-file" accept=".json,application/json" /></label>
+              <p><b>Drop JSON or CSV files here, or click to choose files.</b> — we will show you one trusted picture, or tell you honestly when we cannot.</p>
+              <label class="check">Your JSON file <input type="file" id="f-upload-file" accept=".json,.csv,application/json,text/csv" /></label>
               <button id="f-upload-btn" type="button">Upload + show the picture</button>
               <button id="f-try-example" type="button">Try the messy example</button>
               <button id="f-scene0" type="button">Messy JSON (Scene 0)</button>
@@ -857,8 +907,8 @@
         </div>
         <div class="panel-body" id="upload-body">
           <div class="controls" style="margin:0;">
-            <span class="muted">Drop JSON files here, or click to choose files. JSON only in v1.</span>
-            <label class="check">Upload JSON <input type="file" id="upload-file" accept=".json,application/json" /></label>
+            <span class="muted">Drop JSON or CSV files here, or click to choose files.</span>
+            <label class="check">Upload JSON <input type="file" id="upload-file" accept=".json,.csv,application/json,text/csv" /></label>
             <button id="upload-btn" type="button">Upload + show the picture</button>
             <span class="muted">Synthetic or non-sensitive data only for the demo. Uploaded data is sent to the Muse builder via the Meta Model API in real mode, so do not upload real PII in the demo.</span>
             <span class="muted" id="loop-hint">Loop Running: choosing a file auto-runs the approved pipeline, no click needed.</span>

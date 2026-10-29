@@ -53,6 +53,7 @@
     ctx.lastResolve = payload;
     ctx.setFriendlyFromResolve(payload);
     ctx.renderFriendly();
+    if (ctx.refreshDatasets) ctx.refreshDatasets();
     ctx.renderEngine(payload);
     ctx.renderSteward(ctx, payload.steward_queue || []);
     ctx.renderMosaic(payload);
@@ -127,6 +128,7 @@
     root.querySelector("[data-cf-no]").addEventListener("click", () => {
       if (friendly) {
         ctx.renderFriendly();
+    if (ctx.refreshDatasets) ctx.refreshDatasets();
       } else {
         const h = confirmStash.get(root);
         confirmStash.delete(root);
@@ -172,6 +174,7 @@
     host.querySelector("[data-cf-no]").addEventListener("click", () => {
       if (friendly) {
         ctx.renderFriendly();
+    if (ctx.refreshDatasets) ctx.refreshDatasets();
       } else {
         const h = confirmStash.get(host);
         confirmStash.delete(host);
@@ -230,6 +233,7 @@
     host.querySelector("[data-cf-no]").addEventListener("click", () => {
       if (friendly) {
         ctx.renderFriendly();
+    if (ctx.refreshDatasets) ctx.refreshDatasets();
       } else {
         const h = confirmStash.get(host);
         confirmStash.delete(host);
@@ -275,6 +279,7 @@
       renderSteward(ctx, ctx.lastStewardItems.length ? ctx.lastStewardItems : lastFriendly.steward_queue);
       ctx.renderEscalatedCount(lastFriendly.steward_queue.length);
       ctx.renderFriendly();
+    if (ctx.refreshDatasets) ctx.refreshDatasets();
     } else {
       loadPending(ctx);
     }

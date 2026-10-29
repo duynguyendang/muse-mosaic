@@ -66,6 +66,7 @@ def dataset_summary(request: Request) -> dict[str, Any]:
                 "deadline": item.get("deadline"),
                 "fallback": item.get("fallback"),
                 "status": item.get("status"),
+                "decision_id": item.get("decision_id"),
             }
             for item in pending
         ]

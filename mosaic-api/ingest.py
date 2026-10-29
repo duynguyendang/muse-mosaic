@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from schemas import CandidateFact, Document, DocumentField, Fragment
@@ -267,7 +268,6 @@ def _parse_csv_fragments(raw_text: str) -> tuple[list[dict], list[dict]]:
     ``attribute`` or ``value`` are rejected, never guessed.
     """
     import csv
-    from datetime import datetime, timezone
 
     try:
         rows = list(csv.DictReader(raw_text.splitlines()))
@@ -278,13 +278,13 @@ def _parse_csv_fragments(raw_text: str) -> tuple[list[dict], list[dict]]:
             "File must be CSV with a header row: attribute,value plus optional "
             "source,source_id,authority_rank,event_time,verified,ttl_seconds."
         )
-    header = { (key or "").strip().lower() for key in (rows[0].keys() or []) }
+    header = {(key or "").strip().lower() for key in (rows[0].keys() or [])}
     if "attribute" not in header or "value" not in header:
         raise ValueError(
             "File must be CSV with a header row: attribute,value plus optional "
             "source,source_id,authority_rank,event_time,verified,ttl_seconds."
         )
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     fragments: list[dict] = []
     rejected: list[dict] = []
 

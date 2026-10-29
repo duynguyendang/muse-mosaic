@@ -132,7 +132,7 @@
   }
 
   /* ---- Friendly View (v2.2 default): same endpoints, same decisions ---- */
-  const fState = { ran: false, working: false, downstream: null, needCount: 0, splinkPairs: [], policyUser: "", policyProduct: "", allEntities: [] };
+  const fState = { ran: false, working: false, downstream: null, needCount: 0, splinkPairs: [], policyUser: "", policyProduct: "", allEntities: [], entityFragments: {}, datasetSummary: null };
   let lastFriendly = null;
   let hasRun = false;
   function markRan() {
@@ -171,6 +171,12 @@
     window.__lastGolden = payload.golden || null;
     window.__lastProposals = payload.proposal ? [payload.proposal] : [];
     window.__lastGoldens = payload.golden ? [payload.golden] : [];
+    refreshDatasetData().catch(() => {});
+    try {
+      const snap = activeFragments();
+      const key = `${payload.entity_type || currentEntity().entityType}/${payload.entity_id || currentEntity().entityId}`;
+      fState.entityFragments[key] = snap;
+    } catch (error) { /* snapshot is best-effort, never blocking */ }
   }
 
   function setFriendlyFromBuild(payload) {
@@ -195,6 +201,15 @@
     };
     fState.splinkPairs = (payload.splink && payload.splink.pairs) || [];
     fState.ran = true;
+    refreshDatasetData().catch(() => {});
+    // Snapshot built fragments per golden entity so record switching can
+    // restore pieces without re-running the pipeline (Invariant A).
+    try {
+      const snap = activeFragments();
+      (payload.goldens || []).forEach((g) => {
+        if (g && g.golden_id) fState.entityFragments[`${g.entity_type}/${g.entity_id}`] = snap;
+      });
+    } catch (error) { /* snapshot is best-effort, never blocking */ }
     // Ledger-backed stores for the deterministic chat (askAbout/fallback):
     // golden for attribute answers, proposals for the F6 trap evidence.
     window.__lastGolden = first;
@@ -346,14 +361,15 @@
     return list.find((f) => !f.verified) || list[0] || null;
   }
 
-  function fragmentForFactId(factId, attrName) {
+  function fragmentForFactId(factId, attrName, pool) {
     // Fact ids differ by path: /resolve uses "{entity}-{source_id}", /build
     // uses "{cluster}-{docId}-{rawAttr}". Match exact, entity-prefixed, and
     // suffix forms so the friendly sentence never loses its source. Returns
     // null (caller falls back to a generic line) when nothing matches —
-    // never a guessed fragment.
+    // never a guessed fragment. `pool` defaults to the active fragments so
+    // record cards can resolve lineage in another record's fragment list.
     if (!factId) return null;
-    const list = activeFragments();
+    const list = pool || activeFragments();
     const { entityId } = currentEntity();
     return (
       list.find((f) => f.source_id && factId === f.source_id)
@@ -644,6 +660,13 @@
         ];
 
     const isHiddenScene = Boolean(fState.trapDocs && fState.trapDocs.length > 0);
+    const trapDocIds = (fState.trapDocs || []).slice();
+    // Trap display values are read from the loaded trap fragments, so the
+    // card always describes the actual neighbour, never a hard-coded story.
+    const trapDisplayName = (attr) => {
+      const frag = activeFragments().find((fr) => fr._trap && fr.attribute === attr && fr.value);
+      return frag ? String(frag.value) : "";
+    };
     const { entityType: activeType, entityId: activeId } = currentEntity();
 
     // 1. Initial pre-run state
@@ -706,75 +729,92 @@
     });
     const autoHtml = autoItems.join("");
 
-    // Calculate dataset health metrics
-    let totalRecordsCount = knownEntities.length;
-    let cleanRecordsList = [];
-    let errorRecordsCount = 0;
+    // Dataset health metrics: live ledger summary when available, else the
+    // current-entity fallback (never invented record counts).
+    const summary = fState.datasetSummary;
+    const sumRecords = summary ? summary.total_records : 0;
+    const sumPieces = summary ? summary.total_pieces : totalPieces;
+    const sumSystems = summary ? (summary.systems || []) : srcNames;
+    const sumClean = summary ? summary.clean_records : 0;
+    const sumPct = summary ? summary.clean_pct : 0;
+    const sumNeeds = summary ? (summary.needs_review || []) : [];
+    const hasSummary = !!summary && sumRecords > 0;
 
-    if (isHiddenScene) {
-      totalRecordsCount = 6;
-      errorRecordsCount = 1;
-      cleanRecordsList = [
-        {
-          title: "Merged Person (Documents F1, F2, F3, F4, F5)",
-          detail: "5 pieces connected by email, phone, and order into 1 verified person",
-          entityVal: "user/P-001",
-        },
-      ];
-    } else {
-      knownEntities.forEach((ent) => {
-        const isCurrent = (ent.entity_type === activeType && ent.entity_id === activeId);
-        const name = ent.label || (ent.entity_type === "user" ? (ent.entity_id === "P-001" ? "Nguyen Van An (User P-001)" : `User ${ent.entity_id}`) : `Product ${ent.entity_id}`);
-        if (isCurrent && gapCount > 0) {
-          errorRecordsCount++;
-        } else {
-          cleanRecordsList.push({
-            title: name,
-            detail: `${ent.fragments || 3} pieces verified`,
-            entityVal: `${ent.entity_type}/${ent.entity_id}`,
-          });
-        }
-      });
-    }
-
-    const cleanCount = totalRecordsCount - errorRecordsCount;
-    const cleanPct = Math.round((cleanCount / totalRecordsCount) * 100);
-
-    // Step 1: Render Dataset Status Block
-    if (errorRecordsCount === 0 && !isHiddenScene) {
-      dsBadgeEl.textContent = "All clean";
-      dsBadgeEl.className = "tag tag-ok";
+    // Step 1: Render Dataset Status Block — live ledger counts when the
+    // summary is available, else the current-entity fallback (never invented).
+    const dTotal = hasSummary ? sumRecords : totalPieces > 0 ? 1 : 0;
+    const dPieces = hasSummary ? sumPieces : totalPieces;
+    const dSystems = hasSummary ? summary.systems : srcNames;
+    const dClean = hasSummary ? sumClean : 0;
+    const dPct = hasSummary ? sumPct : 0;
+    const dNeed = hasSummary ? (summary.needs_review || []).length : (gapCount > 0 ? 1 : 0);
+    if (dNeed === 0) {
+      dsBadgeEl.textContent = hasSummary ? "All clean" : `${totalPieces} pieces loaded`;
+      dsBadgeEl.className = hasSummary ? "tag tag-ok" : "tag";
       dsBodyEl.innerHTML =
         `<div class="f-ds-metrics">`
-        + `<div class="f-ds-metric"><b>${totalRecordsCount} Records (${totalPieces} pieces)</b>Across ${uniqueSources.length} systems (${esc(srcNames.join(", "))})</div>`
-        + `<div class="f-ds-metric"><b>✓ ${cleanCount} of ${totalRecordsCount} Clean (100%)</b>All records verified and agreed</div>`
+        + `<div class="f-ds-metric"><b>${dTotal} Records (${dPieces} pieces)</b>Across ${dSystems.length} systems (${esc(dSystems.join(", ") || "—")})</div>`
+        + `<div class="f-ds-metric"><b>✓ ${dClean} of ${dTotal} Clean (${dPct}%)</b>All records verified and agreed</div>`
         + `<div class="f-ds-metric"><b>✓ 0 Disagreements</b>Zero conflicts remain</div>`
-        + `<div class="f-ds-metric"><b>● Checker active</b>Cryptographic proof verified</div>`
+        + `<div class="f-ds-metric"><b>● Checker active</b>Verified before use</div>`
         + `</div>`
-        + `<div>We matched and checked <b>${totalPieces} pieces of data</b> across <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). All <b>${totalRecordsCount} records are 100% verified</b> with zero unresolved conflicts.</div>`;
+        + `<div>We matched and checked <b>${dPieces} pieces of data</b> across <b>${dSystems.length} systems</b> (${esc(dSystems.join(", ") || "—")}). All <b>${dTotal} records are verified</b> with zero unresolved conflicts.</div>`;
     } else {
-      dsBadgeEl.textContent = `${errorRecordsCount} record${errorRecordsCount === 1 ? "" : "s"} need you`;
+      dsBadgeEl.textContent = `${dNeed} record${dNeed === 1 ? "" : "s"} need you`;
       dsBadgeEl.className = "tag tag-need";
       dsBodyEl.innerHTML =
         `<div class="f-ds-metrics">`
-        + `<div class="f-ds-metric"><b>${totalRecordsCount} Records (${totalPieces} pieces)</b>Across ${uniqueSources.length} systems (${esc(srcNames.join(", "))})</div>`
-        + `<div class="f-ds-metric"><b>✓ ${cleanCount} of ${totalRecordsCount} Clean (${cleanPct}%)</b>Verified records ready to use</div>`
-        + `<div class="f-ds-metric"><b>⚠ ${errorRecordsCount} Record${errorRecordsCount === 1 ? "" : "s"} need review</b>${isHiddenScene ? "1 lookalike neighbour separated" : "Disagreements after matching"}</div>`
+        + `<div class="f-ds-metric"><b>${dTotal} Records (${dPieces} pieces)</b>Across ${dSystems.length} systems (${esc(dSystems.join(", ") || "—")})</div>`
+        + `<div class="f-ds-metric"><b>✓ ${dClean} of ${dTotal} Clean (${dPct}%)</b>Verified records ready to use</div>`
+        + `<div class="f-ds-metric"><b>⚠ ${dNeed} Record${dNeed === 1 ? "" : "s"} need review</b>${isHiddenScene ? "1 lookalike neighbour separated" : "Disagreements after matching"}</div>`
         + `<div class="f-ds-metric"><b>● Checker active</b>Rules isolating conflicts</div>`
         + `</div>`
-        + `<div>We automatically matched and checked <b>${totalRecordsCount} records</b> across <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). <b>${cleanCount} records are clean</b>, and only <b>${errorRecordsCount} record has conflicts or lookalikes</b> needing your 1-click decision below.</div>`;
+        + `<div>We automatically matched and checked <b>${dTotal} records</b> across <b>${dSystems.length} systems</b> (${esc(dSystems.join(", ") || "—")}). <b>${dClean} records are clean</b>, and only <b>${dNeed} record${dNeed === 1 ? "" : "s"} ha${dNeed === 1 ? "s" : "ve"} conflicts or lookalikes</b> needing your 1-click decision below.</div>`;
     }
 
     // Step 2: Render Exception-Only Error Triage Queue
     let gapsHtml = "";
 
-    // 1. Errors from active steward queue
-    if (gapCount > 0) {
-      const activeRecordName = (activeType === "user" ? (activeId === "P-001" ? "Nguyen Van An (User P-001)" : `User ${activeId}`) : `Product ${activeId}`);
-      gapsHtml += queue.map((item, idx) => {
+    // 1. Errors from active steward queue — grouped by record, each card
+    // names its record and offers one-click concrete choices.
+    const recordPool = (entityType, entityId) => {
+      const key = `${entityType}/${entityId}`;
+      const cached = (fState.recordFragments || {})[key];
+      const pool = cached && cached.length ? cached : activeFragments();
+      return pool.filter((fr) => (fr.entity_type || entityType) === entityType);
+    };
+    const recordName = (entityType, entityId, pool) =>
+      recordDisplayName(entityType, entityId, pool);
+    // Records that need a person: every entity with open steward items
+    // across the whole dataset (ledger summary), falling back to the
+    // current record's queue when no summary is cached yet.
+    const reviewRecords = hasSummary
+      ? (summary.needs_review || []).map((r) => ({
+          key: `${r.entity_type}/${r.entity_id}`,
+          entityType: r.entity_type,
+          entityId: r.entity_id,
+          name: r.display_name || r.entity_id,
+          issues: r.issues || [],
+        }))
+      : (gapCount > 0 ? [{
+          key: `${activeType}/${activeId}`,
+          entityType: activeType,
+          entityId: activeId,
+          name: recordName(activeType, activeId, list),
+          issues: queue,
+        }] : []);
+    if (reviewRecords.length > 0) {
+      gapsHtml += reviewRecords.map((group, gidx) => {
+        const pool = recordPool(group.entityType, group.entityId);
+        const name = group.name || recordName(group.entityType, group.entityId, pool) || group.entityId;
+        const head = `<div class="f-error-record-title">`
+          + `<span class="f-error-badge">⚠ RECORD: ${esc(name)} (${esc(group.entityType)} ${esc(group.entityId)})</span>`
+          + `<button type="button" class="btn-how btn-view-mosaic" data-view-entity="${esc(group.key)}">View Mosaic Details</button>`
+          + `</div>`;
+        const cards = group.issues.map((item, idx) => {
         const attr = item.attribute;
         const plainName = plainAttr(attr);
-        const matching = list.filter((fr) => fr.attribute === attr);
+        const matching = pool.filter((fr) => fr.attribute === attr);
         let title = `Two ${plainName}s disagree between systems. Which one is right?`;
         let compareHtml = "";
         let choicesHtml = "";
@@ -814,63 +854,74 @@
         return `<div class="f-error-card" data-gap-idx="${idx}" data-steward="${esc(item.steward_id)}">`
           + `<div class="f-error-card-head">`
           + `<div class="f-error-record-title">`
-          + `<span class="f-error-badge">⚠ RECORD: ${esc(activeRecordName)}</span>`
           + `<strong>${esc(title)}</strong>`
           + `</div>`
-          + `<button type="button" class="btn-how btn-view-mosaic" data-view-entity="${esc(activeType)}/${esc(activeId)}">View Mosaic Details</button>`
           + `</div>`
           + compareHtml
           + choicesHtml
           + `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")} · Decide by: ${esc(item.deadline || "—")} · If no decision: ${esc(item.fallback || "do not use this value")}.</div>`
-          + `<div style="margin-top: 6px;"><button class="btn-how" data-f-gap-explain="${esc(item.steward_id)}" type="button">How do we know?</button></div>`
+          + `<div style="margin-top: 6px;"><button class="btn-how" data-f-gap-explain="${esc(item.steward_id)}" data-gap-decision="${esc(item.decision_id || "")}" type="button">How do we know?</button></div>`
           + `</div>`;
+        }).join("");
+        return head + cards;
       }).join("");
     }
 
-    // 2. Lookalike trap card (if in hidden scene)
-    if (isHiddenScene) {
+    // 2. Lookalike trap card (if in hidden scene). Names/values come from
+    // the loaded trap fragments, never from hard-coded demo strings.
+    if (trapVisible()) {
+      const trapName = trapDisplayName("display_name") || trapDisplayName("name") || "F6 neighbour";
+      const trapPhone = trapDisplayName("phone");
+      const trapAddr = trapDisplayName("address");
+      const whoLine = trapPhone
+        ? `${trapName} — Same address, phone differs by 1 digit`
+        : `${trapName} — Kept separate, not merged`;
+      const descLine = trapAddr && trapPhone
+        ? `This neighbour lives at <b>${esc(trapAddr)}</b>, but his phone is <b>${esc(trapPhone)}</b> (differs by 1 digit). The engine isolated him and did not merge him.`
+        : `This neighbour looks similar, so we did not merge him. The engine isolated him and kept him separate.`;
       gapsHtml += `<div class="f-error-card trap-card">`
         + `<div class="f-error-card-head">`
         + `<div class="f-error-record-title">`
-        + `<span class="f-trap-badge">⚠ LOOKALIKE NEIGHBOUR: Document F6</span>`
-        + `<strong>Tran Van Binh — Same address, phone differs by 1 digit</strong>`
+        + `<span class="f-trap-badge">⚠ LOOKALIKE NEIGHBOUR: ${esc(trapDocIds.join(", "))}</span>`
+        + `<strong>${esc(whoLine)}</strong>`
         + `</div>`
         + `<button type="button" class="btn-how" id="btn-trap-proof">How do we know?</button>`
         + `</div>`
-        + `<div class="f-trap-desc">This neighbour lives at <b>123 Le Loi, HCM</b> (same as Nguyen Van An), but his phone is <b>0901234568</b> (differs by 1 digit from 0901234567). The engine isolated him and did not merge him into Nguyen Van An.</div>`
+        + `<div class="f-trap-desc">${descLine}</div>`
         + `<div class="steward-actions">`
         + `<button class="btn-how" disabled style="background:#F0FDF4;color:#15803D;font-weight:700;border:1px solid #86EFAC">✓ Kept Separate as Different Person</button>`
         + `</div>`
         + `</div>`;
     }
 
-    // 3. Clean banner when 0 errors exist
-    if (errorRecordsCount === 0 && !isHiddenScene) {
+    // 3. Clean banner when 0 records need review
+    const cleanList = summary ? (summary.clean_list || []) : [];
+    if (dNeed === 0) {
       if (gapsWrapEl) gapsWrapEl.classList.add("all-clean");
-      gapsBadgeEl.textContent = "0 gaps · all clean";
+      gapsBadgeEl.textContent = hasSummary ? "0 gaps · all clean" : "Not checked yet";
       gapsHtml = `<div class="f-gap-item ok" style="padding:16px;text-align:center;">`
         + `<div style="font-size:16px;font-weight:700;color:#15803D;margin-bottom:6px">✓ 100% Clean! All records in this dataset are verified.</div>`
-        + `<div class="muted" style="margin-bottom:12px">Zero disagreements or conflicts remain across systems. All ${totalRecordsCount} records are ready to use.</div>`
+        + `<div class="muted" style="margin-bottom:12px">Zero disagreements or conflicts remain across systems. All ${dTotal} records are ready to use.</div>`
         + `<button id="f-export-clean-btn" class="btn-how" style="background:#15803D;color:#fff;border:none;padding:6px 14px;font-weight:700;" type="button">⬇ Export All Clean Records</button>`
         + `</div>`
         + autoHtml;
     } else {
       if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
-      gapsBadgeEl.textContent = `${errorRecordsCount} record${errorRecordsCount === 1 ? "" : "s"} to review`;
+      gapsBadgeEl.textContent = `${dNeed} record${dNeed === 1 ? "" : "s"} to review`;
       gapsHtml += autoHtml;
     }
 
-    // 4. Clean Records Collapsed Accordion
-    if (cleanRecordsList.length > 0) {
-      const cleanRowsHtml = cleanRecordsList.map((r) =>
+    // 4. Clean Records Collapsed Accordion (from the live ledger summary)
+    if (cleanList.length > 0) {
+      const cleanRowsHtml = cleanList.map((r) =>
         `<div class="f-clean-row">`
-        + `<div><span class="f-clean-badge">✓ Clean</span> <b>${esc(r.title)}</b> <span class="muted">(${esc(r.detail)})</span></div>`
-        + `<button type="button" class="btn-how btn-view-mosaic" data-view-entity="${esc(r.entityVal)}">View Mosaic Details</button>`
+        + `<div><span class="f-clean-badge">✓ Clean</span> <b>${esc(r.display_name || r.entity_id)}</b> <span class="muted">(${esc(r.entity_type)} ${esc(r.entity_id)})</span></div>`
+        + `<button type="button" class="btn-how btn-view-mosaic" data-view-entity="${esc(r.entity_type)}/${esc(r.entity_id)}" data-view-name="${esc(r.display_name || r.entity_id)}">View Mosaic Details</button>`
         + `</div>`
       ).join("");
 
       gapsHtml += `<details class="f-clean-acc">`
-        + `<summary>▶ View Clean Records (${cleanRecordsList.length} verified with zero conflicts)</summary>`
+        + `<summary>▶ View Clean Records (${cleanList.length} verified with zero conflicts)</summary>`
         + `<div class="f-clean-list">${cleanRowsHtml}</div>`
         + `</details>`;
     }
@@ -882,7 +933,7 @@
 
     // Bind event listeners for explanations and view buttons
     gapsEl.querySelectorAll("[data-f-gap-explain]").forEach((btn) => {
-      btn.addEventListener("click", () => explain(f.decision_id));
+      btn.addEventListener("click", () => explain(btn.getAttribute("data-f-gap-decision") || (f && f.decision_id)));
     });
     gapsEl.querySelectorAll("[data-f-auto-explain]").forEach((btn) => {
       btn.addEventListener("click", () => explain(f.decision_id, btn.getAttribute("data-f-auto-explain")));
@@ -890,23 +941,27 @@
 
     const trapProofBtn = $("btn-trap-proof");
     if (trapProofBtn) {
-      trapProofBtn.addEventListener("click", () => askDownstream("F6"));
+      trapProofBtn.addEventListener("click", () => askAbout("neighbour F6"));
     }
 
     const exportCleanBtn = $("f-export-clean-btn");
     if (exportCleanBtn) {
-      exportCleanBtn.addEventListener("click", () => openExport());
+      exportCleanBtn.addEventListener("click", () => openExport("batch"));
     }
 
-    // View Mosaic Details: smoothly switch active record & scroll to Step 3
+    // View Mosaic Details: read-only record switch (no re-derive), then
+    // scroll to the mosaic picture for that record.
     gapsEl.querySelectorAll(".btn-view-mosaic").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const entVal = btn.getAttribute("data-view-entity");
         if (!entVal) return;
-        if (entitySel.value !== entVal) {
-          switchEntity(entVal);
-          await loadFragments();
-          await resolve(false);
+        const [t, ...rest] = entVal.split("/");
+        const id = rest.join("/");
+        try {
+          await switchRecord(t, id);
+        } catch (error) {
+          setStatus(`Cannot open record ${entVal}: ${error.message}`);
+          return;
         }
         const target = $("f-mosaic-card");
         if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -928,6 +983,26 @@
     // "Show how it was decided" only makes sense once a decision exists.
     $("f-show-detail").hidden = !fState.ran;
     $("f-show-detail-2").hidden = !fState.ran;
+    // Block 3 viewing header: which record is on screen.
+    const viewingEl = $("f-viewing");
+    if (viewingEl) {
+      const g = (lastFriendly && lastFriendly.golden) || null;
+      if (g && g.entity_type && g.entity_id) {
+        const pool = activeFragments().filter((fr) => (fr.entity_type || g.entity_type) === g.entity_type);
+        let label = "";
+        const pick = (attrs) => {
+          for (const attr of attrs) {
+            const hit = pool.find((fr) => fr.attribute === attr && fr.value);
+            if (hit) return String(hit.value);
+          }
+          return "";
+        };
+        label = g.entity_type === "user" ? pick(["display_name", "full_name", "name"]) : pick(["category", "name", "display_name"]);
+        viewingEl.innerHTML = `Viewing: <b>${esc(label || g.entity_id)}</b> <span class="muted">(${esc(g.entity_type)} ${esc(g.entity_id)})</span>`;
+      } else {
+        viewingEl.textContent = "";
+      }
+    }
     // Active-cluster badge: after a build, the UI follows the built entity
     // (e.g. user/cluster-1), even when the fixture selector shows another.
     const activeBadge = $("entity-active");
@@ -1124,6 +1199,162 @@
   function switchEntity(value) {
     entitySel.value = value;
     fState.activeEntity = null;
+  }
+
+  // Dataset summary (Block 1) + per-record fragments/goldens (Block 2/3)
+  // are fetched explicitly after runs, uploads, switches and steward
+  // decisions — never inside render (no render loops, no silent refetch).
+  async function refreshDatasetData() {
+    try {
+      fState.datasetSummary = await api("/datasets/summary");
+    } catch (error) {
+      fState.datasetSummary = null;
+    }
+    const summary = fState.datasetSummary;
+    const keys = new Set();
+    (summary ? summary.needs_review || [] : []).forEach((r) => keys.add(`${r.entity_type}/${r.entity_id}`));
+    (summary ? summary.clean_list || [] : []).forEach((r) => keys.add(`${r.entity_type}/${r.entity_id}`));
+    fState.recordFragments = fState.recordFragments || {};
+    fState.recordGoldens = fState.recordGoldens || {};
+    for (const key of keys) {
+      if (fState.entityFragments && fState.entityFragments[key]) {
+        fState.recordFragments[key] = fState.entityFragments[key];
+      } else if (!fState.recordFragments[key]) {
+        const [t, id] = key.split("/");
+        try {
+          const data = await api(`/fragments/${t}/${encodeURIComponent(id)}`);
+          fState.recordFragments[key] = (data.fragments || []).map((f) => Object.assign({}, f, { entity_type: t }));
+        } catch (error) {
+          fState.recordFragments[key] = [];
+        }
+      }
+      if (!fState.recordGoldens[key]) {
+        const [t, id] = key.split("/");
+        try {
+          fState.recordGoldens[key] = await api(`/golden/${t}/${encodeURIComponent(id)}`);
+        } catch (error) {
+          fState.recordGoldens[key] = null;
+        }
+      }
+    }
+    ensureEntityOptions();
+    renderDatasetAndGaps();
+  }
+
+  function recordKey(entityType, entityId) {
+    return `${entityType}/${entityId}`;
+  }
+
+  function ensureEntityOptions() {
+    const summary = fState.datasetSummary;
+    if (!summary) return;
+    (summary.needs_review || []).forEach((r) => ensureEntityOption(r.entity_type, r.entity_id));
+    (summary.clean_list || []).forEach((r) => ensureEntityOption(r.entity_type, r.entity_id));
+  }
+
+  function recordDisplayName(entityType, entityId, pool) {
+    // Prefer the cached fragments for exactly this record (built entities),
+    // else the active fragment list, else the bare id. Never invented.
+    const cached = (fState.recordFragments || {})[`${entityType}/${entityId}`];
+    const list = (pool || (cached && cached.length ? cached : activeFragments())).filter(
+      (fr) => (fr.entity_type || entityType) === entityType
+    );
+    const pick = (attrs) => {
+      for (const attr of attrs) {
+        const hit = list.find((fr) => fr.attribute === attr && fr.value);
+        if (hit) return String(hit.value);
+      }
+      return "";
+    };
+    if (entityType === "user") {
+      return pick(["display_name", "full_name", "name"]) || entityId;
+    }
+    return pick(["category", "name", "display_name"]) || entityId;
+  }
+
+  function ensureEntityOption(entityType, entityId) {
+    const value = recordKey(entityType, entityId);
+    let opt = [...entitySel.options].find((o) => o.value === value);
+    if (!opt) {
+      opt = document.createElement("option");
+      opt.value = value;
+      entitySel.insertBefore(opt, entitySel.lastChild);
+    }
+    const label = entityType === "user" || entityType === "product"
+      ? recordDisplayName(entityType, entityId)
+      : entityId;
+    opt.textContent = `${label} (${entityType} ${entityId})`;
+  }
+
+  // Trap UI shows only for records that belong to the trap scenario run.
+  function trapVisible() {
+    const docs = fState.trapDocs || [];
+    if (!docs.length) return false;
+    const recs = fState.trapRecords || [];
+    if (!recs.length) return true;
+    const g = (lastFriendly && lastFriendly.golden) || null;
+    const key = g ? `${g.entity_type}/${g.entity_id}` : "";
+    if (key && recs.includes(key)) return true;
+    const pool = activeFragments();
+    return pool.some((fr) => fr._trap || (fr._docId && docs.includes(fr._docId)));
+  }
+
+  // Read-only record switch: follows a record's golden + pending stewards
+  // without deriving anything new. Fragments come from the built-entity
+  // cache, else fixtures; goldens + stewards come straight from the ledger.
+  async function switchRecord(entityType, entityId) {
+    const value = recordKey(entityType, entityId);
+    ensureEntityOption(entityType, entityId);
+    entitySel.value = value;
+    fState.activeEntity = { entityType, entityId };
+    const cached = (fState.entityFragments || {})[value];
+    if (cached && cached.length) {
+      fragments = cached.slice();
+      tickets = [];
+    } else {
+      try {
+        await loadFragments();
+      } catch (error) {
+        fragments = [];
+        tickets = [];
+      }
+    }
+    let golden = null;
+    try {
+      const data = await api(`/golden/${entityType}/${entityId}`);
+      golden = data && data.golden_id ? data : null;
+    } catch (error) {
+      golden = null;
+    }
+    let pending = [];
+    try {
+      const data = await api("/steward/pending");
+      pending = (data.pending || []).filter(
+        (s) => s.entity_type === entityType && s.entity_id === entityId
+      );
+    } catch (error) {
+      pending = [];
+    }
+    lastFriendly = {
+      verdict: pending.length ? "escalated" : golden ? "published" : "denied",
+      golden,
+      steward_queue: pending,
+      conflicts: [],
+      decision_id: (golden && golden.decision_id) || null,
+      policy_version: (golden && golden.policy_version) || null,
+      taxonomy_version: (golden && golden.taxonomy_version) || null,
+    };
+    window.__lastGolden = golden;
+    window.__lastGoldens = golden ? [golden] : [];
+    fState.ran = true;
+    markRan();
+    renderFriendly();
+    if (golden) {
+      await loadGraphForBuild({ goldens: [golden], proposals: [], splink: null });
+      feed(`Viewing record ${entityType}/${entityId} — Decision: ${golden.decision_id} — ${pending.length ? `${pending.length} item(s) need a person` : "no open gaps"}.`);
+    } else {
+      setStatus(`No golden record for ${entityType}/${entityId} yet — nothing derived.`);
+    }
   }
 
   async function loadEntities() {
@@ -2181,6 +2412,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(act2Body),
     });
+    fState.trapRecords = (payload.goldens || []).filter((g) => g.golden_id).map((g) => `${g.entity_type}/${g.entity_id}`);
     setFriendlyFromBuild(payload);
     markRan();
     announceProposer((payload.proposals || [])[0], payload.splink);
@@ -3162,10 +3394,12 @@
       });
     }
 
-    // Trap neighbour (e.g. F6): kept separate, never merged. No values
-    // are invented here — only the trap document ids already on record.
+    // Trap neighbour: kept separate, never merged. Shown only when the
+    // current record belongs to the trap run; ids come from the loaded
+    // hidden dataset, and the display name from its fragments when present.
     const trapIds = fState.trapDocs || [];
-    if (trapIds.length > 0) {
+    const showTrap = trapIds.length > 0 && (typeof trapVisible === "function" ? trapVisible() : true);
+    if (showTrap) {
       tiles.push({
         kind: "trap",
         attrLabel: "🛡 KEPT SEPARATE (NOT MERGED)",
@@ -3248,6 +3482,7 @@
     activeFragments,
     fragmentForAttribute,
     renderFriendly,
+    refreshDatasets() { refreshDatasetData().catch(() => {}); },
     setFriendlyFromResolve,
     renderEngine,
     renderMosaic,
@@ -3495,6 +3730,41 @@
     if (event.key === "Escape") MosaicDrawers.closeDrawer();
   });
 
+  const tabChat = $("tab-btn-chat");
+  const tabPieces = $("tab-btn-pieces");
+  const chatPanel = $("f-chat-panel");
+  const piecesPanel = $("f-pieces-panel");
+  if (tabChat && tabPieces && chatPanel && piecesPanel) {
+    tabChat.addEventListener("click", () => {
+      chatPanel.style.display = "flex";
+      piecesPanel.style.display = "none";
+      tabChat.style.background = "#fff";
+      tabChat.style.color = "#0F172A";
+      tabChat.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+      tabPieces.style.background = "transparent";
+      tabPieces.style.color = "#475569";
+      tabPieces.style.boxShadow = "none";
+      const title = $("tab-card-title");
+      if (title) title.textContent = "Live Multi-Agent Protocol Chat";
+      const sub = $("tab-card-sub");
+      if (sub) sub.textContent = "Every message is backed by a real proposer trace, Datalog derivation, or ledger decision.";
+    });
+    tabPieces.addEventListener("click", () => {
+      chatPanel.style.display = "none";
+      piecesPanel.style.display = "flex";
+      tabPieces.style.background = "#fff";
+      tabPieces.style.color = "#0F172A";
+      tabPieces.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+      tabChat.style.background = "transparent";
+      tabChat.style.color = "#475569";
+      tabChat.style.boxShadow = "none";
+      const title = $("tab-card-title");
+      if (title) title.textContent = "Raw Input Pieces";
+      const sub = $("tab-card-sub");
+      if (sub) sub.textContent = "Inspect raw pieces and authority ranks from each connected system.";
+    });
+  }
+
   renderLoop();
   applyPreRunState();
   renderFriendly();
@@ -3513,6 +3783,9 @@
     .catch(() => {})
     // First paint stays idle: the user picks a scenario or drops a file.
     // Auto-run happens on upload / scenario click, never on page load.
-    .finally(() => loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`)));
+    .finally(() => {
+      loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
+      refreshDatasetData().catch(() => {});
+    });
   MosaicDrawers.loadPending(drawerCtx);
 })();
