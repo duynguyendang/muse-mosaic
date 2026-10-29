@@ -1,0 +1,82 @@
+{
+  "policy_version": "pol-user-olist-2026-10-29-v1",
+  "entity_type": "user",
+  "allowed_attributes": [
+    "customer_unique_id",
+    "customer_zip",
+    "customer_city",
+    "customer_state",
+    "order_id",
+    "order_status",
+    "product_id",
+    "seller_id",
+    "product_category"
+  ],
+  "golden_attributes": [
+    "customer_unique_id",
+    "customer_zip",
+    "customer_city",
+    "customer_state"
+  ],
+  "authority_matrix": {
+    "customer_unique_id": {
+      "olist-customers": 1,
+      "olist-orders": 2
+    },
+    "customer_zip": {
+      "olist-customers": 1
+    },
+    "customer_city": {
+      "olist-customers": 1
+    },
+    "customer_state": {
+      "olist-customers": 1
+    },
+    "order_id": {
+      "olist-orders": 1,
+      "olist-items": 2
+    },
+    "order_status": {
+      "olist-orders": 1
+    },
+    "product_id": {
+      "olist-items": 2,
+      "olist-products": 1
+    },
+    "seller_id": {
+      "olist-items": 1
+    },
+    "product_category": {
+      "olist-products": 1
+    }
+  },
+  "critical_attributes": [],
+  "rules": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "L1",
+    "C1",
+    "C2",
+    "T1",
+    "I1"
+  ],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording"
+  },
+  "ttls_seconds": {
+    "olist-customers": 3600,
+    "olist-orders": 3600,
+    "olist-items": 3600,
+    "olist-products": 3600,
+    "olist-sellers": 3600
+  },
+  "splink": {
+    "threshold": 0.9,
+    "blocking": [
+      "customer_unique_id",
+      "order_id"
+    ]
+  }
+}

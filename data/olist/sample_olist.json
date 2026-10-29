@@ -1,0 +1,813 @@
+{
+ "documents": [
+  {
+   "document_id": "olist-1afe8a9c",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "45200",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "jequie",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-bb874c45",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "bb874c45df1a3c97842d52f31efee99a",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-bb874c45-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "bb874c45df1a3c97842d52f31efee99a",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "8f71fe1e1b5bbb6773e7276b5c37ef65",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "95ec4458365c4d11f452ccf538377619",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-8f71fe1e",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "8f71fe1e1b5bbb6773e7276b5c37ef65",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "papelaria",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-24b0e2bd",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "45200",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "jequie",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-c306eca4",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "c306eca42d32507b970739b5b6a5a33a",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "canceled",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-1b4a75b3",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "26220",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "nova iguacu",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "RJ",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-a61d617f",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "a61d617fbe5bd006e40d3a0988fc844b",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-a61d617f-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "a61d617fbe5bd006e40d3a0988fc844b",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "6e1b14d3cbb5fb3a2c00351007127dfd",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "7a67c85e85bb2ce8582c35f2203ad736",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-6e1b14d3",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "6e1b14d3cbb5fb3a2c00351007127dfd",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cool_stuff",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-f6efe5d5",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "26220",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "nova iguacu",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "RJ",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-08204559",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "08204559bebd39e09ee52dcb56d8faa2",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-08204559-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "08204559bebd39e09ee52dcb56d8faa2",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "a2bd2eae20998a24c22b110334928b02",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "6cd68b3ed6d59aaa9fece558ad360c0a",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-a2bd2eae",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "a2bd2eae20998a24c22b110334928b02",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "malas_acessorios",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-49cf243e",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "57055",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "maceio",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "AL",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-90ae229a",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "90ae229a4addcfead792e2564554f09c",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "shipped",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-90ae229a-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "90ae229a4addcfead792e2564554f09c",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "b0961721fd839e9982420e807758a2a6",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1f50f920176fa81dab994f9023523100",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-b0961721",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "b0961721fd839e9982420e807758a2a6",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "ferramentas_jardim",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-d95f60d7",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "57035",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "maceio",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "AL",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-9392c5e7",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "9392c5e72885ad5aba87e6223ca9838d",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-9392c5e7-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "9392c5e72885ad5aba87e6223ca9838d",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "a6ad77b15e566298a4e8ee2011ab1255",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1025f0e2d44d7041d6cf58b6550e0bfa",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-a6ad77b1",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "a6ad77b15e566298a4e8ee2011ab1255",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "moveis_decoracao",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-9c6ea4e6",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "customer_unique_id": {
+     "value": "060874c9cbadb6df3d73ddea97e55bf7",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "45200",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "jequie",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-88498659",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "customer_unique_id": {
+     "value": "060874c9cbadb6df3d73ddea97e55bf7",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "88498659c4bfb68808d6b49a57a6ed17",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-88498659-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "order_id": {
+     "value": "88498659c4bfb68808d6b49a57a6ed17",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "24ef70f010919148b022e66b05862778",
+     "authority_rank": 2,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "a938325a4b357fd23a6a4d5bb126408e",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-24ef70f0",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "product_id": {
+     "value": "24ef70f010919148b022e66b05862778",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "automotivo",
+     "authority_rank": 1,
+     "event_time": "2026-10-29T13:04:36.908363+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  }
+ ],
+ "meta": {
+  "source": "olistbr/brazilian-ecommerce (official olist/work-at-olist-data mirror)",
+  "main_unique_ids": [
+   "00172711b30d52eea8b313a7f2cced02",
+   "004288347e5e88a27ded2bb23747066c",
+   "004b45ec5c64187465168251cd1c9c2f"
+  ],
+  "trap_unique_id": "060874c9cbadb6df3d73ddea97e55bf7",
+  "dropped": {
+   "orders_missing_customer": 0,
+   "items_missing_order": 0,
+   "items_missing_product": 0
+  },
+  "mapping": {
+   "customer_unique_id": "verbatim customer_unique_id (person key per dataset docs)",
+   "customer_zip/city/state": "verbatim location fields",
+   "order_id": "verbatim order key (exact link proof)",
+   "product_id/seller_id": "verbatim item keys",
+   "product_category": "verbatim category name (raw Portuguese)"
+  },
+  "event_time_note": "import batch timestamp for TTL liveness; recency not asserted"
+ }
+}
