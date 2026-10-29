@@ -66,6 +66,19 @@ def _parse_bool(raw: str, name: str) -> bool:
     raise ConfigurationError(f"{name} must be a boolean (true/false), got {raw!r}")
 
 
+def _parse_optional_int(raw: str, name: str, minimum: int = 0) -> int:
+    value = raw.strip()
+    if not value:
+        return 0
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be an integer, got {raw!r}") from exc
+    if parsed < minimum:
+        raise ConfigurationError(f"{name} must be >= {minimum}, got {parsed}")
+    return parsed
+
+
 def _parse_optional_dim(raw: str, name: str) -> int | None:
     value = raw.strip()
     if not value:
@@ -98,6 +111,17 @@ class Settings:
     database_path: str = "./data/mosaic.db"
     mock_data_dir: Path = DEFAULT_MOCK_DATA_DIR
     static_dir: Path = STATIC_DIR
+    autonomy_mode: str = "manual"
+    job_max_attempts: int = 3
+    muse_job_token_budget: int = 0
+    muse_daily_token_budget: int = 0
+    inbox_dir: str = ""
+    inbox_poll_seconds: int = 30
+    analyser_interval_seconds: int = 0
+    steward_webhook_url: str = ""
+    steward_webhook_secret: str = ""
+    ingest_webhook_secret: str = ""
+    enable_background_tasks: bool = True
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -129,6 +153,31 @@ class Settings:
             trust_engine_url=trust_engine_url,
             manglekit_bin=get("MANGLEKIT_BIN"),
             database_path=get("DATABASE_PATH") or "./data/mosaic.db",
+            autonomy_mode=(get("AUTONOMY_MODE") or "manual").strip().lower(),
+            job_max_attempts=_parse_optional_int(
+                get("JOB_MAX_ATTEMPTS"), "JOB_MAX_ATTEMPTS", minimum=1
+            )
+            or 3,
+            muse_job_token_budget=_parse_optional_int(
+                get("MUSE_JOB_TOKEN_BUDGET"), "MUSE_JOB_TOKEN_BUDGET"
+            ),
+            muse_daily_token_budget=_parse_optional_int(
+                get("MUSE_DAILY_TOKEN_BUDGET"), "MUSE_DAILY_TOKEN_BUDGET"
+            ),
+            inbox_dir=get("INBOX_DIR"),
+            inbox_poll_seconds=_parse_optional_int(
+                get("INBOX_POLL_SECONDS"), "INBOX_POLL_SECONDS", minimum=1
+            )
+            or 30,
+            analyser_interval_seconds=_parse_optional_int(
+                get("ANALYSER_INTERVAL_SECONDS"), "ANALYSER_INTERVAL_SECONDS"
+            ),
+            steward_webhook_url=get("STEWARD_WEBHOOK_URL"),
+            steward_webhook_secret=get("STEWARD_WEBHOOK_SECRET"),
+            ingest_webhook_secret=get("INGEST_WEBHOOK_SECRET"),
+            enable_background_tasks=_parse_bool(
+                get("ENABLE_BACKGROUND_TASKS") or "true", "ENABLE_BACKGROUND_TASKS"
+            ),
         )
 
     @property
@@ -154,6 +203,10 @@ class Settings:
         all-or-nothing: partial configuration would risk mixing vectors from
         different models or versions, which CSD 5.3a forbids.
         """
+        if self.autonomy_mode not in ("manual", "supervised"):
+            raise ConfigurationError(
+                f"AUTONOMY_MODE must be manual or supervised, got {self.autonomy_mode!r}"
+            )
         if not self.use_mock_muse:
             missing = [
                 name

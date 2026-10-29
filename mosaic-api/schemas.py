@@ -490,6 +490,36 @@ class BuildResponse(StrictModel):
     splink_status: str = Field(min_length=1)
 
 
+class JobStatus:
+    """Job lifecycle. Terminal states never re-run without an explicit retry."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    PUBLISHED = "published"
+    ESCALATED = "escalated"
+    DENIED = "denied"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+    TERMINAL = (PUBLISHED, ESCALATED, DENIED, FAILED, CANCELLED)
+
+
+class JobResponse(StrictModel):
+    """One background job: execution tracking only, never trust content."""
+
+    job_id: str = Field(min_length=1)
+    kind: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    idempotency_key: str = Field(min_length=1)
+    attempts: int = Field(ge=0)
+    tokens_used: int = Field(ge=0)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    next_run_at: str | None = None
+    created_at: str = Field(min_length=1)
+    updated_at: str = Field(min_length=1)
+
+
 class UploadResponse(StrictModel):
     file_name: str = Field(min_length=1)
     detected_entity_type: str = Field(min_length=1)

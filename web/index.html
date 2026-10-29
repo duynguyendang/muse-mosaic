@@ -495,6 +495,21 @@
         </div>
       </section>
 
+      <section class="panel" style="margin-bottom: 16px;" aria-labelledby="jobs-title">
+        <div class="panel-head">
+          <h2 id="jobs-title">Background jobs</h2>
+          <span class="tag">queued → running → published / escalated / failed — resume is replay, never re-derive</span>
+        </div>
+        <div class="panel-body">
+          <div class="controls" style="margin:0 0 10px 0;">
+            <button id="jobs-refresh">Refresh jobs</button>
+            <button id="jobs-enqueue-view">Enqueue current view</button>
+            <span class="muted" id="jobs-info">No jobs polled yet.</span>
+          </div>
+          <div class="card mono" id="jobs-list">No jobs yet.</div>
+        </div>
+      </section>
+
       <section class="panel tall accent-indigo" id="sec-graph" style="margin-bottom: 16px;" aria-labelledby="graph-title">
         <div class="panel-head">
           <h2 id="graph-title">Data graph — canvas</h2>

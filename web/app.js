@@ -1565,6 +1565,102 @@
     if (hit) hit.scrollIntoView({ block: "center" });
   }
 
+  async function loadJobs() {
+    try {
+      const data = await api("/jobs?limit=20");
+      renderJobs(data.jobs || []);
+    } catch (error) {
+      $("jobs-info").textContent = `Jobs unavailable: ${error.message}`;
+    }
+  }
+
+  function renderJobs(jobs) {
+    const host = $("jobs-list");
+    if (!jobs.length) {
+      host.textContent = "No jobs yet.";
+      $("jobs-info").textContent = "No jobs yet — enqueue one to run unattended.";
+      return;
+    }
+    host.innerHTML = jobs.map((job) => {
+      const verdict = job.result && job.result.verdict ? ` · verdict ${esc(job.result.verdict)}` : "";
+      const error = job.error ? ` · ${esc(job.error.slice(0, 120))}` : "";
+      const tokens = ` · ${job.tokens_used} tokens / ${job.attempts} attempts`;
+      const actions = job.status === "failed"
+        ? ` <button data-job-retry="${esc(job.job_id)}">Retry</button>`
+        : (job.status === "queued" || job.status === "running"
+          ? ` <button data-job-cancel="${esc(job.job_id)}">Cancel</button>`
+          : "");
+      return `<div><b>${esc(job.job_id.slice(0, 8))}</b> ${esc(job.kind)} — ${esc(job.status)}${verdict}${tokens}${error}${actions}</div>`;
+    }).join("");
+    const counts = {};
+    jobs.forEach((job) => { counts[job.status] = (counts[job.status] || 0) + 1; });
+    $("jobs-info").textContent = Object.entries(counts)
+      .map(([status, count]) => `${count} ${status}`).join(" · ");
+    host.querySelectorAll("[data-job-retry]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await api(`/jobs/${btn.getAttribute("data-job-retry")}/retry`, { method: "POST" });
+          feed(`Job ${btn.getAttribute("data-job-retry").slice(0, 8)} re-queued by steward — worker resumes from persisted clusters.`);
+          await loadJobs();
+        } catch (error) {
+          setStatus(`Retry failed: ${error.message}`);
+        }
+      });
+    });
+    host.querySelectorAll("[data-job-cancel]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await api(`/jobs/${btn.getAttribute("data-job-cancel")}`, { method: "DELETE" });
+          feed(`Job ${btn.getAttribute("data-job-cancel").slice(0, 8)} cancelled — running clusters finish their gate, nothing new starts.`);
+          await loadJobs();
+        } catch (error) {
+          setStatus(`Cancel failed: ${error.message}`);
+        }
+      });
+    });
+  }
+
+  function currentViewDocuments() {
+    const { entityType } = currentEntity();
+    const docsBySource = {};
+    for (const f of activeFragments()) {
+      (docsBySource[f.source] = docsBySource[f.source] || { source: f.source, fields: {} });
+    }
+    return Object.values(docsBySource).map((d, i) => ({
+      document_id: `DOC-${i + 1}`,
+      entity_type: entityType,
+      source: d.source,
+      synthetic: true,
+      fields: Object.fromEntries(
+        activeFragments().filter((f) => f.source === d.source).map((f) => [f.attribute, {
+          value: f.value, authority_rank: f.authority_rank, event_time: f.event_time,
+          verified: f.verified, ttl_seconds: f.ttl_seconds,
+        }])
+      ),
+    }));
+  }
+
+  async function enqueueCurrentView() {
+    const documents = currentViewDocuments();
+    if (!documents.length) {
+      setStatus("Nothing to enqueue — load fragments first.");
+      return;
+    }
+    try {
+      const key = `ui-job-${Date.now()}`;
+      const payload = await api("/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ work_id: key, idempotency_key: key, dataset: { documents } }),
+      });
+      feed(`Job ${payload.job_id.slice(0, 8)} enqueued — worker runs it unattended; same key replays, never duplicates.`);
+      setStatus(`Job ${payload.job_id} queued — poll the jobs panel for the verdict.`);
+      await loadJobs();
+    } catch (error) {
+      setStatus(`Enqueue failed (fail-closed): ${error.message}`);
+    }
+  }
+
   function renderMosaic(payload) {    mosaic.innerHTML = "";
     const tiles = [];
     const golden = payload.golden || { attributes: {} };
@@ -1609,6 +1705,8 @@
   }
 
   entitySel.addEventListener("change", onEntityChange);
+  $("jobs-refresh").addEventListener("click", loadJobs);
+  $("jobs-enqueue-view").addEventListener("click", enqueueCurrentView);
   ticketBox.addEventListener("change", renderFragments);
   refreshBtn.addEventListener("click", loadFragments);
   resolveBtn.addEventListener("click", () => resolve(false));
@@ -1689,6 +1787,8 @@
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();
   window.setInterval(refreshHealth, 10000);
+  loadJobs();
+  window.setInterval(loadJobs, 10000);
   loadEntities()
     .catch(() => {})
     .finally(() => loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`)));

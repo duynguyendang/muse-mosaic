@@ -245,6 +245,7 @@ def make_api_client(te_derive_url: str, tmp_path, matching_service_url: str | No
         trust_engine_url=te_derive_url,
         manglekit_bin="",
         database_path=str(Path(tmp_path) / "mosaic.db"),
+        enable_background_tasks=False,
     )
     if matching_service_url:
         settings = dataclasses.replace(settings, matching_service_url=matching_service_url)

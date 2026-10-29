@@ -600,41 +600,12 @@ async def build(request: Request) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     current: Settings = request.app.state.settings
-    policies = request.app.state.policies
-    taxonomies = getattr(request.app.state, "taxonomies", None)
-    expected_structures = getattr(request.app.state, "expected_structures", {}) or {}
-    documents = [doc.model_dump() for doc in build_request.dataset.documents]
-    for document in documents:
-        document["content_hash"] = document.get("content_hash") or document["document_id"]
-    ctx = _BuildContext(
-        settings=current,
-        policies=policies,
-        taxonomies=taxonomies,
-        expected_structures=expected_structures,
-        request=build_request,
-    )
-    # Cluster: Splink clusters when available, else exact-identifier
-    # connected components (Muse + fuzzy fallback).
-    splink_out, splink_status = await _match_documents(
-        current, policies, documents, build_request.work_id
-    )
-    ctx.splink_out = splink_out
-    ctx.splink_status = splink_status
-    clusters = await _build_clusters(
+    from jobs import execute_full_build
+
+    return await execute_full_build(
         current,
-        policies=policies,
-        taxonomies=taxonomies,
-        documents=documents,
-        splink_out=splink_out,
+        request.app.state.policies,
+        getattr(request.app.state, "taxonomies", None),
+        getattr(request.app.state, "expected_structures", {}) or {},
+        build_request,
     )
-    goldens: list[dict[str, Any]] = []
-    conflicts_all: list[dict[str, Any]] = []
-    stewards_all: list[dict[str, Any]] = []
-    verdicts: list[str] = []
-    for index, cluster in enumerate(clusters):
-        goldens_i, conflicts_i, stewards_i, verdict = await _build_one_cluster(ctx, cluster, index)
-        goldens.extend(goldens_i)
-        conflicts_all.extend(conflicts_i)
-        stewards_all.extend(stewards_i)
-        verdicts.append(verdict)
-    return _build_summary(ctx, goldens, conflicts_all, stewards_all, verdicts)

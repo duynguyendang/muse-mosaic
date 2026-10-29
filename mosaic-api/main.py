@@ -17,6 +17,7 @@ Implemented (fail-closed where noted):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -32,6 +33,8 @@ from routes import explain as explain_routes
 from routes import golden as golden_routes
 from routes import graph as graph_routes
 from routes import health as health_routes
+from routes import ingest as ingest_routes
+from routes import jobs as jobs_routes
 from routes import resolve as resolve_routes
 from routes import similar as similar_routes
 from routes import steward as steward_routes
@@ -57,7 +60,20 @@ async def lifespan(app: FastAPI):
         app.state.taxonomies = load_taxonomies()
     except Exception as exc:
         raise RuntimeError(f"cannot start without taxonomies: {exc}") from exc
+    tasks: list[asyncio.Task] = []
+    if settings.enable_background_tasks:
+        import worker as worker_module
+
+        tasks.append(asyncio.create_task(worker_module.run_jobs_loop(app), name="job-worker"))
+        if settings.inbox_dir:
+            tasks.append(asyncio.create_task(worker_module.inbox_loop(app), name="inbox-poller"))
+        if settings.analyser_interval_seconds > 0:
+            tasks.append(asyncio.create_task(worker_module.analyser_loop(app), name="analyser"))
     yield
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -89,6 +105,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         health_routes,
         entities_routes,
         resolve_routes,
+        jobs_routes,
+        ingest_routes,
         golden_routes,
         explain_routes,
         steward_routes,

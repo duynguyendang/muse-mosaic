@@ -169,6 +169,19 @@ def fetch_candidate_facts(
     return [dict(row) for row in rows]
 
 
+def fetch_entities(database_path: str | Path) -> list[tuple[str, str]]:
+    """Distinct (entity_type, entity_id) pairs present in candidate_facts."""
+    connection = connect(database_path)
+    try:
+        rows = connection.execute(
+            "SELECT DISTINCT entity_type, entity_id FROM candidate_facts "
+            "ORDER BY entity_type, entity_id"
+        ).fetchall()
+    finally:
+        connection.close()
+    return [(row["entity_type"], row["entity_id"]) for row in rows]
+
+
 def fetch_pending_stewards(
     database_path: str | Path,
     entity_type: str | None = None,
@@ -281,3 +294,204 @@ def fetch_agent_traces(database_path: str | Path, decision_id: str) -> list[dict
         record["payload"] = json.loads(record["payload"])
         traces.append(record)
     return traces
+
+
+# ---------------------------------------------------------------------------
+# Background jobs (autonomy): durable, idempotent build runs.
+# ---------------------------------------------------------------------------
+
+JOB_STATUSES = ("queued", "running", "published", "escalated", "denied", "failed", "cancelled")
+
+JOB_TERMINAL = ("published", "escalated", "denied", "failed", "cancelled")
+
+
+def create_job(
+    database_path: str | Path,
+    *,
+    job_id: str,
+    kind: str,
+    idempotency_key: str,
+    payload_hash: str,
+    payload: dict[str, Any],
+    created_at: str,
+) -> dict[str, Any]:
+    """Insert one job row. Raises sqlite3.IntegrityError on key reuse."""
+    connection = connect(database_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                INSERT INTO jobs
+                  (job_id, kind, status, idempotency_key, payload_hash,
+                   payload, attempts, tokens_used, created_at, updated_at)
+                VALUES (?, ?, 'queued', ?, ?, ?, 0, 0, ?, ?)
+                """,
+                (
+                    job_id,
+                    kind,
+                    idempotency_key,
+                    payload_hash,
+                    json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    created_at,
+                    created_at,
+                ),
+            )
+    finally:
+        connection.close()
+    job = fetch_job(database_path, job_id)
+    assert job is not None
+    return job
+
+
+def fetch_job(database_path: str | Path, job_id: str) -> dict[str, Any] | None:
+    connection = connect(database_path)
+    try:
+        row = connection.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+    finally:
+        connection.close()
+    return _job_row(row)
+
+
+def fetch_job_by_key(database_path: str | Path, idempotency_key: str) -> dict[str, Any] | None:
+    connection = connect(database_path)
+    try:
+        row = connection.execute(
+            "SELECT * FROM jobs WHERE idempotency_key = ?", (idempotency_key,)
+        ).fetchone()
+    finally:
+        connection.close()
+    return _job_row(row)
+
+
+def _job_row(row: Any) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    record = dict(row)
+    record["payload"] = json.loads(record["payload"])
+    if record.get("result") is not None:
+        record["result"] = json.loads(record["result"])
+    return record
+
+
+def list_jobs(
+    database_path: str | Path, status: str | None = None, limit: int = 50
+) -> list[dict[str, Any]]:
+    query = "SELECT * FROM jobs"
+    params: tuple = ()
+    if status is not None:
+        query += " WHERE status = ?"
+        params = (status,)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    connection = connect(database_path)
+    try:
+        rows = connection.execute(query, params + (limit,)).fetchall()
+    finally:
+        connection.close()
+    return [record for record in (_job_row(row) for row in rows) if record is not None]
+
+
+def claim_next_job(database_path: str | Path, now_iso: str) -> dict[str, Any] | None:
+    """Atomically move one due queued job to running. Single-writer safe."""
+    connection = connect(database_path)
+    try:
+        with connection:
+            row = connection.execute(
+                """
+                SELECT job_id FROM jobs
+                WHERE status = 'queued'
+                  AND (next_run_at IS NULL OR next_run_at <= ?)
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (now_iso,),
+            ).fetchone()
+            if row is None:
+                return None
+            updated = connection.execute(
+                "UPDATE jobs SET status = 'running', updated_at = ? "
+                "WHERE job_id = ? AND status = 'queued'",
+                (now_iso, row["job_id"]),
+            ).rowcount
+            if not updated:
+                return None
+            job_row = connection.execute(
+                "SELECT * FROM jobs WHERE job_id = ?", (row["job_id"],)
+            ).fetchone()
+    finally:
+        connection.close()
+    return _job_row(job_row)
+
+
+def update_job(database_path: str | Path, job_id: str, now_iso: str, **fields: Any) -> None:
+    """Update whitelisted job columns (status/attempts/tokens_used/result/error/next_run_at)."""
+    allowed = {"status", "attempts", "tokens_used", "result", "error", "next_run_at"}
+    unknown = set(fields) - allowed
+    if unknown:
+        raise ValueError(f"cannot update job columns: {sorted(unknown)}")
+    values: dict[str, Any] = dict(fields)
+    if "result" in values and values["result"] is not None:
+        values["result"] = json.dumps(values["result"], ensure_ascii=False)
+    assignments = ", ".join(f"{column} = ?" for column in values) + ", updated_at = ?"
+    connection = connect(database_path)
+    try:
+        with connection:
+            connection.execute(
+                f"UPDATE jobs SET {assignments} WHERE job_id = ?",
+                tuple(values.values()) + (now_iso, job_id),
+            )
+    finally:
+        connection.close()
+
+
+def upsert_steward_items(database_path: str | Path, items: list[dict[str, Any]]) -> int:
+    """Insert steward items, ignoring ones already present (deterministic ids).
+
+    Analyser findings use content-derived ids, so re-runs are no-ops.
+    Returns the number of newly inserted rows.
+    """
+    if not items:
+        return 0
+    connection = connect(database_path)
+    inserted = 0
+    try:
+        with connection:
+            for item in items:
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO steward_queue
+                      (steward_id, entity_type, entity_id, attribute, owner,
+                       deputy, deadline, fallback, status, decision_id,
+                       suggested_action)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item["steward_id"],
+                        item["entity_type"],
+                        item["entity_id"],
+                        item["attribute"],
+                        item.get("owner", "steward-001"),
+                        item.get("deputy"),
+                        item["deadline"],
+                        item["fallback"],
+                        item.get("status", "pending"),
+                        item["decision_id"],
+                        item.get("suggested_action"),
+                    ),
+                )
+                inserted += cursor.rowcount
+    finally:
+        connection.close()
+    return inserted
+
+
+def sum_job_tokens_since(database_path: str | Path, since_iso: str) -> int:
+    """Total tokens_used by jobs created at/after an ISO timestamp."""
+    connection = connect(database_path)
+    try:
+        row = connection.execute(
+            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM jobs WHERE created_at >= ?",
+            (since_iso,),
+        ).fetchone()
+    finally:
+        connection.close()
+    return int(row["total"])

@@ -159,3 +159,27 @@ CREATE TABLE IF NOT EXISTS conflicts (
 
 CREATE INDEX IF NOT EXISTS idx_conflicts_decision
   ON conflicts(decision_id);
+
+-- Background jobs (autonomy): durable, idempotent build runs.
+-- A job wraps one build payload; per-cluster decisions keep their own
+-- idempotency keys, so re-running a job replays finished clusters and only
+-- derives the rest. The publisher still writes nothing except derived +
+-- validated values; this table only tracks execution, never trust.
+CREATE TABLE IF NOT EXISTS jobs (
+  job_id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  idempotency_key TEXT UNIQUE NOT NULL,
+  payload_hash TEXT NOT NULL,
+  payload JSON NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  tokens_used INTEGER NOT NULL DEFAULT 0,
+  result JSON,
+  error TEXT,
+  next_run_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_status
+  ON jobs(status, next_run_at);
