@@ -155,9 +155,9 @@ def _export_metadata(
     meta: dict[str, Any] = {
         "exported_at": _now_iso(),
         "policy_version": policy_versions[0] if len(policy_versions) == 1 else policy_versions,
-        "taxonomy_version": taxonomy_versions[0]
-        if len(taxonomy_versions) == 1
-        else taxonomy_versions,
+        "taxonomy_version": (
+            taxonomy_versions[0] if len(taxonomy_versions) == 1 else taxonomy_versions
+        ),
         "total_records": len(records),
         "scope": scope,
         "engine_version": _ENGINE_VERSION,

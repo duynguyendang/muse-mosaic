@@ -257,18 +257,97 @@ def detect_entity_type(raw: dict) -> tuple[str, str]:
     return "unknown", "low"
 
 
-def parse_upload(filename: str, raw_text: str) -> tuple[list[dict], list[dict]]:
-    """Parse an uploaded JSON file into fragment dicts (+rejections).
+def _parse_csv_fragments(raw_text: str) -> tuple[list[dict], list[dict]]:
+    """Parse a simple columnar CSV into fragment dicts (+rejections).
 
-    Accepted shapes: one fragment object, an array of fragments, or an
-    object with a ``fragments`` array. Anything else — including CSV — is
-    rejected with an exact message, never silently mapped (CSD 12.4).
+    Documented shape (header row required): ``attribute,value`` plus any of
+    ``source,source_id,authority_rank,event_time,verified,ttl_seconds``.
+    Missing optional columns fall back to explicit demo defaults
+    (unverified, rank 3) — never to invented provenance. Rows missing
+    ``attribute`` or ``value`` are rejected, never guessed.
+    """
+    import csv
+    from datetime import datetime, timezone
+
+    try:
+        rows = list(csv.DictReader(raw_text.splitlines()))
+    except (csv.Error, ValueError) as exc:
+        raise ValueError(f"Upload is not valid CSV: {exc}") from exc
+    if not rows:
+        raise ValueError(
+            "File must be CSV with a header row: attribute,value plus optional "
+            "source,source_id,authority_rank,event_time,verified,ttl_seconds."
+        )
+    header = { (key or "").strip().lower() for key in (rows[0].keys() or []) }
+    if "attribute" not in header or "value" not in header:
+        raise ValueError(
+            "File must be CSV with a header row: attribute,value plus optional "
+            "source,source_id,authority_rank,event_time,verified,ttl_seconds."
+        )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    fragments: list[dict] = []
+    rejected: list[dict] = []
+
+    def cell(row: dict, key: str, default: str = "") -> str:
+        for variant in (key, key.title(), key.upper()):
+            if row.get(variant) not in (None, ""):
+                return str(row.get(variant))
+        return default
+
+    for index, row in enumerate(rows):
+        attribute = cell(row, "attribute").strip()
+        value = cell(row, "value").strip()
+        if not attribute or not value:
+            rejected.append({"index": index, "reason": "missing attribute or value"})
+            continue
+        try:
+            authority_rank = int(cell(row, "authority_rank", "3") or 3)
+        except (TypeError, ValueError):
+            rejected.append({"index": index, "reason": "authority_rank must be an integer"})
+            continue
+        try:
+            ttl_seconds = int(cell(row, "ttl_seconds", "3600") or 3600)
+        except (TypeError, ValueError):
+            rejected.append({"index": index, "reason": "ttl_seconds must be an integer"})
+            continue
+        verified_raw = cell(row, "verified").strip().lower()
+        verified = verified_raw in ("true", "1", "yes", "y")
+        item = {
+            "source": cell(row, "source") or "uploaded-csv",
+            "source_id": cell(row, "source_id") or f"csv-{index}",
+            "attribute": attribute,
+            "value": value,
+            "authority_rank": authority_rank,
+            "event_time": cell(row, "event_time") or now_iso,
+            "verified": verified,
+            "ttl_seconds": ttl_seconds,
+        }
+        try:
+            fragments.append(Fragment.model_validate(item).model_dump(mode="json"))
+        except ValueError as exc:
+            rejected.append(
+                {
+                    "index": index,
+                    "reason": str(exc),
+                    "item": {k: str(v)[:120] for k, v in item.items()},
+                }
+            )
+    return fragments, rejected
+
+
+def parse_upload(filename: str, raw_text: str) -> tuple[list[dict], list[dict]]:
+    """Parse an uploaded JSON or CSV file into fragment dicts (+rejections).
+
+    Accepted shapes: one fragment object, an array of fragments, an
+    object with a ``fragments`` array — or a columnar CSV with an
+    ``attribute,value`` header row. Anything else is rejected with an
+    exact message, never silently mapped (CSD 12.4).
     """
     name = filename.lower()
     if name.endswith(".csv"):
-        raise ValueError("CSV is not supported in v1. Please convert to JSON, or use a template.")
+        return _parse_csv_fragments(raw_text)
     if not (name.endswith(".json") or name.endswith(".txt")):
-        raise ValueError(f"Unsupported upload type {filename!r}: JSON only in v1.")
+        raise ValueError(f"Unsupported upload type {filename!r}: JSON or CSV only in v1.")
     try:
         data = json.loads(raw_text)
     except ValueError as exc:

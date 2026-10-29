@@ -310,15 +310,15 @@
         margin-bottom: 6px; font-size: 16px; color: #0F172A;
       }
       .f-ds-metrics {
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px;
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px;
       }
       .f-ds-metric {
         padding: 10px 12px; border-radius: 10px; background: #F8FAFC; border: 1px solid #E2E8F0;
-        font-size: 12.5px; color: #334155;
+        font-size: 12px; color: #334155;
       }
       .f-ds-metric b { display: block; font-size: 15px; color: #0F172A; margin-bottom: 2px; }
       .f-gap-item {
-        padding: 12px 14px; border-radius: 10px; margin-top: 8px;
+        padding: 14px 16px; border-radius: 12px; margin-top: 10px;
         border: 1.5px dashed #F59E0B; background: #FFFBEB; font-size: 13.5px; color: #0F172A;
       }
       .f-gap-item.resolved, .f-gap-item.ok {
@@ -330,6 +330,56 @@
       .f-gap-item .gap-title, .f-gap-item .f-gap-title {
         display: flex; align-items: center; justify-content: space-between;
         font-weight: 700; margin-bottom: 6px; font-size: 14px;
+      }
+      .f-clean-acc {
+        margin-top: 14px; border: 1px solid #CBD5E1; border-radius: 12px;
+        padding: 10px 14px; background: #F8FAFC;
+      }
+      .f-clean-acc summary {
+        font-size: 13.5px; font-weight: 700; color: #15803D; cursor: pointer;
+        outline: none; user-select: none;
+      }
+      .f-clean-list {
+        margin-top: 10px; display: grid; gap: 8px;
+      }
+      .f-clean-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 8px 12px; border-radius: 8px; background: #fff;
+        border: 1px solid #E2E8F0; font-size: 13px; color: #0F172A;
+      }
+      .f-clean-badge {
+        display: inline-block; padding: 1px 6px; border-radius: 999px;
+        font-size: 11px; font-weight: 700; background: #DCFCE7; color: #15803D;
+      }
+      .f-error-card {
+        padding: 14px 16px; border-radius: 12px; margin-top: 10px;
+        border: 1.5px dashed #F59E0B; background: #FFFBEB; font-size: 13.5px; color: #0F172A;
+      }
+      .f-error-card.trap-card {
+        border: 1.5px dashed #64748B; background: #F8FAFC;
+      }
+      .f-error-card-head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+        margin-bottom: 8px; flex-wrap: wrap;
+      }
+      .f-error-record-title {
+        display: flex; flex-direction: column; gap: 3px;
+      }
+      .f-error-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 700; background: #FEF3C7; color: #B45309; border: 1px solid #FDE68A;
+        width: fit-content;
+      }
+      .f-trap-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;
+        width: fit-content;
+      }
+      .f-trap-desc {
+        font-size: 13px; color: #334155; margin: 6px 0 10px; line-height: 1.5;
+      }
+      .btn-view-mosaic {
+        font-size: 12px; font-weight: 600; padding: 4px 10px;
       }
       .f-gap-compare {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -591,6 +641,8 @@
       #f-back-top { margin-bottom: 16px; }
       mark.f-hit { background: #FEF3C7; color: #0F172A; padding: 0 2px; }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
+      .friendly #f-status-pill { display: none !important; }
+      .friendly #hdr-entity-wrap { display: none !important; }
       @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -601,8 +653,19 @@
         <h1>Muse Mosaic</h1>
         <span>Clean, trustworthy records from scattered data.</span>
       </div>
+      <div class="hdr-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
+        <span class="pill ver-badge detail-only" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
+        <span class="pill detail-only"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
+        <span class="pill detail-only"><span id="api-dot" class="dot"></span><span id="api-status">mosaic-api: checking…</span></span>
+        <span class="pill detail-only"><span id="splink-dot" class="dot"></span><span id="splink-status">matching engine: checking…</span></span>
+        <button class="pill badge-btn detail-only" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
+        <button class="f-only" id="f-show-detail" type="button">Show how it was decided</button>
+        <button class="detail-only" id="f-back" type="button">Back to simple view</button>
+      </div>
+      <!-- Hidden technical holders for test contract & background state -->
       <span class="pill f-only" id="f-status-pill" role="status">● Ready</span>
-      <label class="muted">Record
+      <label class="muted" id="hdr-entity-wrap">Record
         <select id="entity" class="hdr-select" aria-label="Record selector">
           <option value="user/P-001">Nguyen Van An — User P-001</option>
           <option value="product/prod-001">Product — prod-001</option>
@@ -610,18 +673,6 @@
         </select>
       </label>
       <span class="pill ver-badge f-only" id="entity-active" title="Entity actually derived in the last run" hidden></span>
-      <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
-      <span class="pill ver-badge detail-only" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
-      <span class="pill detail-only"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
-      <span class="pill detail-only"><span id="api-dot" class="dot"></span><span id="api-status">mosaic-api: checking…</span></span>
-      <span class="pill detail-only"><span id="splink-dot" class="dot"></span><span id="splink-status">matching engine: checking…</span></span>
-      <button class="pill badge-btn detail-only" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
-      <button class="f-only" id="f-how-it-works" type="button" title="How checking works and recent activity">How it works / Log</button>
-      <button class="f-only" id="f-show-detail" type="button">Show how it was decided</button>
-      <button class="f-only" id="f-pause" type="button">Pause the loop</button>
-      <button id="f-taxonomy" type="button" title="Read-only taxonomy terms and aliases">Taxonomy</button>
-      <button id="f-similar" type="button" title="Structured similar search (candidates only, never a merge)">Similar</button>
-      <button class="detail-only" id="f-back" type="button">Back to simple view</button>
     </header>
 
     <main>
@@ -747,6 +798,12 @@
                 <button id="f-loop-review" type="button" hidden>Review in Steward Queue</button>
                 <button id="f-loop-more-btn" type="button">See what it did by itself</button>
                 <ol id="f-loop-more" hidden></ol>
+              </div>
+              <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #CBD5E1;display:flex;flex-wrap:wrap;gap:6px;">
+                <button class="f-only" id="f-how-it-works" type="button" title="How checking works and recent activity">How it works / Log</button>
+                <button class="f-only" id="f-pause" type="button">Pause the loop</button>
+                <button id="f-taxonomy" type="button" title="Read-only taxonomy terms and aliases">Taxonomy</button>
+                <button id="f-similar" type="button" title="Structured similar search (candidates only, never a merge)">Similar</button>
               </div>
             </details>
           </div>

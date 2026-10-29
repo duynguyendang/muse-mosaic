@@ -22,6 +22,90 @@ router = APIRouter()
 
 _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+_NAME_ATTRIBUTES = ("display_name", "name", "full_name")
+
+
+def _display_name(facts: list[dict[str, Any]]) -> str | None:
+    for attr in _NAME_ATTRIBUTES:
+        for fact in facts:
+            if fact.get("attribute") == attr and fact.get("value"):
+                return str(fact["value"])
+    return None
+
+
+@router.get("/datasets/summary")
+def dataset_summary(request: Request) -> dict[str, Any]:
+    """Dataset health: per-record clean/needs-review status from ledger rows.
+
+    Read-only aggregation over candidate facts, goldens, tombstones, and the
+    pending steward queue. Record counts, piece counts and system names are
+    computed, never invented; names come from display facts on record.
+    """
+    from config import Settings
+
+    current: Settings = request.app.state.settings
+    database_path = current.database_path
+    records: list[dict[str, Any]] = []
+    total_pieces = 0
+    sources: list[str] = []
+    for entity_type, entity_id in ledger.fetch_entities(database_path):
+        facts = ledger.fetch_candidate_facts(database_path, entity_type, entity_id)
+        total_pieces += len(facts)
+        for fact in facts:
+            source = fact.get("source")
+            if source and source not in sources:
+                sources.append(source)
+        golden = ledger.fetch_latest_golden(database_path, entity_type, entity_id)
+        pending = ledger.fetch_pending_stewards(database_path, entity_type, entity_id)
+        issues = [
+            {
+                "steward_id": item.get("steward_id"),
+                "attribute": item.get("attribute"),
+                "suggested_action": item.get("suggested_action"),
+                "owner": item.get("owner"),
+                "deadline": item.get("deadline"),
+                "fallback": item.get("fallback"),
+                "status": item.get("status"),
+            }
+            for item in pending
+        ]
+        records.append(
+            {
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "display_name": _display_name(facts),
+                "pieces": len(facts),
+                "clean": golden is not None and not pending,
+                "golden_id": (golden or {}).get("golden_id"),
+                "decision_id": (golden or {}).get("decision_id"),
+                "policy_version": (golden or {}).get("policy_version"),
+                "taxonomy_version": (golden or {}).get("taxonomy_version"),
+                "issues": issues,
+            }
+        )
+    needs_review = [record for record in records if record["issues"]]
+    clean = [record for record in records if record["clean"]]
+    total = len(records)
+    return {
+        "synthetic": True,
+        "total_records": total,
+        "total_pieces": total_pieces,
+        "systems": sorted(sources),
+        "clean_records": len(clean),
+        "clean_pct": round(100 * len(clean) / total) if total else 0,
+        "needs_review": needs_review,
+        "clean_list": [
+            {
+                "entity_type": record["entity_type"],
+                "entity_id": record["entity_id"],
+                "display_name": record["display_name"],
+                "golden_id": record["golden_id"],
+                "decision_id": record["decision_id"],
+            }
+            for record in clean
+        ],
+    }
+
 
 @router.get("/datasets/hidden")
 def hidden_dataset(request: Request) -> dict[str, Any]:
