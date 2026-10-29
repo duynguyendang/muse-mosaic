@@ -176,6 +176,18 @@ def explain(decision_id: str, request: Request) -> dict[str, Any]:
     )
     authority_ranks = {row["fact_id"]: row["authority_rank"] for row in fact_rows}
     event_times = {row["fact_id"]: row["event_time"] for row in fact_rows}
+    input_facts = [
+        {
+            "fact_id": row["fact_id"],
+            "attribute": row["attribute"],
+            "value": row["value"],
+            "source": row["source"],
+            "authority_rank": row["authority_rank"],
+            "verified": bool(row["verified"]),
+            "event_time": row["event_time"],
+        }
+        for row in fact_rows
+    ]
     proposal = _replay_proposal(current, entity_type, entity_id)
     traces = {
         row["kind"]: row["payload"]
@@ -194,9 +206,12 @@ def explain(decision_id: str, request: Request) -> dict[str, Any]:
         rule_fired=decision.get("rule_fired"),
         winner_fact_id=winner,
         loser_fact_ids=sorted(set(losers)),
+        payload_hash=decision.get("payload_hash"),
+        created_at=decision.get("created_at"),
         authority_ranks=authority_ranks,
         event_times=event_times,
         input_fact_ids=input_ids,
+        input_facts=input_facts,
         policy_version=decision["policy_version"],
         taxonomy_version=decision.get("taxonomy_version"),
         proposal=proposal,

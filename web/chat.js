@@ -14,8 +14,8 @@
   const ROLE_META = {
     downstream: { icon: "🤖", label: "Downstream Agent", badge: "SYNTHETIC", cls: "chat-downstream" },
     proposer: { icon: "🧠", label: "Muse Spark + Matching Engine", badge: "REAL · CLAIM, NOT A FACT", cls: "chat-proposer" },
-    engine: { icon: "⚖️", label: "Trust Engine — manglekit", badge: "REAL · DETERMINISTIC DATALOG", cls: "chat-engine" },
-    steward: { icon: "👤", label: "Human Steward", badge: "STEWARD · EXCEPTION ONLY", cls: "chat-steward" },
+    engine: { icon: "⚖️", label: "Trust Engine (manglekit)", badge: "REAL · DETERMINISTIC DATALOG", cls: "chat-engine" },
+    steward: { icon: "👤", label: "Human Steward (steward-001)", badge: "EXCEPTION ONLY", cls: "chat-steward" },
   };
 
   function escHtml(s) {
@@ -39,7 +39,7 @@
       `<button type="button" data-chat-act="${escHtml(a.act)}"${a.arg ? ` data-chat-arg="${escHtml(a.arg)}"` : ""}${a.arg2 ? ` data-chat-arg2="${escHtml(a.arg2)}"` : ""}${a.cls ? ` class="${escHtml(a.cls)}"` : ""}>${escHtml(a.label)}</button>`
     ).join("");
     return `<div class="chat-bubble ${meta.cls}${extra}${extraClass ? " " + escHtml(extraClass) : ""}" data-chat-role="${role}">`
-      + `<div class="chat-head">${meta.icon} ${escHtml(title || meta.label)} <span class="chat-badge">${escHtml(meta.badge)}</span>`
+      + `<div class="chat-head">${meta.icon} ${escHtml(title || meta.label)} · <span class="chat-badge">${escHtml(meta.badge)}</span>`
       + (stamp ? ` <span class="mono muted">${escHtml(stamp)}</span>` : "") + `</div>`
       + (body ? `<ul>${body}</ul>` : "")
       + (policyLine ? `<div class="meta mono">${escHtml(policyLine)}</div>` : "")

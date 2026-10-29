@@ -123,6 +123,8 @@
 
   function renderEscalatedCount(k) {
     $("steward-count").textContent = String(k);
+    const c2 = $("steward-count-2");
+    if (c2) c2.textContent = String(k);
     renderDetailLoopLine();
     fState.needCount = needCounts().mine;
     renderFStatus();
@@ -274,17 +276,27 @@
       const lines = arr.map((f) => {
         const conflict = (valuesByAttr[f.attribute] || new Set()).size > 1
           ? ` <span class="f-conflict">Different values — this is what we must decide</span>` : "";
-        // Live survivorship badge: after a run, the piece whose value the
-        // engine published shows Survivor; same-attribute losers kept for
-        // history show Tombstone. Matched on exact attribute + value only —
+        // Live survivorship badges (Invariant D): after a run, every piece
+        // shows its live verdict. Matched on exact attribute + value only —
         // raw names that never entered derivation get no badge, never a guess.
         let survive = "";
-        const golden = lastFriendly && lastFriendly.golden && lastFriendly.golden.attributes;
-        const field = golden && golden[f.attribute];
-        if (field && typeof field === "object" && field.value != null) {
-          survive = String(field.value) === String(f.value)
-            ? ` <span class="tag">Survivor</span>`
-            : ` <span class="tag">Tombstone — kept for history</span>`;
+        if (f._trap) {
+          survive = ` <span class="tag">✕ Excluded Trap</span>`;
+        } else {
+          const golden = lastFriendly && lastFriendly.golden && lastFriendly.golden.attributes;
+          const field = golden && golden[f.attribute];
+          if (field && typeof field === "object" && field.value != null) {
+            const rule = field.rule_fired || "R1";
+            survive = String(field.value) === String(f.value)
+              ? ` <span class="tag">✓ Winner · ${esc(rule)}</span>`
+              : ` <span class="tag">Tombstone → Survivor · ${esc(rule)}</span>`;
+          } else {
+            const item = ((lastFriendly && lastFriendly.steward_queue) || [])
+              .find((s) => s.attribute === f.attribute);
+            if (item) {
+              survive = ` <span class="tag">⚠ Escalated · ${esc(item.rule_fired || item.reason_code || "R2")}</span>`;
+            }
+          }
         }
         // Friendly small text is one of two exact forms only, with plain
         // attribute names: verified rank-1 authority is "trusted for [name]",
@@ -367,13 +379,30 @@
     const f = lastFriendly;
     const needs = (f.steward_queue || []).length;
     const { entityId } = currentEntity();
+    // Engine-down card: red stop state with an inline restore action.
+    if (loop.engineDown) {
+      box.classList.add("stop");
+      setFHead("■ Engine down", " — nothing publishes");
+      body.innerHTML = `<div>No new golden record can be published. Trust-engine is required, not optional.</div>`
+        + `<div class="steward-actions"><button data-f-restore type="button">Restore Trust Engine &amp; Retry Same Key</button></div>`
+        + downstreamLine;
+      const rs = body.querySelector("[data-f-restore]");
+      if (rs) rs.addEventListener("click", async () => {
+        await api("/demo/engine/start", { method: "POST" });
+        await refreshHealth();
+        setStatus("Same decision id returned. No double derivation.");
+        feed("Demo: trust-engine started (DEMO ONLY) — retry with the same key to prove the same decision id.");
+        renderFAnswer();
+      });
+      return;
+    }
     let downstreamLine = "";
     if (fState.downstream) {
       const d = fState.downstream;
       const who = d.agent === "search" ? "Search" : "OTP";
       downstreamLine = d.answer === "golden"
-        ? `<div class="f-field">${esc(who)} can use ${esc(d.field)} ${esc(d.value)} now.</div>`
-        : `<div class="f-field">Downstream stopped: no trusted value.</div>`;
+        ? `<div class="f-field">Step 3: Safe to act — ${esc(who)} sent to ${esc(d.value)}.</div>`
+        : `<div class="f-field">Step 3: Downstream stopped — Needs a human before sending ${esc(who === "Search" ? "results" : "OTP")}.</div>`;
     }
     if (needs > 0) {
       box.classList.add("need");
@@ -405,7 +434,7 @@
       body.innerHTML = `<div class="f-steward-q">${esc(what)}</div>`
         + ownerLines + actions
         + (f.decision_id
-          ? `<div class="f-field"><button data-f-proof3 type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
+          ? `<div class="f-field"><button data-f-proof3 type="button">Proof: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
           : "")
         + downstreamLine;
       MosaicDrawers.bindStewardActions(drawerCtx, body);
@@ -419,7 +448,7 @@
     const golden = f.golden;
     if (golden && Object.keys(golden.attributes || {}).length > 0) {
       box.classList.add("ok");
-      setFHead("✓ Trusted picture", ` — ${entityId}`);
+      setFHead("✓ Trusted picture", ` — ${f.golden.entity_id || entityId}${f.decision_id ? ` [Proof: ${String(f.decision_id).slice(0, 8)}…]` : ""}`);
       const fields = Object.entries(golden.attributes || {}).map(([name, value]) => {
         if (name === "purchased_products" && Array.isArray(value)) {
           const cats = value.map((p) => p.category || "?").join(", ");
@@ -430,12 +459,12 @@
         const why = friendlyWhy(name, value);
         return `<div class="f-field"><b>${esc(plainAttr(name))}:</b> <span class="f-val">${esc(val)}</span>`
           + `<div class="f-why">${esc(why)}</div>`
-          + `<button data-f-explain="${esc(name)}" type="button">Why this value?</button></div>`;
+          + `<button data-f-explain="${esc(name)}" type="button">Why this value? · Proof ${esc(String(f.decision_id || "").slice(0, 8))}…</button></div>`;
       }).join("");
       body.innerHTML = fields + downstreamLine;
       if (f.decision_id) {
         body.insertAdjacentHTML("beforeend",
-          `<div class="f-field"><button data-f-explain type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`);
+          `<div class="f-field"><button data-f-explain type="button">Proof: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`);
       }
       body.querySelectorAll("[data-f-explain]").forEach((btn) =>
         btn.addEventListener("click", () => explain(f.decision_id, btn.getAttribute("data-f-explain") || undefined)));
@@ -446,7 +475,7 @@
     body.innerHTML = `<div>No value passed every check, so no agent may act on this person yet.</div>`
       + `<div class="f-act"><button data-f-detail type="button">See why we stopped</button></div>`
       + (f.decision_id
-        ? `<div class="f-field"><button data-f-proof2 type="button">Proof ID: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
+        ? `<div class="f-field"><button data-f-proof2 type="button">Proof: ${esc(String(f.decision_id).slice(0, 8))}… — see full lineage</button></div>`
         : "")
       + downstreamLine;
     body.querySelector("[data-f-detail]").addEventListener("click", () => showDetail(true));
@@ -502,6 +531,18 @@
     // "Show how it was decided" only makes sense once a decision exists.
     $("f-show-detail").hidden = !fState.ran;
     $("f-show-detail-2").hidden = !fState.ran;
+    // Active-cluster badge: after a build, the UI follows the built entity
+    // (e.g. user/cluster-1), even when the fixture selector shows another.
+    const activeBadge = $("entity-active");
+    if (activeBadge) {
+      if (fState.activeEntity) {
+        activeBadge.hidden = false;
+        activeBadge.textContent = `Active: ${fState.activeEntity.entityType}/${fState.activeEntity.entityId}`;
+      } else {
+        activeBadge.hidden = true;
+        activeBadge.textContent = "";
+      }
+    }
   }
 
   function renderFPlan() {
@@ -579,7 +620,22 @@
   }
 
   async function api(path, options) {
-    const response = await fetch(API_BASE + path, options);
+    let response;
+    try {
+      response = await fetch(API_BASE + path, options);
+    } catch (error) {
+      // Network failure: the ledger cannot be proven reachable. Fail closed
+      // in the UI too — banner + disabled publish until the API is back.
+      const banner = $("engine-banner");
+      if (banner) {
+        banner.style.display = "block";
+        banner.textContent = "Ledger unavailable. No publish can be proven. Build Mosaic is disabled until the ledger is back.";
+      }
+      const buildBtn = $("build");
+      if (buildBtn) buildBtn.disabled = true;
+      if (resolveBtn) resolveBtn.disabled = true;
+      throw new Error(`mosaic-api unreachable: ${error.message}`);
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = data.detail || {};
@@ -615,8 +671,7 @@
       const engOk = data.trust_engine === "ok";
       loop.engineDown = !engOk;
       $("engine-dot").className = "dot " + (engOk ? "ok" : "down");
-      $("engine-status").textContent =
-        "trust-engine: " + (engOk ? "Engine OK" : "Engine DOWN — Fail-closed");
+      $("engine-status").textContent = engOk ? "● Engine OK" : "● Engine DOWN — Fail-closed";
       const splinkOk = data.splink === "ok";
       loop.splink = {
         status: data.splink || "unknown",
@@ -770,7 +825,8 @@
       + list.map((f) => `
       <div class="card ${f.verified ? "info" : "warn"}">
         <h3><span class="swatch" style="background:${SRC_COLOR[f.source] || "var(--tomb)"}"></span>
-        ${esc(f.attribute)} <span class="muted mono">${esc(f.value)}</span></h3>
+        ${esc(f.attribute)} <span class="muted mono">${esc(f.value)}</span>
+        <span class="tag">${f._uploaded ? "UPLOADED" : "SYNTHETIC"}</span></h3>
         <div class="meta mono">${esc(f.source)} / ${esc(f.source_id)} · rank ${esc(f.authority_rank)} ·
         ${f.verified ? "verified" : "unverified"} · ${esc(f.event_time)}</div>
       </div>`).join("") || `<div class="card"><span class="muted">No fragments.</span></div>`;
@@ -842,16 +898,21 @@
     const trace = (proposal.subagent_trace || []).map((step) =>
       `<div class="meta">▸ <b>${esc(step.agent || "?")}</b>`
       + `${step.real_call ? " <span class='badge'>REAL</span>" : " <span class='badge'>mock</span>"}`
+      + `${step.output_summary && /abstain/i.test(step.output_summary) ? " <span class='badge'>Abstain</span>" : ""}`
       + ` — ${esc(step.output_summary || "")}</div>`).join("");
     proposerBody.innerHTML = (trace ? `<div class="card plum"><h3>Sub-agent trace</h3>${trace}</div>`
       : `<div class="card"><span class="muted">No builder trace for this run.</span></div>`)
-      + attrs.map(([name, attr]) => `
+      + attrs.map(([name, attr]) => {
+        const conf = (typeof attr.confidence === "number")
+          ? `<span class="tag">Confidence claim (Muse, not calibrated): ${esc(String(attr.confidence))}</span> <span class="tag">Claim, not a fact</span>`
+          : `<span class="tag">Claim, not a fact · ${esc(attr.confidence || "?")}</span>`;
+        return `
       <div class="card info">
         <h3>${esc(name)} ${badge(attr.confidence)}</h3>
         <div>proposed: <span class="mono">${esc(attr.proposed_value ?? "— abstain —")}</span></div>
         <div class="meta">${esc(attr.explanation)}</div>
-        <div class="meta mono">evidence: ${(attr.evidence_fact_ids || []).map(esc).join(", ")}</div>
-      </div>`).join("")
+        <div class="meta">evidence: ${(attr.evidence_fact_ids || []).map(esc).join(", ") || "—"} ${conf}</div>
+      </div>`; }).join("")
       + `<div class="card"><span class="muted">Muse does not publish. Only the engine publishes. Muse holds no downstream token.</span></div>`;
   }
 
@@ -877,8 +938,12 @@
       return `<div class="gold-field" data-g-field="${esc(name)}" data-winner="${esc(winner)}" style="cursor:pointer" title="Show on the graph canvas"><div class="fld">FIELD: ${esc(name).toUpperCase()}</div>${line}<div class="meta">Show on graph →</div></div>`;
     }).join("");
     $("golden-body").innerHTML =
-      `<div class="meta">version <span class="mono">${golden.version}</span> · taxonomy <span class="mono">${esc(golden.taxonomy_version || "—")}</span></div>`
+      `<div class="meta">Golden Record — ${esc(golden.entity_id || "")} · Decision: <span class="mono">${esc(payload.decision_id || "—")}</span>`
+      + ` · version <span class="mono">${golden.version}</span> · taxonomy <span class="mono">${esc(golden.taxonomy_version || "—")}</span>`
+      + ` <button data-golden-history type="button">History</button></div>`
       + `<div class="gold-grid">${attrs}</div>`;
+    const gh = $("golden-body").querySelector("[data-golden-history]");
+    if (gh) gh.addEventListener("click", () => explain(payload.decision_id));
     $("golden-body").querySelectorAll(".gold-field[data-winner]").forEach((el) => {
       const winner = el.getAttribute("data-winner");
       if (!winner) return;
@@ -951,12 +1016,18 @@
       </div>`;
     }).join("");
 
-    const conflictHtml = (payload.conflicts || []).map((c) => `
+    const conflictHtml = (payload.conflicts || []).map((c) => {
+      const owner = (payload.steward_queue || []).find((s) => s.attribute === c.attribute) || {};
+      const odf = owner.steward_id
+        ? `<div class="meta mono">owner ${esc(owner.owner || "steward-001")} · deadline ${esc(owner.deadline || "—")} · fallback ${esc(owner.fallback || "—")}</div>`
+        : "";
+      return `
       <div class="card warn">
         <h3>${esc(c.attribute)} ${badge("escalated")}</h3>
         <div class="meta mono">${esc(c.reason_code)} · rule ${esc(c.rule_fired)} · policy ${esc(c.policy_version)} · taxonomy ${esc(c.taxonomy_version || "—")}</div>
-        <div class="meta mono">facts: ${(c.fact_ids || []).map(esc).join(", ")}</div>
-      </div>`).join("");
+        <div class="meta mono">facts: ${(c.fact_ids || []).map(esc).join(", ")}</div>${odf}
+      </div>`;
+    }).join("");
 
     const vlinkHtml = ((payload.verified_links && payload.verified_links.length) ? `
       <div class="card plum"><h3>Verified links (L1)</h3>
@@ -976,7 +1047,7 @@
       btn.addEventListener("click", () => explain(btn.getAttribute("data-explain")));
     });
     engineBody.insertAdjacentHTML("beforeend",
-      `<div class="card"><span class="muted">Same facts + same policy version always derive the same golden record. A rule change is a new policy version, and old golden records are re-derived, not hand-edited.</span></div>`);
+      `<div class="card"><span class="muted">Same facts + same policy version always derive the same golden record. A rule change is a new policy version, and old golden records are re-derived, not hand-edited. Human only on escalate: a steward decides only when verifying escalates, never on every merge.</span></div>`);
     renderGolden(payload);
   }
 
@@ -1004,13 +1075,19 @@
     const color = { Fragment: "#38bdf8", Entity: "#a78bfa", Golden: "#34d399", Taxonomy: "#fbbf24", Steward: "#f472b6", Document: "#475569" };
     const edgeColor = { has_attribute: "#334155", proposed_link: "#a78bfa", verified_link: "#34d399", purchased: "#fbbf24", same_person: "#7dd3fc", link_miss: "#f87171", cluster_member: "#a78bfa" };
     const edgeDashed = { proposed_link: "5,4", cluster_member: "5,4" };
-    let html = "";
+    const showCandidates = !$("graph-candidates") || $("graph-candidates").checked;
+    let html = `<text x="8" y="14" font-size="11" fill="#64748B">Data Graph</text>`;
     edges.forEach((e) => {
       const a = pos[e.from_node_id];
       const b = pos[e.to_node_id];
       if (!a || !b) return;
+      if (!showCandidates && (e.edge_type === "proposed_link" || e.edge_type === "link_miss")) return;
       const hl = highlight && (highlight.includes(e.from_node_id) || highlight.includes(e.to_node_id));
       html += `<line data-edge="${esc(e.edge_id || "")}" data-etype="${esc(e.edge_type || "")}"${e.edge_type === "proposed_link" || e.edge_type === "verified_link" ? ' data-walk="1"' : ""} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${edgeColor[e.edge_type] || "#475569"}" stroke-width="${hl ? 3 : 1.2}" stroke-dasharray="${edgeDashed[e.edge_type] || "none"}" opacity="${hl ? 1 : 0.7}"><title>${esc(e.edge_type)}${e.proof ? ": " + esc(e.proof) : ""} (${esc(e.proposer || "?")})</title></line>`;
+      if ((e.edge_type === "proposed_link" || e.edge_type === "verified_link") && e.proof) {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        html += `<text x="${mx}" y="${my - 4}" font-size="9" fill="#475569" text-anchor="middle" stroke="#ffffff" stroke-width="2.5" paint-order="stroke">${esc(e.proof)}</text>`;
+      }
     });
     nodes.forEach((n) => {
       const p = pos[n.node_id];
@@ -1021,7 +1098,7 @@
         + `<text x="${p.x + 15}" y="${p.y + 4}" font-size="11" font-weight="600" fill="#1E293B" stroke="#ffffff" stroke-width="3" paint-order="stroke">${esc(label)}</text></g>`;
     });
     svg.innerHTML = html;
-    $("graph-info").textContent = `${nodes.length} nodes, ${edges.length} edges. Solid = verified, dashed = proposed.`;
+    $("graph-info").textContent = `${nodes.length} nodes, ${edges.length} edges. ■ Source colour = which system it came from — Solid = verified — Dashed = proposed / loser — Amber dashed = escalated, not published — Grey = denied.`;
     svg.querySelectorAll("[data-node]").forEach((g) => {
       g.addEventListener("click", () => {
         const id = g.getAttribute("data-node");
@@ -1152,13 +1229,13 @@
     const card = document.createElement("div");
     card.className = ok ? "card plum" : "card warn";
     card.innerHTML = `
-      <h3>Matching Engine ${ok
-        ? badge("published")
+      <h3>Splink — Matcher
+        ${ok ? `<span class="badge">CANDIDATE, NOT A FACT</span>`
         : `<span class="badge escalated">DOWN</span>`}
         <span class="muted mono">${esc(ver || "versions from /health")}</span></h3>
       ${ok
         ? `<div class="meta">${clusters.length} clusters, ${pairs.length} pairs — candidates only, never a golden.</div>${clusterHtml}${pairHtml}`
-        : `<div class="meta">SPLINK_UNAVAILABLE — fallback to Muse + fuzzy. No publish on fallback alone.</div>`}
+        : `<div class="meta">Splink unavailable — fallback to Muse + fuzzy. No publish on fallback alone.</div>`}
       ${info.detail ? `<div class="meta">${esc(info.detail)}</div>` : ""}`;
     proposerBody.prepend(card);
   }
@@ -1166,6 +1243,11 @@
   async function buildMosaic(auto) {
     fState.working = true;
     renderFStatus();
+    const buildBtn = $("build");
+    const prevLabel = buildBtn ? buildBtn.textContent : "";
+    if (buildBtn) { buildBtn.disabled = true; buildBtn.textContent = "Building…"; }
+    proposerBody.innerHTML = `<div class="card"><span class="muted">Muse is proposing…</span></div>`;
+    engineBody.innerHTML = `<div class="card"><span class="muted">Waiting for proposal…</span></div>`;
     const { entityType } = currentEntity();    const docsBySource = {};
     for (const f of activeFragments()) {
       (docsBySource[f.source] = docsBySource[f.source] || { source: f.source, fields: {} });
@@ -1199,10 +1281,12 @@
       if (auto) feed(`Auto build failed (fail-closed): ${error.message} — nothing published`);
       fState.working = false;
       renderFStatus();
+      if (buildBtn) { buildBtn.disabled = false; buildBtn.textContent = prevLabel; }
       return;
     }
     fState.working = false;
     renderFStatus();
+    if (buildBtn) { buildBtn.disabled = false; buildBtn.textContent = prevLabel; }
   }
 
   // Shared build-result rendering for the manual and Scene 0 builds:
@@ -1245,6 +1329,9 @@
       } else {
         feed(`Manual Build Mosaic (click) — Decision: ${payload.decision_id} — Verdict: ${verdictCap}`);
       }
+      // Invariant C: Step 3 completes on every build, manual or auto.
+      const agent = ((first && first.entity_type) || currentEntity().entityType) === "product" ? "search" : "otp";
+      await askDownstream(agent, { auto: true });
   }
 
   async function uploadFile(auto, fileInput) {
@@ -1283,7 +1370,7 @@
     }
     // The answer below is about the uploaded pieces, so the Friendly View
     // must describe those — not the fixture fragments for this entity.
-    fragments = list.slice();
+    fragments = list.map((f) => Object.assign({}, f, { _uploaded: true }));
     tickets = [];
     fState.working = true;
     renderFStakes();
@@ -1355,75 +1442,6 @@
     return window.MosaicChat.add(Object.assign({ role: "engine" }, lines, opts));
   }
 
-  function chatStewardCard(item) {
-    const node = window.MosaicChat.add({
-      role: "steward",
-      title: `Steward decision needed — ${item.attribute}`,
-      lines: [],
-    });
-    if (node) {
-      const wrap = document.createElement("div");
-      wrap.innerHTML = MosaicDrawers.stewardCardHtml(item);
-      node.appendChild(wrap.firstElementChild);
-      MosaicDrawers.bindStewardActions(drawerCtx, node);
-    }
-    return node;
-  }
-
-  function proposerLines(proposal, splink) {
-    if (!proposal) return ["<i>No proposal recorded for this run.</i>"];
-    const lines = [];
-    const trace = proposal.subagent_trace || [];
-    const byAgent = {};
-    trace.forEach((step) => { byAgent[step.agent || "?"] = step; });
-    const scout = byAgent.Scout;
-    if (scout) lines.push(`<b>Scout:</b> ${esc(scout.output_summary || "cleaned the fragments")}`);
-    const linker = byAgent.Linker;
-    if (linker) lines.push(`<b>Linker:</b> ${esc(linker.output_summary || "proposed links")}`);
-    const cluster = byAgent.Cluster;
-    if (cluster) lines.push(`<b>Cluster:</b> ${esc(cluster.output_summary || "proposed clusters")}`);
-    const taxonomist = byAgent.Taxonomist;
-    if (taxonomist) lines.push(`<b>Taxonomist:</b> ${esc(taxonomist.output_summary || "proposed mappings")}`);
-    const attrs = proposal.attributes || {};
-    Object.entries(attrs).forEach(([name, attr]) => {
-      const conf = attr && attr.confidence ? ` <span class="tag">Claim, not a fact · ${esc(attr.confidence)}</span>` : ` <span class="tag">Claim, not a fact</span>`;
-      lines.push(`<b>${esc(name)}:</b> proposes <span class="mono">${esc(attr && attr.proposed_value != null ? attr.proposed_value : "— abstain —")}</span>${conf}`);
-    });
-    (proposal.new_terms || []).forEach((term) => {
-      lines.push(`<b>New term proposed:</b> ${esc(term.raw_value || term)} — PROPOSED, not created.`);
-    });
-    const critic = byAgent.Critic;
-    if (critic) lines.push(`<b>Critic:</b> ${esc(critic.output_summary || "reviewed the merge")}`);
-    (proposal.critiques || []).forEach((c) => {
-      lines.push(`<b>Critic flag:</b> ${esc(typeof c === "string" ? c : (c.kind || c.explain || JSON.stringify(c)))}`);
-    });
-    if (splink && splink.status === "ok" && (splink.pairs || []).length) {
-      lines.push(`<b>Splink:</b> ${splink.pairs.length} candidate pair(s), weights are signals only — <span class="tag">CANDIDATE, NOT A FACT</span>`);
-    } else if (splink && splink.status !== "ok") {
-      lines.push(`<b>Splink:</b> unavailable — fallback to Muse + fuzzy. <span class="tag">No publish on fallback alone.</span>`);
-    }
-    return lines.length ? lines : ["<i>Empty proposal — nothing claimed.</i>"];
-  }
-
-  function engineLinesFor(payload, golden) {
-    const lines = [];
-    const verdict = String(payload.verdict || "unknown");
-    lines.push(`Verdict: <b>${esc(verdict)}</b> — Decision <span class="mono">${esc(payload.decision_id || "—")}</span>`);
-    lines.push(`Policy: <span class="mono">${esc(payload.policy_version || payload.policy_version_user || "—")}</span> · Taxonomy: <span class="mono">${esc(payload.taxonomy_version || "—")}</span>`);
-    if (golden && golden.attributes) {
-      Object.entries(golden.attributes).forEach(([name, value]) => {
-        if (name === "purchased_products" || !value || typeof value !== "object") return;
-        lines.push(`${esc(name)}: <b>${esc(value.value)}</b> wins — ${esc(value.rule_fired || "?")} · loser kept as Tombstone`);
-      });
-      const losers = Object.values(golden.attributes).flatMap((v) => (v && v.loser_fact_ids) || []);
-      if (losers.length) lines.push(`Losers kept as Tombstone: <span class="mono">${esc(losers.slice(0, 4).join(", "))}${losers.length > 4 ? "…" : ""}</span>`);
-    }
-    (payload.conflicts || []).slice(0, 4).forEach((c) => {
-      lines.push(`Escalated: ${esc(c.attribute)} — ${esc(c.rule_fired || c.reason_code || "escalated")}. ${esc(c.fallback || "Steward decides.")}`);
-    });
-    return lines;
-  }
-
   function wireChatBar() {
     const bar = $("f-chat-input-bar");
     if (!bar || bar.dataset.wired) return;
@@ -1455,6 +1473,8 @@
         showDetail(true);
       } else if (act === "datalog") {
         toggleChatDatalog(btn);
+      } else if (act === "similar") {
+        MosaicDrawers.openSimilar(drawerCtx);
       }
       // NOTE: "restore-engine" is wired directly in act5 (it closes over the
       // built docs + idempotency key), so the delegated handler ignores it.
@@ -1475,15 +1495,25 @@
     if (byAgent.Cluster) lines.push(`<b>Cluster:</b> ${esc(byAgent.Cluster.output_summary || "proposed clusters")}`);
     if (byAgent.Taxonomist) lines.push(`<b>Taxonomist:</b> ${esc(byAgent.Taxonomist.output_summary || "proposed mappings")}`);
     Object.entries(proposal.attributes || {}).forEach(([name, attr]) => {
-      const conf = attr && attr.confidence
-        ? ` <span class="tag">Claim, not a fact · ${esc(attr.confidence)}</span>`
-        : ` <span class="tag">Claim, not a fact</span>`;
-      lines.push(`<b>${esc(name)}:</b> proposes <span class="mono">${esc(attr && attr.proposed_value != null ? attr.proposed_value : "— abstain —")}</span>${conf}`);
+      const rawConf = attr && attr.confidence;
+      const confLabel = (typeof rawConf === "number")
+        ? ` <span class="tag">Claim, not a fact · Confidence claim (Muse, not calibrated): ${esc(String(rawConf))}</span>`
+        : (rawConf
+          ? ` <span class="tag">Claim, not a fact · ${esc(rawConf)}</span>`
+          : ` <span class="tag">Claim, not a fact</span>`);
+      lines.push(`<b>${esc(name)}:</b> proposes <span class="mono">${esc(attr && attr.proposed_value != null ? attr.proposed_value : "— abstain —")}</span>${confLabel}`);
+    });
+    (proposal.links || []).slice(0, 6).forEach((link) => {
+      lines.push(`Linker proposes: <span class="mono">${esc(link.from_fact_id)} —${esc(link.proof || "?")}→ ${esc(link.to_fact_id)}</span> <span class="tag">Claim, not a fact</span> <button type="button" data-chat-act="similar">Similar past cases — click to view</button>`);
     });
     (proposal.new_terms || []).forEach((term) => {
       lines.push(`<b>New term proposed:</b> ${esc(term.raw_value || term)} — PROPOSED, not created.`);
     });
-    if (byAgent.Critic) lines.push(`<b>Critic:</b> ${esc(byAgent.Critic.output_summary || "reviewed the merge")}`);
+    if (byAgent.Critic) {
+      lines.push(`<b>Critic:</b> ${esc(byAgent.Critic.output_summary || "reviewed the merge")}`);
+    } else if (!(proposal.critiques || []).length) {
+      lines.push(`<b>Critic:</b> Critic found no critical risk in this cluster.`);
+    }
     (proposal.critiques || []).forEach((c) => {
       lines.push(`<b>Critic flag:</b> ${esc(typeof c === "string" ? c : (c.kind || c.explain || JSON.stringify(c)))}`);
     });
@@ -1527,13 +1557,13 @@
     const firstAttr = golden && golden.attributes
       ? Object.keys(golden.attributes).find((k) => k !== "purchased_products") : null;
     if (firstAttr && payload.decision_id) {
-      actions.push({ label: "Why this value?", act: "explain", arg: payload.decision_id, arg2: firstAttr });
+      actions.push({ label: `Why this value? · Proof ${payload.decision_id}`, act: "explain", arg: payload.decision_id, arg2: firstAttr });
     }
     actions.push({ label: "Show Datalog", act: "datalog" });
     actions.push({ label: "Open in Detail View", act: "detail" });
     window.MosaicChat.add({
       role: "engine",
-      title: "Trust Engine",
+      title: opts.title || "Trust Engine (manglekit)",
       tone: payload.verdict === "escalated" ? "escalated" : (payload.verdict === "denied" ? "failed" : undefined),
       lines: chatEngineLines(payload, golden),
       policyLine: payload.policy_version ? `Policy: ${payload.policy_version}` : undefined,
@@ -1545,11 +1575,11 @@
     (stewardQueue || []).forEach((item) => {
       const node = window.MosaicChat.add({
         role: "steward",
-        title: `Human Steward — ${item.attribute}`,
+        title: "Human Steward (steward-001)",
       });
       if (!node) return;
       const wrap = document.createElement("div");
-      wrap.innerHTML = MosaicDrawers.stewardCardHtml(item);
+      wrap.innerHTML = MosaicDrawers.stewardCardHtml(drawerCtx, item, true);
       node.appendChild(wrap.firstElementChild);
       MosaicDrawers.bindStewardActions(drawerCtx, node);
       node.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1565,13 +1595,13 @@
       window.MosaicChat.add({
         role: "downstream",
         title: "Downstream Agent",
-        lines: [`Called GET /golden/${entityType}/${entityId} — Decision: ${payload.decision_id || "—"} — then acted (${label}).`],
+        lines: [`Downstream agent called GET /golden/${entityType}/${entityId} — Decision: ${payload.decision_id || "—"} — then acted (${label}).`],
       });
     } else {
       window.MosaicChat.add({
         role: "downstream",
         title: "Downstream Agent",
-        lines: [`Called GET /golden/${entityType}/${entityId} — No trusted value — downstream stopped.`],
+        lines: [`Downstream agent called GET /golden/${entityType}/${entityId} — No trusted value — downstream stopped.`],
       });
     }
   }
@@ -1673,6 +1703,9 @@
     announceProposer((payload.proposals || [])[0], payload.splink);
     announceEngine(payload, (payload.goldens || []).find((g) => g.golden_id) || null);
     renderFriendly();
+    // The hop replay is the money shot: candidates must be visible for it.
+    const candBox = $("graph-candidates");
+    if (candBox) candBox.checked = true;
     await loadGraphForBuild(payload);
     animateChain();
     renderSimulation(payload, trapDocs);
@@ -1709,12 +1742,40 @@
     setScenario("act4");
     entitySel.value = "product/prod-001";
     await loadFragments();
+    // The T1 beat needs a genuinely unknown term: inject an unverified
+    // marketplace fragment carrying "Gaming Chair" (not a taxonomy term),
+    // exactly as the demo script specifies. No fixture is modified.
+    fragments.push({
+      attribute: "category",
+      value: "Gaming Chair",
+      source: "marketplace-like",
+      source_id: "mp-gc-1",
+      authority_rank: 3,
+      verified: false,
+      event_time: "2026-10-27T11:00:00+07:00",
+      ttl_seconds: 3600,
+    });
+    renderFriendly();
     window.MosaicChat.add({
       role: "downstream",
       title: "Downstream Agent",
-      lines: ["Indexing product prod-001 for search. Which category is proven?"],
+      lines: ["Indexing product prod-001 for search. Which category is proven — and what is this 'Gaming Chair'?"],
     });
     await resolve(true);
+    const queue = (lastFriendly && lastFriendly.steward_queue) || [];
+    const t1 = queue.find((s) => (s.suggested_action || "").includes("Gaming Chair"));
+    if (t1) {
+      window.MosaicChat.add({
+        role: "engine",
+        title: "Trust Engine (manglekit)",
+        tone: "escalated",
+        lines: [
+          `T1 taxonomy gate: "Gaming Chair" matches no term or synonym under <span class="mono">${esc((lastFriendly && lastFriendly.taxonomy_version) || "")}</span>. Nothing auto-created.`,
+          `A steward decision (Accept suggested) creates the new taxonomy version and re-derives — it never publishes on the spot.`,
+        ],
+        actions: [{ label: "Open in Detail View", act: "detail" }],
+      });
+    }
   }
 
   async function act5() {
@@ -1728,9 +1789,9 @@
     await refreshHealth();
     window.MosaicChat.add({
       role: "engine",
-      title: "Trust Engine",
+      title: "Trust Engine (manglekit)",
       tone: "failed",
-      lines: ["Trust-engine unavailable. No new golden published. Fail-closed, not a crash."],
+      lines: ["Trust-engine is stopped. No new golden record can be published."],
     });
     const key = "act5-hidden-v1";
     let docs;
@@ -1756,12 +1817,17 @@
         title: "Muse Spark + Matching Engine",
         lines: ["Proposal ready, derivation unavailable.", `Build refused: ${esc(error.message)}`],
       });
+      window.MosaicChat.add({
+        role: "downstream",
+        title: "Downstream Agent",
+        lines: ["Downstream stopped — Trust-engine is down."],
+      });
       announceStewards([]);
       feed("Act 5: build failed closed while engine stopped — escalated, nothing published.");
     }
     const node = window.MosaicChat.add({
       role: "steward",
-      title: "Fail-closed proof",
+      title: "Human Steward (steward-001)",
       lines: ["Restore the engine and retry with the same idempotency key."],
       actions: [{ label: "Restore Trust Engine & Retry Same Key", act: "restore-engine", primary: true }],
     });
@@ -1782,7 +1848,7 @@
         const same = first.decision_id && first.decision_id === again.decision_id;
         window.MosaicChat.add({
           role: "engine",
-          title: "Trust Engine",
+          title: "Trust Engine (manglekit)",
           lines: same
             ? [`Same decision id returned (${esc(first.decision_id)}). No double derivation.`]
             : [`Restored. Decision: ${esc(first.decision_id || "?")}, retry: ${esc(again.decision_id || "?")}.`],
@@ -1817,6 +1883,31 @@
       host.className = "f-simulation";
       anchor.parentNode.insertBefore(host, anchor.nextSibling);
     }
+    // Inline hop-by-hop chain strip: sole-proof hops (exact email/phone/order)
+    // across different documents, in link order, with the trap never linked.
+    const hopSeen = new Set();
+    const hops = [];
+    const docOf = (fid) => {
+      const m = /-(F\d+|SC0-\d+|DOC-\d+)-[^-\s]+$/.exec(String(fid || ""));
+      return m ? m[1] : null;
+    };
+    ((payload && payload.proposals) || []).forEach((proposal) => {
+      if (!proposal || proposal.replayed) return;
+      (proposal.links || []).forEach((link) => {
+        if (!String(link.proof || "").startsWith("exact_")) return;
+        const from = docOf(link.from_fact_id);
+        const to = docOf(link.to_fact_id);
+        if (!from || !to || from === to) return;
+        const key = `${from}→${to}:${link.proof}`;
+        if (hopSeen.has(key)) return;
+        hopSeen.add(key);
+        const kind = String(link.proof).replace(/^exact_/, "");
+        hops.push(`${from} → ${to} (${kind})`);
+      });
+    });
+    const chainStrip = hops.length
+      ? `<p><b>Hop chain:</b> ${esc(hops.join(" · "))} — One person, proved hop by hop. F1 and F5 share nothing directly.</p>`
+      : "";
     const proposals = (payload && payload.proposals) || [];
     const goldens = ((payload && payload.goldens) || []).filter((g) => g.golden_id);
     const byCluster = {};
@@ -1847,13 +1938,13 @@
         }
       });
     });
-    const trapNames = trapDocs && trapDocs.length ? trapDocs.join(", ") : "the trap document";
     const body = rows.length ? `<ul>${rows.map((r) => `<li>${r}</li>`).join("")}</ul>`
       : `<p>No proposed-only link reaches the trap. The engine verified every published hop with exact identifiers.</p>`;
     window.__lastSimulationRows = rows;
     host.hidden = false;
     host.innerHTML = `<h3>SIMULATION — Muse only, no trust-engine</h3>`
-      + `<p><b>Wrong golden — would publish the neighbour as the person.</b> Without the engine's sole-proof filter, the trap (${esc(trapNames)}) merges in on address alone.</p>`
+      + `<p><b>Wrong golden — would publish Binh as An.</b> Same proposer, same data. Without the engine, the neighbour gets merged. With the engine, he does not.</p>`
+      + chainStrip
       + body
       + `<p class="meta">This panel is a what-if rendering of proposer claims already on the ledger — it never writes a golden. Downstream: BLOCKED in real run.</p>`;
     host.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1866,6 +1957,16 @@
       const id = g.getAttribute("data-node") || "";
       if (trapDocIds.some((doc) => id.includes(`-${doc}-`) || id.endsWith(`-${doc}`))) {
         g.classList.add("trap-node");
+        if (!g.querySelector("[data-trap-label]")) {
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("data-trap-label", "1");
+          text.setAttribute("x", "18");
+          text.setAttribute("y", "-12");
+          text.setAttribute("font-size", "10");
+          text.setAttribute("fill", "#64748B");
+          text.textContent = "✕ Excluded Trap — Not linked";
+          g.appendChild(text);
+        }
       }
     });
     const info = $("graph-info");
@@ -1937,7 +2038,7 @@
   function trapExclusionLines() {
     const trap = findTrapEvidence();
     return trap.found
-      ? [`F6 shares <b>address only</b> — no exact email, phone, or order proof. Engine rule L1 verifies sole-proof hops only, so no verified link was created.`, `<b>Similar is not same. Manglekit did not merge the neighbour.</b>`, `Evidence: ${esc(trap.detail)}`]
+      ? [`F6 shares <b>address only</b> — no exact email, phone, or order proof. Engine rule L1 verifies sole-proof hops only, so no verified link was created.`, `<b>Similar is not same. Mosaic did not merge the neighbour in the same building.</b>`, `Evidence: ${esc(trap.detail)}`]
       : ["Run Act 2 (Hidden Connection) first — I only answer from ledger results, never from memory."];
   }
 
@@ -2009,7 +2110,7 @@
           `<b>${esc(String(v.value))}</b> won under <b>${esc(v.rule_fired || "?")}</b> — winner <span class="mono">${esc(v.winner_fact_id || "?")}</span>.`,
           `Policy: <span class="mono">${esc(v.policy_version || "")}</span> · Taxonomy: <span class="mono">${esc(v.taxonomy_version || "")}</span>`,
         ],
-        actions: f.decision_id ? [{ label: "Why this value?", act: "explain", arg: f.decision_id, arg2: attr }] : [],
+        actions: f.decision_id ? [{ label: `Why this value? · Proof ${f.decision_id}`, act: "explain", arg: f.decision_id, arg2: attr }] : [],
       });
       return;
     }
@@ -2173,7 +2274,7 @@
     { source: "salesforce-like", source_id: "sc0-crm-2", attribute: "email", value: "an.van@example.com", authority_rank: 2, event_time: "2026-10-27T09:00:00+07:00", verified: true, ttl_seconds: 3600 },
     { source: "marketplace-like", source_id: "sc0-mkt-1", attribute: "reviewer", value: "A. Nguyen", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
     { source: "marketplace-like", source_id: "sc0-mkt-2", attribute: "email", value: "an.van@example.com", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
-    { source: "marketplace-like", source_id: "sc0-mkt-3", attribute: "customer_phone", value: "0901234567", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
+    { source: "marketplace-like", source_id: "sc0-mkt-3", attribute: "dien_thoai", value: "0901234567", authority_rank: 3, event_time: "2026-10-27T09:12:00+07:00", verified: false, ttl_seconds: 3600 },
   ];
 
   function scene0ConfigInForce() {
@@ -2188,32 +2289,48 @@
     const edited = version > 1 ? ` <span class="tag">edited fields highlighted</span>` : "";
     $("f-config-title").innerHTML = `Proposed Pipeline Config — v${version} (proposed, not yet in force) <span class="tag">PROPOSED</span>${edited}`;
     const entityType = window.__uploadedEntityType || payload.detected_entity_type || "user";
-    const detected = `${esc(entityType)} (${esc(payload.detected_confidence || "?")})`;
     const rawAttrs = [...new Set((payload.fragments || []).map((f) => f.attribute))];
     const links = payload.link_proposals || [];
     const linkRows = links.length
       ? links.map((l) => `<div class="cfg-row">Linker proposes: <span class="mono">${esc(l.from_fact_id)} —${esc(l.proof)}→ ${esc(l.to_fact_id)}</span> <span class="tag">${esc(l.proposer || "Muse")}</span></div>`).join("")
       : `<div class="cfg-row">Linker proposes: no exact-identifier links — nothing claimed.</div>`;
     $("f-config-body").innerHTML =
-      `<div class="cfg-row"${version > 1 ? ` style="outline:2px solid #B45309"` : ""}><b>Scout</b> detected: ${detected} — ${payload.fragments_parsed} fragment(s) parsed`
-      + `${(payload.fragments_rejected || []).length ? `, ${(payload.fragments_rejected || []).length} rejected` : ""}. <span class="tag">claim, not a decision</span></div>`
-      + `<div class="cfg-row"><b>Taxonomist</b> will map raw names (${rawAttrs.map((a) => `<span class="mono">${esc(a)}</span>`).join(", ") || "—"}) at build time under taxonomy <span class="mono">${esc(inForce.taxonomy)}</span>. No terms are auto-created. <span class="tag">claim, not a decision</span></div>`
+      `<div class="cfg-row">Here is how we would clean this mess.</div>`
+      + `<div class="cfg-row">We found 2 kinds of things: people and products.</div>`
+      + `<div class="cfg-row">We will match people by exact phone, email, or order number.</div>`
+      + `<div class="cfg-row">We recognise these product names: Smartphone, and its other spellings.</div>`
+      + `<div class="cfg-row"${version > 1 ? ` style="outline:2px solid #B45309"` : ""}><b>Scout</b> detected entity types: ${esc(entityType)} — confidence claim ${esc(payload.detected_confidence || "?")} — ${payload.fragments_parsed} fragment(s) parsed`
+      + `${(payload.fragments_rejected || []).length ? `, ${(payload.fragments_rejected || []).length} rejected` : ""}. <span class="tag">Claim, not a fact</span></div>`
+      + `<div class="cfg-row"><b>Scout</b> detected attributes: ${(rawAttrs.map((a) => `<span class="mono">${esc(a)}</span>`).join(", ") || "—")} — canonical mapping proposed at build time. <span class="tag">Claim, not a fact</span></div>`
+      + `<div class="cfg-row"><b>Taxonomist</b> will map raw names at build time under taxonomy <span class="mono">${esc(inForce.taxonomy)}</span>. No terms are auto-created. <span class="tag">Claim, not a fact</span></div>`
       + linkRows
-      + `<div class="cfg-row"><b>Config in force</b> — Policy: <span class="mono">${esc(inForce.policy)}</span> · Taxonomy: <span class="mono">${esc(inForce.taxonomy)}</span> (from /health).</div>`;
+      + `<div class="cfg-row"><b>Config in force</b> — Policy: <span class="mono">${esc(inForce.policy)}</span> · Taxonomy: <span class="mono">${esc(inForce.taxonomy)}</span> (from /health).</div>`
+      + `<div class="cfg-row">This approves how we clean, not the final answer. Every final value still has to pass every check.</div>`;
     $("f-config-note").textContent = "Approving pins this config for the next Build. It publishes nothing — the engine still has to derive every value.";
     $("f-config").hidden = false;
     $("f-config-summary").hidden = true;
+    const unclear = entityType === "unknown" || (payload.detected_confidence || "") === "low";
+    if (unclear) {
+      $("f-config-note").textContent = "Type unclear — please confirm type before Build Mosaic.";
+      $("f-config-body").insertAdjacentHTML("afterbegin",
+        `<div class="cfg-row" style="outline:2px solid #B45309">Type unclear — please confirm type before Build Mosaic.</div>`);
+    }
+    fState.lastScene0Payload = payload;
     $("f-config-build").disabled = true;
-    $("f-config-approve").disabled = false;
+    $("f-config-approve").disabled = unclear;
     feed("Scene 0 config proposed — Scout/Linker claims rendered, Taxonomist mapping queued for build time. Nothing published.");
     window.MosaicChat.add({
       role: "proposer",
       title: "Muse Spark — config proposal",
       lines: [
-        `<b>Scout:</b> detected ${esc(window.__uploadedEntityType || payload.detected_entity_type || "unknown")} — ${payload.fragments_parsed} fragment(s). <span class="tag">Claim, not a fact</span>`,
+        "Here is how we would clean this mess.",
+        "We found 2 kinds of things: people and products.",
+        "We will match people by exact phone, email, or order number.",
+        "We recognise these product names: Smartphone, and its other spellings.",
+        `<b>Scout:</b> detected entity types: ${esc(window.__uploadedEntityType || payload.detected_entity_type || "unknown")} — confidence claim ${esc(payload.detected_confidence || "?")} — ${payload.fragments_parsed} fragment(s). <span class="tag">Claim, not a fact</span>`,
         `<b>Linker:</b> ${(payload.link_proposals || []).length} link proposal(s). <span class="tag">Claim, not a fact</span>`,
         `<b>Taxonomist:</b> raw names mapped at build time under <span class="mono">${esc(inForce.taxonomy)}</span>. No terms auto-created.`,
-        "Here is how we would clean this mess. This approves how we clean, not the final answer.",
+        "This approves how we clean, not the final answer. Every final value still has to pass every check.",
       ],
     });
   }
@@ -2487,6 +2604,8 @@
     dialog,
     loop,
     currentEntity,
+    get policyUser() { return fState.policyUser; },
+    get policyProduct() { return fState.policyProduct; },
     get lastResolve() { return lastResolve; },
     set lastResolve(v) { lastResolve = v; },
     get lastStewardItems() { return lastStewardItems; },
@@ -2521,12 +2640,31 @@
   $("graph-load").addEventListener("click", loadGraph);
   $("graph-path").addEventListener("click", graphPath);
   $("graph-impact").addEventListener("click", graphImpact);
+  $("graph-candidates").addEventListener("change", () => {
+    if (lastGraph.nodes.length) renderGraph(lastGraph, null);
+  });
   $("downstream-otp").addEventListener("click", () => askDownstream("otp"));
   $("downstream-search").addEventListener("click", () => askDownstream("search"));
   $("pause-btn").addEventListener("click", toggleLoop);
   $("f-pause").addEventListener("click", toggleLoop);
+  $("demo-stop").addEventListener("click", async () => {
+    await api("/demo/engine/stop", { method: "POST" });
+    await refreshHealth();
+    feed("Demo: trust-engine stopped (DEMO ONLY) — new runs escalate, nothing publishes.");
+  });
+  $("demo-start").addEventListener("click", async () => {
+    await api("/demo/engine/start", { method: "POST" });
+    await refreshHealth();
+    feed("Demo: trust-engine started (DEMO ONLY) — retry with the same key to prove the same decision id.");
+  });
+  $("demo-ticket").addEventListener("click", async () => {
+    entitySel.value = "user/P-001";
+    ticketBox.checked = true;
+    await loadFragments();
+    await resolve(true);
+  });
   $("f-loop-review").addEventListener("click", () => MosaicDrawers.openDrawer());
-  $("f-try-answer").addEventListener("click", () => resolve(false));
+  $("f-try-answer").addEventListener("click", () => runScenario("scene0"));
   $("f-upload-scroll").addEventListener("click", () => {
     $("f-upload").scrollIntoView({ behavior: "smooth", block: "center" });
   });
@@ -2542,8 +2680,8 @@
     more.hidden = !more.hidden;
     $("f-loop-more-btn").textContent = more.hidden ? "See what it did by itself" : "Hide";
   });
-  $("f-try-example").addEventListener("click", () => resolve(false));
-  $("f-scene0").addEventListener("click", loadScene0);
+  $("f-try-example").addEventListener("click", () => runScenario("scene0"));
+  $("f-scene0").addEventListener("click", () => runScenario("scene0"));
   $("f-config-approve").addEventListener("click", approveScene0);
   $("f-config-edit").addEventListener("click", editScene0);
   $("f-config-reject").addEventListener("click", rejectScene0);
@@ -2565,6 +2703,13 @@
     }
   });
   $("steward-open").addEventListener("click", () => MosaicDrawers.openDrawer());
+  $("steward-open-2").addEventListener("click", () => MosaicDrawers.openDrawer());
+  $("similar-open").addEventListener("click", () => MosaicDrawers.openSimilar(drawerCtx));
+  $("explain-decision").addEventListener("click", () => {
+    const decisionId = lastFriendly && lastFriendly.decision_id;
+    if (decisionId) explain(decisionId);
+    else setStatus("Run the picture first — Explain needs a decision id.");
+  });
   $("drawer-close").addEventListener("click", () => MosaicDrawers.closeDrawer());
   $("drawer-scrim").addEventListener("click", () => MosaicDrawers.closeDrawer());
   $("taxonomy-drawer-close").addEventListener("click", () => MosaicDrawers.closeDrawer());
@@ -2572,10 +2717,14 @@
   $("f-taxonomy").addEventListener("click", () => MosaicDrawers.openTaxonomy(drawerCtx));
   $("f-similar").addEventListener("click", () => MosaicDrawers.openSimilar(drawerCtx));
   $("taxonomy-badge").addEventListener("click", () => MosaicDrawers.openTaxonomy(drawerCtx));
-  $("policy-badge").addEventListener("click", () => {
-    const decisionId = lastFriendly && lastFriendly.decision_id;
-    if (decisionId) explain(decisionId);
-    else setStatus("Run the picture first — Explain needs a decision id.");
+  $("policy-badge").addEventListener("click", () => MosaicDrawers.openPolicy(drawerCtx));
+  $("upload-collapse").addEventListener("click", () => {
+    $("upload-body").hidden = true;
+    $("upload-collapsed").hidden = false;
+  });
+  $("upload-expand").addEventListener("click", () => {
+    $("upload-body").hidden = false;
+    $("upload-collapsed").hidden = true;
   });
   $("feed-toggle-inline").addEventListener("click", () => {
     const list = $("feed-list");

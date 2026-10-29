@@ -247,6 +247,11 @@
       .f-chat-input input { flex: 1 1 220px; min-height: 34px; }
       .f-simulation { border: 2px solid #B91C1C; background: #FEF2F2; border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
       .f-simulation h3 { margin: 0 0 6px 0; color: #991B1B; font-size: 14px; }
+      .cert-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+      .cert-col { border: 1px solid #CBD5E1; border-radius: 8px; padding: 8px; font-size: 12px; background: #fff; }
+      .cert-col h4 { margin: 0 0 4px 0; font-size: 11px; color: #475569; }
+      .cert-win { border-color: #15803D; background: #F0FDF4; }
+      .cert-lose { border-color: #94A3B8; background: #F1F5F9; }
       .tile.trap { border: 2px dashed #64748B !important; background: #F1F5F9 !important; }
       .tile.trap::after { content: "Not linked"; display: block; font-size: 10px; color: #64748B; }
       #graph-canvas g[data-node].trap-node circle { fill: #94A3B8 !important; stroke-dasharray: 4 3; }
@@ -259,7 +264,9 @@
       dialog::backdrop { background: rgba(15,23,42,0.4); }
       #downstream-log { font-size: 12px; color: var(--body); }
       #realtime-bar {
-        margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
+        position: sticky; bottom: 0; z-index: 5;
+        margin-top: 22px; padding: 10px 14px; border-top: 1px solid var(--line);
+        background: var(--panel);
         color: var(--muted); font-size: 11.5px; line-height: 1.6;
       }
       /* ---- Colorful theme (original dashboard-v2-light language) ---- */
@@ -437,6 +444,7 @@
       .f-steward-meta { font-size: 13px; color: #334155; margin: 8px 0; }
       #f-back-top { margin-bottom: 16px; }
       mark.f-hit { background: #FEF3C7; color: #0F172A; padding: 0 2px; }
+      button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
       @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -455,6 +463,7 @@
           <option value="product/prod-002">Product — prod-002</option>
         </select>
       </label>
+      <span class="pill ver-badge f-only" id="entity-active" title="Entity actually derived in the last run" hidden></span>
       <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
       <span class="pill ver-badge detail-only" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
       <span class="pill detail-only"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
@@ -481,7 +490,7 @@
   <div class="f-scenarios" id="f-scenario-bar" aria-label="Demo scenario chips">
           <button type="button" data-act="scene0">1. Scene 0: Clean Messy JSON</button>
           <button type="button" data-act="act1">2. Act 1: Send OTP (Authority vs Recency)</button>
-          <button type="button" data-act="act2">3. Act 2: Connect 6 Hidden Pieces (F1-F6 Trap)</button>
+          <button type="button" data-act="act2">3. Act 2: Connect 6 Hidden Pieces (F1–F6 Trap)</button>
           <button type="button" data-act="act3">4. Act 3: Inject Unverified Support Ticket</button>
           <button type="button" data-act="act4">5. Act 4: Gaming Chair (Taxonomy Accept)</button>
           <button type="button" data-act="act5">6. Act 5: Stop Trust Engine (Fail-Closed Test)</button>
@@ -489,13 +498,13 @@
 
         <div class="f-cols">
           <div>
-            <div class="f-col-h">Live Multi-Agent Protocol Chat</div>
+            <div class="f-col-h">Live Multi-Agent Protocol Chat <span class="tag">Every message is backed by a real proposer trace, Datalog derivation, or ledger decision — never a free-form chatbot.</span></div>
             <div id="f-chat-stream" aria-live="polite"></div>
             <div class="f-chat-input" id="f-chat-input-bar">
               <span class="muted">Ask the proof:</span>
               <button type="button" data-q="phone">Why did this phone win?</button>
               <button type="button" data-q="F6">Why was F6 excluded?</button>
-              <button type="button" data-q="datalog">Show Datalog</button>
+              <button type="button" data-q="datalog">Show Datalog proof</button>
               <button type="button" data-q="muse-only">Compare with Muse-only</button>
               <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, datalog" />
             </div>
@@ -531,12 +540,12 @@
         </div>
 
         <div class="f-upload" id="f-upload">
-          <p><b>Drop your messy JSON here</b> — we will show you one trusted picture, or tell you honestly when we cannot.</p>
+          <p><b>Drop JSON files here, or click to choose files. JSON only in v1.</b> — we will show you one trusted picture, or tell you honestly when we cannot.</p>
           <label class="check">Your JSON file <input type="file" id="f-upload-file" accept=".json,application/json" /></label>
           <button id="f-upload-btn" type="button">Upload + show the picture</button>
           <button id="f-try-example" type="button">Try the messy example</button>
           <button id="f-scene0" type="button">Messy JSON (Scene 0)</button>
-          <span class="muted">Synthetic or non-sensitive data only for the demo.</span>
+          <span class="muted">Synthetic or non-sensitive data only for the demo. Uploaded data is sent to the Muse builder via the Meta Model API in real mode, so do not upload real PII in the demo.</span>
         </div>
 
         <div class="f-config" id="f-config" hidden>
@@ -570,14 +579,22 @@
         <button id="pause-btn" class="primary" type="button">Pause Autonomous Loop</button>
       </section>
 
+      <section id="demo-controls" aria-label="Demo controls">
+        <span class="tag">Demo controls: DEMO ONLY</span>
+        <button id="demo-stop" type="button">Demo: Stop trust-engine</button>
+        <button id="demo-start" type="button">Demo: Start trust-engine</button>
+        <button id="demo-ticket" type="button">Demo: Add ticket</button>
+      </section>
+
       <div id="config-summary" role="note">Config in force — Policy: checking… · Taxonomy: checking… (from /health; no config proposed yet)</div>
 
       <section class="panel drop accent-cyan" style="margin-bottom: 16px;" aria-labelledby="upload-title">
         <div class="panel-head">
           <h2 id="upload-title">Upload data</h2>
           <button id="feed-toggle-inline" class="tag" type="button" style="cursor:pointer" title="Show or hide the activity feed">Activity feed: shown below</button>
+          <button id="upload-collapse" class="tag" type="button">Collapse</button>
         </div>
-        <div class="panel-body">
+        <div class="panel-body" id="upload-body">
           <div class="controls" style="margin:0;">
             <span class="muted">Drop JSON files here, or click to choose files. JSON only in v1.</span>
             <label class="check">Upload JSON <input type="file" id="upload-file" accept=".json,application/json" /></label>
@@ -585,6 +602,10 @@
             <span class="muted">Synthetic or non-sensitive data only for the demo. Uploaded data is sent to the Muse builder via the Meta Model API in real mode, so do not upload real PII in the demo.</span>
             <span class="muted" id="loop-hint">Loop Running: choosing a file auto-runs the approved pipeline, no click needed.</span>
           </div>
+        </div>
+        <div class="panel-body" id="upload-collapsed" hidden>
+          <span class="muted">Upload data — JSON in v1 · Templates: User profile, Purchased product, Messy JSON (Scene 0)</span>
+          <button id="upload-expand" type="button">Expand</button>
         </div>
       </section>
 
@@ -623,6 +644,7 @@
             <button id="graph-load" type="button">Load graph for this entity</button>
             <button id="graph-path" type="button">Pathfinder F1-F5</button>
             <button id="graph-impact" type="button">Blast radius: phone</button>
+            <label class="check"><input type="checkbox" id="graph-candidates" /> Show candidates</label>
             <span class="muted" id="graph-info">Nodes and edges for the current entity.</span>
           </div>
           <svg id="graph-canvas" width="100%" height="300" role="img" aria-label="Data graph canvas"></svg>
@@ -635,6 +657,9 @@
         <button class="primary" id="resolve" type="button">Propose + resolve</button>
         <button id="refresh" type="button">Reload fragments</button>
         <button id="build" type="button" title="Manual single run only — the loop auto-runs on upload">Build Mosaic</button>
+        <button id="explain-decision" type="button">Explain this decision</button>
+        <button id="steward-open-2" type="button">Steward Queue (<span id="steward-count-2">0</span>)</button>
+        <button id="similar-open" type="button">Similar</button>
         <span class="muted" id="status-line">Synthetic demo data only. Muse mock proposes; manglekit derives.</span>
       </div>
 
@@ -643,7 +668,7 @@
         <section class="panel tall accent-blue" aria-labelledby="proposer-title">
           <div class="panel-head">
             <h2 id="proposer-title">Muse Spark — Builder</h2>
-            <span class="tag">proposes only · REAL · AUTO REASONING</span>
+            <span class="tag">REAL · Via Meta Model API · AUTO REASONING — Muse, no human prompt per case</span>
           </div>
           <div class="panel-body" id="proposer-body">
             <div class="card"><span class="muted">Fragments and the mock proposal appear here.</span></div>
@@ -653,7 +678,7 @@
         <section class="panel tall accent-green" id="sec-engine" aria-labelledby="engine-title">
           <div class="panel-head">
             <h2 id="engine-title">Trust Engine — manglekit, Datalog</h2>
-            <span class="tag">derives only · REAL · AUTO VERIFYING</span>
+            <span class="tag">REAL · Deterministic, replayable · AUTO VERIFYING — Engine, no human click per case</span>
           </div>
           <div class="panel-body" id="engine-body">
             <div class="card"><span class="muted">Derived golden record, lineage, conflicts and steward queue appear here.</span></div>
@@ -718,12 +743,13 @@
         </section>
       </div>
 
-      <div id="realtime-bar">
-        REAL: Meta Model API call, mosaic-api, trust-engine, ledger, graph, UI
-        &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream
-      </div>
       </div><!-- /#detail-view -->
     </main>
+
+    <div id="realtime-bar">
+      REAL: Meta API call, mosaic-api, trust-engine, ledger, graph, UI
+      &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream
+    </div>
 
     <div id="drawer-scrim"></div>
     <aside id="steward-drawer" aria-labelledby="drawer-steward-title" role="dialog" aria-modal="true">

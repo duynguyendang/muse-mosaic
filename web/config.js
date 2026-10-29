@@ -75,6 +75,24 @@
     needsYou: (k) => `⚠ Needs you (${k})`,
   };
 
+  // Plain-language rule meanings, transcribed from the runnable policy
+  // (trust-engine/policies/*/[version].mg "Rule summary"). Never invented.
+  const RULE_PLAIN = {
+    R1: "Authority rank 1 beats rank 2, then verified beats unverified, then latest event time. Arrival time was never used.",
+    R2: "Escalate, never guess — critical winner unverified, or mixed tie.",
+    R3: "Expired fact treated as missing.",
+    R4: "Deny weak provenance / no authority ranks.",
+    L1: "Link proof — a sole-proof hop (exact email/phone/order) verifies only if the endpoint facts share that exact value.",
+    C1: "Cluster uniqueness — a verified rank-1 exact tie is a conflict, never a merge.",
+    C2: "Weakest-link chain — a winner cut off from the anchor by unverified hops is escalated, not silently published.",
+    T1: "Taxonomy membership for categorical attributes.",
+    I1: "Idempotency — same input derives same output.",
+  };
+
+  function rulePlain(rule) {
+    return RULE_PLAIN[rule] || "";
+  }
+
   window.MosaicConfig = {
     API_BASE,
     SRC_PLAIN,
@@ -82,8 +100,10 @@
     SRC_COLOR,
     VERDICTS,
     LOOP_PILL,
+    RULE_PLAIN,
     plainSource,
     plainAttr,
+    rulePlain,
     esc,
   };
 })();

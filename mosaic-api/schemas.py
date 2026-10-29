@@ -224,9 +224,12 @@ class ExplainResponse(StrictModel):
     rule_fired: str | None = None
     winner_fact_id: str | None = None
     loser_fact_ids: list[str] = Field(default_factory=list)
+    payload_hash: str | None = None
+    created_at: str | None = None
     authority_ranks: dict[str, int] = Field(default_factory=dict)
     event_times: dict[str, str] = Field(default_factory=dict)
     input_fact_ids: list[str] = Field(default_factory=list)
+    input_facts: list[dict[str, Any]] = Field(default_factory=list)
     policy_version: str = Field(min_length=1)
     taxonomy_version: str | None = None
     proposal: Proposal | None = None

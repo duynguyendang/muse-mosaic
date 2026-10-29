@@ -110,16 +110,22 @@ def _load_expected_structures() -> dict[str, dict[str, Any]]:
 def _write_taxonomy_version(taxonomies: dict, base, suggested_action: str, new_version: str) -> str:
     """Create a new taxonomy version file from one accepted suggestion.
 
-    Supported: 'Create as new term "X"' (adds the term, empty synonyms) and
-    'Map "X" to "Y"' (adds X as a synonym of existing term Y). Anything else
-    fails closed. The new version id must be fresh.
+    Supported (case-insensitive verb, both quote styles kept verbatim):
+    'Create as new term "X"' / 'create new term "X"' (adds the term, empty
+    synonyms) and 'Map "X" to "Y"' / 'map "X" → "Y"' (adds X as a synonym
+    of existing term Y). Anything else fails closed. The new version id
+    must be fresh.
     """
     if not new_version or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", new_version):
         raise ValueError(f"invalid taxonomy version {new_version!r}")
     if new_version in taxonomies:
         raise ValueError(f"taxonomy version {new_version!r} already exists")
-    create_match = re.fullmatch(r'Create as new term "(.*)"', suggested_action)
-    map_match = re.fullmatch(r'Map "(.*)" to "(.*)"', suggested_action)
+    create_match = re.fullmatch(r'[Cc]reate as new term "(.*)"', suggested_action) or re.fullmatch(
+        r'create new term "(.*)"', suggested_action
+    )
+    map_match = re.fullmatch(r'[Mm]ap "(.*)" to "(.*)"', suggested_action) or re.fullmatch(
+        r'map "(.*)" → "(.*)"', suggested_action
+    )
     terms = [{"term": term.term, "synonyms": list(term.synonyms)} for term in base.terms]
     if create_match:
         raw = create_match.group(1).strip()

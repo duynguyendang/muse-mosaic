@@ -104,3 +104,118 @@ def test_taxonomy_accept_rejects_wrong_action(api_client):
         },
     )
     assert bad.status_code == 422
+
+
+def test_resolve_unknown_term_synthesizes_t1_item(api_client):
+    """Deterministic T1: an unmapped category on an unpublished attribute
+    raises `create new term "X"` even when the proposer emits no new_terms."""
+    from test_flows import PRODUCT_FRAGMENTS, resolve
+
+    fragments = list(PRODUCT_FRAGMENTS) + [
+        {
+            "source": "marketplace-like",
+            "source_id": "mp-gc-1",
+            "attribute": "category",
+            "value": "Gaming Chair",
+            "authority_rank": 3,
+            "event_time": "2026-10-27T11:00:00+07:00",
+            "verified": False,
+            "ttl_seconds": 3600,
+        }
+    ]
+    response = resolve(
+        api_client, fragments, "flow-gc-t1", entity_type="product", entity_id="prod-gc"
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    items = [
+        s for s in payload["steward_queue"] if '"Gaming Chair"' in (s.get("suggested_action") or "")
+    ]
+    assert items, "expected a T1 new-term steward item for Gaming Chair"
+    assert any(
+        c["rule_fired"] == "T1"
+        and c["reason_code"] in ("TAXONOMY_UNKNOWN_TERM", "TAXONOMY_NEW_TERM_PROPOSED")
+        for c in payload["conflicts"]
+    )
+    # Accepting the exact suggested action mints the version and re-derives.
+    accept = api_client.post(
+        f"/steward/{items[0]['steward_id']}/accept",
+        json={
+            "action": items[0]["suggested_action"],
+            "taxonomy_version": "tax-product-2026-10-27-v99",
+        },
+    )
+    try:
+        assert accept.status_code == 200, accept.text
+        assert accept.json()["taxonomy_version"] == "tax-product-2026-10-27-v99"
+        assert "Gaming Chair" in str(accept.json())
+    finally:
+        # The accept path writes the new version file next to the fixtures;
+        # remove it so later tests see the pristine taxonomy.
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mosaic-api"))
+        from taxonomies import taxonomies_dir
+
+        created = taxonomies_dir() / "tax-product-2026-10-27-v99.json"
+        if created.is_file():
+            created.unlink()
+
+
+def test_taxonomy_synthesis_unknown_term_without_proposer_terms():
+    """Unit: synthesis fires when the proposer emits nothing (real-Muse path
+    where Gaming Chair never becomes a new_term claim)."""
+    import sys
+
+    sys.path.insert(
+        0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "mosaic-api")
+    )
+    from publisher import taxonomy_steward_items
+    from schemas import CandidateFact, Proposal
+    from taxonomies import default_version, load_taxonomies
+
+    taxonomies = load_taxonomies()
+    taxonomy = taxonomies[default_version(taxonomies, "product")]
+    facts = [
+        CandidateFact(
+            fact_id="prod-gc-mp-gc-1",
+            entity_type="product",
+            entity_id="prod-gc",
+            attribute="category",
+            value="Gaming Chair",
+            source="marketplace-like",
+            source_id="mp-gc-1",
+            authority_rank=3,
+            event_time="2026-10-27T11:00:00+07:00",
+            verified=False,
+            ttl_seconds=3600,
+        )
+    ]
+    proposal = Proposal(mode="mock", model=None, attributes={}, note="")
+    conflicts, stewards = taxonomy_steward_items(
+        proposal,
+        "product",
+        "prod-gc",
+        "dec-unit-1",
+        facts,
+        "2026-10-29T00:00:00+07:00",
+        policy_version="pol-product-2026-10-27-v1",
+        taxonomy_version=taxonomy.taxonomy_version,
+        taxonomy=taxonomy,
+        published_attrs=frozenset(),
+    )
+    assert [s.suggested_action for s in stewards] == ['create new term "Gaming Chair"']
+    assert [(c.reason_code, c.rule_fired) for c in conflicts] == [("TAXONOMY_UNKNOWN_TERM", "T1")]
+    # Published attributes never synthesize.
+    _, none_stewards = taxonomy_steward_items(
+        proposal,
+        "product",
+        "prod-gc",
+        "dec-unit-2",
+        facts,
+        "2026-10-29T00:00:00+07:00",
+        taxonomy=taxonomy,
+        published_attrs=frozenset({"category"}),
+    )
+    assert none_stewards == []

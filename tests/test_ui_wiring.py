@@ -111,6 +111,35 @@ def test_scene0_panel_ids_exist():
     assert "f-config-cancel" not in (WEB / "index.html").read_text(encoding="utf-8")
 
 
+def test_demo_controls_and_badges_exist():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    assert "Demo controls: DEMO ONLY" in html
+    html_ids = _html_ids()
+    for ref in (
+        "demo-stop",
+        "demo-start",
+        "demo-ticket",
+        "entity-active",
+        "graph-candidates",
+        "realtime-bar",
+        "upload-collapse",
+        "upload-body",
+        "upload-collapsed",
+        "upload-expand",
+        "explain-decision",
+        "steward-open-2",
+        "steward-count-2",
+        "similar-open",
+    ):
+        assert ref in html_ids, ref
+    # Mock/Real bar is exact copy and lives outside detail view (always visible).
+    assert "REAL: Meta API call" in html
+    assert html.index('id="realtime-bar"') > html.index("/#detail-view")
+    src = (WEB / "app.js").read_text(encoding="utf-8")
+    for handler in ("openPolicy", "markTrapNodes", "renderSimulation"):
+        assert handler in src, handler
+
+
 def test_drawer_and_chat_surface_ids_exist():
     html_ids = _html_ids()
     for ref in (

@@ -38,9 +38,7 @@
   }
 
   function ownerLinesHtml(item) {
-    return `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")}</div>`
-      + `<div class="f-steward-meta">Decide by: ${esc(item.deadline || "—")}</div>`
-      + `<div class="f-steward-meta">If no decision: ${esc(item.fallback || "do not use this value")}</div>`;
+    return `<div class="f-steward-meta">Owner: ${esc(item.owner || "steward-001")} · Decide by: ${esc(item.deadline || "—")} · If no decision: ${esc(item.fallback || "do not use this value")}.</div>`;
   }
 
   function stewardQuestionHtml(ctx, item) {
@@ -293,18 +291,32 @@
     dropFriendlySteward(ctx, id);
   }
 
-  function stewardCardHtml(item) {
+  function stewardCardHtml(ctx, item, friendly) {
+    const question = stewardQuestionHtml(ctx, item);
+    let suggestedBlock = "";
+    if (item.suggested_action) {
+      suggestedBlock = `<div class="meta">Suggested: <span class="mono">${esc(item.suggested_action)}</span></div>`;
+      const rawMatch = /"([^"]+)"/.exec(item.suggested_action || "");
+      if (rawMatch && ctx.activeFragments) {
+        const raw = rawMatch[1];
+        const carriers = ctx.activeFragments()
+          .filter((f) => f.attribute === item.attribute && String(f.value) === raw);
+        if (carriers.length) {
+          const sources = [...new Set(carriers.map((f) => f.source))];
+          suggestedBlock += `<div class="meta">Raw value <span class="mono">${esc(raw)}</span> — ${carriers.length} fragment(s): ${esc(sources.join(", "))}</div>`;
+        }
+      }
+    }
     return `
       <div class="card warn" data-steward="${esc(item.steward_id)}">
-        <h3>${esc(item.attribute)} <span class="muted mono">${esc(item.status)}</span></h3>
-        <div class="meta">owner ${esc(item.owner)} · deputy ${esc(item.deputy || "—")}</div>
-        <div class="meta">deadline <span class="mono">${esc(item.deadline)}</span></div>
-        <div class="meta">fallback: ${esc(item.fallback)}</div>
-        ${item.suggested_action ? `<div class="meta">suggested: <span class="mono">${esc(item.suggested_action)}</span></div>` : ""}
+        <h3>${esc(item.attribute)} — ${esc(item.entity_id || "")} <span class="muted mono">Escalated</span></h3>
+        ${question}
+        ${suggestedBlock}
+        <div class="meta">Your decision becomes a new fact and the picture is re-derived. It does not edit the golden by hand.</div>
         <div class="steward-actions">
-          <button class="btn-approve" data-approve="${esc(item.steward_id)}">Approve w/ value…</button>
-          <button class="btn-reject" data-reject="${esc(item.steward_id)}">Reject</button>
-          <button class="btn-split" data-split="${esc(item.steward_id)}">Split to v1</button>
+          <button class="btn-approve" data-approve="${esc(item.steward_id)}">${friendly ? "Use this value" : "Approve"}</button>
+          <button class="btn-reject" data-reject="${esc(item.steward_id)}">${friendly ? "Do not use it" : "Reject"}</button>
+          <button class="btn-split" data-split="${esc(item.steward_id)}">${friendly ? "These are two different people" : "Split"}</button>
           ${item.suggested_action ? `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept suggested</button>` : ""}
         </div>
       </div>`;
@@ -336,16 +348,21 @@
     }
     const first = items[0];
     const rule = first.rule_fired || first.reason_code || "escalated";
+    const firstFrag = ctx.fragmentForAttribute ? ctx.fragmentForAttribute(first.attribute) : null;
+    const firstSrc = firstFrag && firstFrag.source === "ticket"
+      ? "Ticket"
+      : (firstFrag ? plainSource(firstFrag.source) : "");
+    const what = `${firstSrc ? firstSrc + " " : ""}${plainAttr(first.attribute)}`;
     ctx.stewardBody.innerHTML = `
       <div class="exception-card" role="alert">
-        <div>⚠ ${items.length} escalation${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} a human — ${esc(first.attribute)} — ${esc(rule)} — Steward Queue (${items.length})</div>
+        <div>⚠ ${items.length} escalation${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} a human — ${esc(what)} — ${esc(rule)} — Steward Queue (${items.length})</div>
         <div class="steward-actions" style="margin-top:0">
           <button id="exception-review" type="button">Review in Steward Queue</button>
         </div>
       </div>`;
     $("exception-review").addEventListener("click", () => openDrawer());
     const drawerList = $("steward-drawer-list");
-    drawerList.innerHTML = items.map(stewardCardHtml).join("");
+    drawerList.innerHTML = items.map((item) => stewardCardHtml(ctx, item, false)).join("");
     bindStewardActions(ctx, drawerList);
   }
 
@@ -363,29 +380,70 @@
     $("explain-id").textContent = decisionId;
     const entityType = (ctx.currentEntity && ctx.currentEntity().entityType) || data.entity_type || "user";
     const entityId = (ctx.currentEntity && ctx.currentEntity().entityId) || data.entity_id || "";
-    const tree = (data.derivation_tree || []).join("\n");
-    const trace = (data.subagent_trace || []).map((s) =>
-      `▸ ${s.agent || "?"}${s.real_call ? " [REAL]" : " [mock]"} — ${s.output_summary || ""}`).join("\n");
-    const wonder = data.wonder_note ? `Wonder: ${JSON.stringify(data.wonder_note)}\n\n` : "";
-    const head = field ? `Proof for: ${field}\n\n` : "";
-    // Visual Proof Certificate: what was proven, under which versions.
+    const friendlyGolden = (ctx.lastFriendly && ctx.lastFriendly.golden) || null;
+    const ruleText = window.MosaicConfig.rulePlain(data.rule_fired);
+    const verdict = String(data.verdict || "unknown");
+    const verdictPill = verdict === "published" ? "Published" : verdict === "escalated" ? "Escalated" : verdict;
+    // Certificate column 1: winning value + source. Prefer the live golden
+    // value for the asked field; fall back to the winner fact id alone.
+    let winnerLine = esc(data.winner_fact_id || "—");
+    if (field && friendlyGolden && friendlyGolden.attributes && friendlyGolden.attributes[field]) {
+      const v = friendlyGolden.attributes[field];
+      winnerLine = `<b>${esc(String(v.value))}</b> — winner <span class="mono">${esc(v.winner_fact_id || data.winner_fact_id || "—")}</span>`;
+    }
+    const loserLines = (data.loser_fact_ids || []).map((fid) =>
+      `<div><span class="mono">${esc(fid)}</span> <span class="tag">Tombstone → Survivor</span></div>`
+    ).join("") || `<div class="meta">No losers recorded.</div>`;
     const cert =
-      `VISUAL PROOF CERTIFICATE\nDecision ${decisionId} · Policy ${data.policy_version} · Taxonomy ${data.taxonomy_version || "—"}\n`
-      + `Rule ${data.rule_fired} · Golden ${data.golden_id || data.golden_version || "—"}\n\n`;
+      `<div class="cert-grid">`
+      + `<div class="cert-col cert-win"><h4>Winning Value &amp; Source</h4><div>${winnerLine}</div></div>`
+      + `<div class="cert-col cert-lose"><h4>Losers / Tombstones</h4>${loserLines}</div>`
+      + `<div class="cert-col"><h4>Rule &amp; Policy Version</h4><div>${esc(data.rule_fired || "?")} · <span class="mono">${esc(data.policy_version || "?")}</span></div></div>`
+      + `<div class="cert-col"><h4>Payload Hash &amp; Replay Status</h4><div class="mono">${esc((data.payload_hash || "").slice(0, 12) || "—")}</div><div>Deterministic ✓</div></div>`
+      + `</div>`;
+    const head = (field ? `Proof for: ${field}\n\n` : "")
+      + `Explain — Decision ${decisionId} · ${verdictPill} · Policy ${data.policy_version} · Taxonomy ${data.taxonomy_version || "—"}\n\n`;
+    const facts = (data.input_facts || []).map((f) =>
+      `• ${f.attribute} = ${f.value} — ${f.source} · rank ${f.authority_rank} · ${f.verified ? "verified" : "unverified"} · ${f.event_time}`
+    ).join("\n") || "(no input facts recorded)";
+    const byAgent = {};
+    (data.subagent_trace || []).forEach((s) => {
+      (byAgent[s.agent || "?"] = byAgent[s.agent || "?"] || []).push(s);
+    });
+    const trace = Object.entries(byAgent).map(([agent, steps]) =>
+      `▸ ${agent}${steps[0] && steps[0].real_call ? " [REAL]" : " [mock]"}\n`
+      + steps.map((s) => `    — ${s.output_summary || ""}${s.confidence ? ` (confidence ${s.confidence})` : ""}${s.evidence ? ` — evidence: ${typeof s.evidence === "string" ? s.evidence : JSON.stringify(s.evidence)}` : ""}`).join("\n")
+    ).join("\n") || "(none)";
+    const wonder = data.wonder_note
+      ? `Wonder: ${JSON.stringify(data.wonder_note)}\n\n`
+      : `Wonder adjudication: Not available in this run.\n\n`;
+    const guard = data.prompt_guard_flag && Object.keys(data.prompt_guard_flag).length
+      ? `Prompt Guard: ${JSON.stringify(data.prompt_guard_flag)}\n\n`
+      : `Screening: Pydantic + claim log (Prompt Guard not verified in this run)\n\n`;
+    const created = data.created_at || "";
+    const lineage =
+      `LINEAGE\nFragment → Screen → Proposal → Derivation → Structure → Publish\n`
+      + `• Fragment: ${(data.input_fact_ids || []).length} input fact(s) recorded\n`
+      + `• Screen: validated against the fact contract\n`
+      + `• Proposal: ${Object.keys(byAgent).join(", ") || "no trace recorded"}\n`
+      + `• Derivation: ${data.rule_fired || "?"} under ${data.policy_version}\n`
+      + `• Structure: whole-document validation\n`
+      + `• Publish: Decision ${decisionId}${created ? ` · ${created}` : ""}\n`;
     let historyText = "";
+    let historyRows = [];
     try {
       const history = entityId ? await ctx.api(`/golden/${entityType}/${entityId}/history`) : null;
-      const versions = (history && history.versions) || [];
-      if (versions.length) {
-        historyText = `\nGOLDEN HISTORY (newest first)\n` + versions.slice(0, 5).map((v) =>
-          `v${v.version} · Decision ${v.decision_id} · Policy ${v.policy_version} · ${v.created_at}`
+      historyRows = ((history && history.versions) || []).slice(0, 5);
+      if (historyRows.length) {
+        historyText = `\nGOLDEN HISTORY (newest first)\n` + historyRows.map((v, i) =>
+          `[${i + 1}] v${v.version} · Decision ${v.decision_id} · Policy ${v.policy_version} · ${v.created_at}`
         ).join("\n") + `\n`;
       }
     } catch (error) {
       historyText = `\nGOLDEN HISTORY\nUnavailable in this run: ${error.message}\n`;
     }
     const escalated = ((ctx.lastFriendly && ctx.lastFriendly.steward_queue) || []).length > 0;
-    const published = !!(data.golden_id || data.golden_version);
+    const published = verdict === "published";
     const improvement = published && !escalated
       ? "This outcome will become an example for future reasoning: Yes, engine published."
       : (published
@@ -393,25 +451,36 @@
         : (escalated
           ? "This outcome will become an example for future reasoning: No, escalated — trap example only."
           : "This outcome will become an example for future reasoning: No, unverified proposal only."));
-    const text = head + cert
-      + `DERIVATION TREE\n${tree || "(empty)"}\n\n`
-      + `SUBAGENT TRACE\n${trace || "(none)"}\n\n`
-      + wonder
+    const text = head
+      + `RULE ${data.rule_fired || "?"}${ruleText ? `: ${ruleText}` : ""} · POLICY ${data.policy_version} · TAXONOMY ${data.taxonomy_version || "—"}\n\n`
+      + `INPUT FACTS\n${facts}\n\n`
+      + `BUILDER TRACE\n${trace}\n\n`
+      + wonder + guard
+      + `DERIVATION TREE\n${(data.derivation_tree || []).join("\n") || "(empty)"}\n\n`
+      + lineage + `\n`
       + historyText + `\n`
       + improvement + `\n\n`
-      + JSON.stringify(data, null, 1);
+      + `Replay: same facts + same policy version derive the same golden record. If you re-run this decision, you must get the same decision id for the same payload hash.`;
     // Highlight the lineage row(s) for the requested field; the full proof
     // stays visible (highlighting is in addition, not instead).
     const key = field ? `"${field}"` : null;
     const policyVersion = data.policy_version || "";
-    $("explain-body").innerHTML = text.split("\n").map((line) =>
-      (key && line.includes(key) ? `<mark class="f-hit">${esc(line)}</mark>` : esc(line))
-    ).join("\n")
+    const historyBtns = historyRows.map((v, i) =>
+      `<button type="button" data-explain-history="${esc(v.decision_id)}">Open v${esc(String(v.version))} · ${esc(v.decision_id)}</button>`
+    ).join(" ");
+    $("explain-body").innerHTML = cert
+      + text.split("\n").map((line) =>
+        (key && line.includes(key) ? `<mark class="f-hit">${esc(line)}</mark>` : esc(line))
+      ).join("\n")
+      + (historyBtns ? `<div class="steward-actions" style="margin-top:10px">${historyBtns}</div>` : "")
       + (policyVersion
         ? `<div class="steward-actions" style="margin-top:10px">`
           + `<button data-explain-datalog type="button">Show Datalog</button>`
           + `</div><div class="meta mono" data-explain-datalog-box hidden>Loading policy source…</div>`
         : "");
+    $("explain-body").querySelectorAll("[data-explain-history]").forEach((btn) => {
+      btn.addEventListener("click", () => explain(ctx, btn.getAttribute("data-explain-history")));
+    });
     const datalogBtn = $("explain-body").querySelector("[data-explain-datalog]");
     if (datalogBtn) {
       datalogBtn.addEventListener("click", async () => {
@@ -442,8 +511,40 @@
     if (hit) hit.scrollIntoView({ block: "center" });
   }
 
-  function drawerShow(id) {
-    $(id).classList.add("open");
+  // Policy badge click: Explain for the current policy — allowed
+  // attributes and authority matrix in plain language, never raw JSON
+  // on screen (raw JSON stays one Show-Datalog-style toggle away).
+  async function openPolicy(ctx) {
+    const type = (ctx.currentEntity && ctx.currentEntity().entityType) || "user";
+    $("explain-id").textContent = `Policy`;
+    const box = $("explain-body");
+    box.innerHTML = "Loading policy…";
+    ctx.dialog.showModal();
+    try {
+      const inForce = type === "product"
+        ? ctx.policyProduct || "pol-product-2026-10-27-v1"
+        : ctx.policyUser || "pol-2026-10-28-v1";
+      const data = await ctx.api(`/policies/${type}/${encodeURIComponent(inForce)}`);
+      const policy = data.policy || {};
+      const allowed = (policy.allowed_attributes || []).map((a) =>
+        `<div>• ${esc(a)}${(policy.critical_attributes || []).includes(a) ? ' <span class="tag">critical</span>' : ""}</div>`
+      ).join("") || `<div class="meta">No allowed attributes listed.</div>`;
+      const matrix = Object.entries(policy.authority_matrix || {}).map(([attr, ranks]) => {
+        const ordered = Object.entries(ranks || {}).sort((a, b) => a[1] - b[1])
+          .map(([src, rank]) => `${plainSource(src)} (rank ${rank})`).join(" beats ");
+        return `<div>• <b>${esc(attr)}</b>: ${esc(ordered || "no ranks")}</div>`;
+      }).join("") || `<div class="meta">No authority matrix listed.</div>`;
+      box.innerHTML =
+        `<div><b>Policy ${esc(data.policy_version || inForce)}</b> for ${esc(type)} — the config in force.</div>`
+        + `<div class="meta">Approving a config pins this file. It never approves a golden.</div>`
+        + `<h4>Allowed attributes</h4>${allowed}`
+        + `<h4>Authority matrix (lower rank wins)</h4>${matrix}`;
+    } catch (error) {
+      box.textContent = `Policy unreadable: ${error.message}`;
+    }
+  }
+
+  function drawerShow(id) {    $(id).classList.add("open");
     $("drawer-scrim").classList.add("open");
     const closeBtn = $(id).querySelector("button");
     if (closeBtn) closeBtn.focus();
@@ -488,12 +589,26 @@
       const data = await ctx.api(
         `/similar?entity_type=${encodeURIComponent(current.entityType)}&entity_id=${encodeURIComponent(current.entityId)}&limit=20`
       );
-      const hits = (data.hits || []).map((h) =>
-        `<div class="card"><b>${esc(h.attribute)}</b> <span class="mono">${esc(h.value)}</span>`
-        + `<div class="meta">${esc(h.source)} · rank ${esc(h.authority_rank)} · ${h.verified ? "verified" : "unverified"} · fact <span class="mono">${esc(h.fact_id)}</span></div></div>`
-      ).join("") || `<div class="card"><span class="muted">No similar candidates.</span></div>`;
+      const recall = data.vector_recall || "";
+      const noEmbedding = /not configured|unavailable|no embedding/i.test(recall);
+      const rows = (data.results || []).map((h) => {
+        const evidence = Object.entries(h.evidence || {})
+          .map(([k, v]) => `${esc(k)}: ${esc(typeof v === "object" ? JSON.stringify(v) : String(v))}`).join(" · ");
+        const vectorLine = (h.vector_score === null || h.vector_score === undefined)
+          ? `<div class="meta">Vector only — needs structured check</div>`
+          : `<div class="meta">Vector: ${esc(Number(h.vector_score).toFixed(2))}${evidence ? "" : " — needs structured check"}</div>`;
+        const evidenceLine = evidence ? `<div class="meta">${evidence}</div>` : (h.vector_score !== null && h.vector_score !== undefined ? "" : "");
+        return `<div class="card"><b>${esc(h.attribute)}</b> <span class="mono">${esc(h.value)}</span>`
+          + `<div class="meta">${esc(h.source)} · rank ${esc(h.authority_rank)} · ${h.verified ? "verified" : "unverified"} · fact <span class="mono">${esc(h.fact_id)}</span></div>`
+          + vectorLine + evidenceLine
+          + `<div class="meta">Candidate only — needs structured check</div></div>`;
+      }).join("");
+      const emptyLine = noEmbedding
+        ? `<div class="card"><span class="muted">No embedding for this fragment yet. Similar search is unavailable for this fragment, structured search still works.</span></div>`
+        : `<div class="card"><span class="muted">No similar candidate found in the filtered set. Try a broader filter, or check structured search. Vector search is recall, not a decision.</span></div>`;
       body.innerHTML = `<div class="card"><h3>Similar candidates <span class="tag">candidate only, never a merge</span></h3>`
-        + `<div class="meta">Structured recall for ${esc(current.entityType)}/${esc(current.entityId)}. Similar is not same — nothing here publishes.</div></div>` + hits;
+        + `<div class="meta">Structured recall for ${esc(current.entityType)}/${esc(current.entityId)}. Similar is not same — nothing here publishes.</div></div>`
+        + (rows || emptyLine);
     } catch (error) {
       body.innerHTML = `<div class="card warn">Similar search unreadable: ${esc(error.message)}</div>`;
     }
@@ -530,6 +645,7 @@
     renderSteward,
     loadPending,
     explain,
+    openPolicy,
     openDrawer,
     closeDrawer,
     openTaxonomy,

@@ -284,6 +284,8 @@ async def _derive_persist(
         created_at,
         policy_version=policy.policy_version,
         taxonomy_version=ctx.taxonomy_version,
+        taxonomy=(ctx.taxonomies or {}).get(ctx.taxonomy_version),
+        published_attrs=frozenset(g.attribute for g in golden),
     )
     item_conflicts = list(item_conflicts) + tax_conflicts
     item_stewards = list(item_stewards) + tax_stewards

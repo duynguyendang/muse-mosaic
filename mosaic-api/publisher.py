@@ -292,6 +292,7 @@ async def resolve_flow(
         settings,
         expected_structure,
         documents or [],
+        taxonomy=taxonomy,
     )
     response = persist_decision(
         settings=settings,
@@ -455,7 +456,8 @@ def _gate_structure(
     settings: Settings,
     expected_structure: dict[str, Any] | None,
     documents: list[dict[str, Any]],
-):
+    taxonomy=None,
+) -> tuple[list[GoldenFact], list[ConflictFact], list[StewardItem]]:
     """Proposer gate + taxonomy items + whole-document structure gate."""
     golden, conflicts, stewards = apply_proposer_gate(
         request,
@@ -476,6 +478,8 @@ def _gate_structure(
         created_at,
         policy_version=policy.policy_version,
         taxonomy_version=taxonomy_version,
+        taxonomy=taxonomy,
+        published_attrs=frozenset(g.attribute for g in golden),
     )
     conflicts.extend(tax_conflicts)
     steward_queue = list(stewards) + tax_stewards
@@ -567,12 +571,23 @@ def taxonomy_steward_items(
     created_at: str,
     policy_version: str = "",
     taxonomy_version: str = "",
+    taxonomy=None,
+    published_attrs: frozenset[str] = frozenset(),
 ) -> tuple[list[ConflictFact], list[StewardItem]]:
-    """Steward items for Taxonomist new-term proposals (steward-only Accept)."""
+    """Steward items for Taxonomist new-term proposals (steward-only Accept).
+
+    Plus deterministic T1 items for unknown categorical values the proposer
+    did not cover: when a taxonomy-gated attribute (product ``category``)
+    publishes nothing and some candidate value matches no term or synonym,
+    a steward item proposes ``create new term "X"``. Users are skipped (T1
+    is vacuous for user v1, same convention as the attribute mapping above).
+    """
     conflicts: list[ConflictFact] = []
     stewards: list[StewardItem] = []
     attribute = "category" if entity_type == "product" else "display_name"
+    covered = set()
     for term in proposal.new_terms:
+        covered.add(term.raw_value)
         stewards.append(
             StewardItem(
                 steward_id=f"st-{decision_id}-tax-{_slug(term.raw_value)}",
@@ -600,6 +615,49 @@ def taxonomy_steward_items(
                 taxonomy_version=taxonomy_version,
             )
         )
+    if taxonomy is not None and entity_type == "product" and attribute not in published_attrs:
+        from taxonomies import canonical_term as _canonical_term
+
+        unknown: dict[str, list] = {}
+        for fact in facts:
+            if fact.attribute != attribute:
+                continue
+            if fact.value in covered:
+                continue
+            try:
+                _, mapping = _canonical_term(taxonomy, attribute, fact.value)
+            except (ValueError, AttributeError):
+                mapping = "unmapped"
+            if mapping == "unmapped":
+                unknown.setdefault(fact.value, []).append(fact)
+        for value in sorted(unknown):
+            stewards.append(
+                StewardItem(
+                    steward_id=f"st-{decision_id}-tax-{_slug(value)}",
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    attribute=attribute,
+                    owner="steward-001",
+                    deputy="steward-002",
+                    deadline=_deadline_from_facts(facts),
+                    fallback="do not use the new term until a steward accepts it",
+                    status="pending",
+                    decision_id=decision_id,
+                    suggested_action=f'create new term "{value}"',
+                )
+            )
+            conflicts.append(
+                ConflictFact(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    attribute=attribute,
+                    reason_code="TAXONOMY_UNKNOWN_TERM",
+                    rule_fired="T1",
+                    fact_ids=[fact.fact_id for fact in unknown[value]],
+                    policy_version=policy_version,
+                    taxonomy_version=taxonomy_version,
+                )
+            )
     return conflicts, stewards
 
 
