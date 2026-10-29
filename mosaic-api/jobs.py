@@ -136,6 +136,7 @@ async def run_job_once(
     expected_structures: dict,
     *,
     now_iso: str | None = None,
+    engine_killed: bool = False,
 ) -> str | None:
     """Claim one due job and run it to a terminal state. Returns the job id."""
     from datetime import datetime as _datetime
@@ -147,7 +148,12 @@ async def run_job_once(
     logger.info("job %s claimed (kind=%s attempt=%d)", job["job_id"], job["kind"], job["attempts"])
     try:
         summary, tokens_used = await _run_build_job(
-            settings, policies, taxonomies, expected_structures, job
+            settings,
+            policies,
+            taxonomies,
+            expected_structures,
+            job,
+            engine_killed=engine_killed,
         )
     except _JobCancelled:
         current = ledger.fetch_job(settings.database_path, job["job_id"])
@@ -278,17 +284,22 @@ async def execute_build(ctx, clusters: list[dict[str, Any]], *, hooks=None) -> d
     conflicts: list = []
     stewards: list = []
     verdicts: list[str] = []
+    proposals: list[dict[str, Any]] = []
     for index, cluster in enumerate(clusters):
         if hooks is not None:
             hooks.before_cluster()
-        goldens_i, conflicts_i, stewards_i, verdict = await _build_one_cluster(ctx, cluster, index)
+        goldens_i, conflicts_i, stewards_i, verdict, proposal_i = await _build_one_cluster(
+            ctx, cluster, index
+        )
         goldens.extend(goldens_i)
         conflicts.extend(conflicts_i)
         stewards.extend(stewards_i)
         verdicts.append(verdict)
+        if proposal_i is not None:
+            proposals.append(proposal_i)
         if hooks is not None:
             hooks.after_cluster(goldens_i)
-    return _build_summary(ctx, goldens, conflicts, stewards, verdicts)
+    return _build_summary(ctx, goldens, conflicts, stewards, verdicts, proposals)
 
 
 async def execute_full_build(
@@ -299,6 +310,7 @@ async def execute_full_build(
     request: BuildRequest,
     *,
     hooks=None,
+    engine_killed: bool = False,
 ) -> dict[str, Any]:
     """Full pipeline shared by POST /build and jobs: match, cluster, derive."""
     from routes.build import _build_clusters, _BuildContext, _match_documents
@@ -309,6 +321,7 @@ async def execute_full_build(
         taxonomies=taxonomies,
         expected_structures=expected_structures,
         request=request,
+        engine_killed=engine_killed,
     )
     documents = [doc.model_dump() for doc in request.dataset.documents]
     for document in documents:
@@ -334,6 +347,8 @@ async def _run_build_job(
     taxonomies: dict | None,
     expected_structures: dict,
     job: dict,
+    *,
+    engine_killed: bool = False,
 ) -> tuple[dict[str, Any], int]:
     """Execute one build job cluster-by-cluster with budget/cancel checks."""
     request = BuildRequest.model_validate(job["payload"])
@@ -343,7 +358,13 @@ async def _run_build_job(
             raise RuntimeError(reason)
     hooks = _JobHooks(settings, job["job_id"], int(job.get("tokens_used", 0) or 0))
     summary = await execute_full_build(
-        settings, policies, taxonomies, expected_structures, request, hooks=hooks
+        settings,
+        policies,
+        taxonomies,
+        expected_structures,
+        request,
+        hooks=hooks,
+        engine_killed=engine_killed,
     )
     return summary, hooks.tokens_used
 

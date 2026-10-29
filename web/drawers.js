@@ -361,36 +361,150 @@
   async function explain(ctx, decisionId, field) {
     const data = await ctx.api(`/explain/${decisionId}`);
     $("explain-id").textContent = decisionId;
+    const entityType = (ctx.currentEntity && ctx.currentEntity().entityType) || data.entity_type || "user";
+    const entityId = (ctx.currentEntity && ctx.currentEntity().entityId) || data.entity_id || "";
     const tree = (data.derivation_tree || []).join("\n");
     const trace = (data.subagent_trace || []).map((s) =>
       `▸ ${s.agent || "?"}${s.real_call ? " [REAL]" : " [mock]"} — ${s.output_summary || ""}`).join("\n");
     const wonder = data.wonder_note ? `Wonder: ${JSON.stringify(data.wonder_note)}\n\n` : "";
     const head = field ? `Proof for: ${field}\n\n` : "";
-    const text = head
-      + `RULE ${data.rule_fired} · POLICY ${data.policy_version} · TAXONOMY ${data.taxonomy_version || "—"}\n\n`
+    // Visual Proof Certificate: what was proven, under which versions.
+    const cert =
+      `VISUAL PROOF CERTIFICATE\nDecision ${decisionId} · Policy ${data.policy_version} · Taxonomy ${data.taxonomy_version || "—"}\n`
+      + `Rule ${data.rule_fired} · Golden ${data.golden_id || data.golden_version || "—"}\n\n`;
+    let historyText = "";
+    try {
+      const history = entityId ? await ctx.api(`/golden/${entityType}/${entityId}/history`) : null;
+      const versions = (history && history.versions) || [];
+      if (versions.length) {
+        historyText = `\nGOLDEN HISTORY (newest first)\n` + versions.slice(0, 5).map((v) =>
+          `v${v.version} · Decision ${v.decision_id} · Policy ${v.policy_version} · ${v.created_at}`
+        ).join("\n") + `\n`;
+      }
+    } catch (error) {
+      historyText = `\nGOLDEN HISTORY\nUnavailable in this run: ${error.message}\n`;
+    }
+    const escalated = ((ctx.lastFriendly && ctx.lastFriendly.steward_queue) || []).length > 0;
+    const published = !!(data.golden_id || data.golden_version);
+    const improvement = published && !escalated
+      ? "This outcome will become an example for future reasoning: Yes, engine published."
+      : (published
+        ? "This outcome will become an example for future reasoning: Yes, steward approved then published."
+        : (escalated
+          ? "This outcome will become an example for future reasoning: No, escalated — trap example only."
+          : "This outcome will become an example for future reasoning: No, unverified proposal only."));
+    const text = head + cert
       + `DERIVATION TREE\n${tree || "(empty)"}\n\n`
       + `SUBAGENT TRACE\n${trace || "(none)"}\n\n`
       + wonder
+      + historyText + `\n`
+      + improvement + `\n\n`
       + JSON.stringify(data, null, 1);
     // Highlight the lineage row(s) for the requested field; the full proof
     // stays visible (highlighting is in addition, not instead).
     const key = field ? `"${field}"` : null;
+    const policyVersion = data.policy_version || "";
     $("explain-body").innerHTML = text.split("\n").map((line) =>
       (key && line.includes(key) ? `<mark class="f-hit">${esc(line)}</mark>` : esc(line))
-    ).join("\n");
+    ).join("\n")
+      + (policyVersion
+        ? `<div class="steward-actions" style="margin-top:10px">`
+          + `<button data-explain-datalog type="button">Show Datalog</button>`
+          + `</div><div class="meta mono" data-explain-datalog-box hidden>Loading policy source…</div>`
+        : "");
+    const datalogBtn = $("explain-body").querySelector("[data-explain-datalog]");
+    if (datalogBtn) {
+      datalogBtn.addEventListener("click", async () => {
+        const box = $("explain-body").querySelector("[data-explain-datalog-box]");
+        if (!box) return;
+        if (!box.hidden) {
+          box.hidden = true;
+          datalogBtn.textContent = "Show Datalog";
+          return;
+        }
+        datalogBtn.textContent = "Hide Datalog";
+        box.hidden = false;
+        try {
+          const policy = await ctx.api(`/policies/${entityType}/${encodeURIComponent(policyVersion)}`);
+          const src = String((policy && policy.rules_datalog) || "Policy source unavailable in this run.");
+          box.textContent = "";
+          const pre = document.createElement("pre");
+          pre.style.whiteSpace = "pre-wrap";
+          pre.textContent = src.split("\n").slice(0, 60).join("\n");
+          box.appendChild(pre);
+        } catch (error) {
+          box.textContent = `Policy source unavailable: ${error.message}`;
+        }
+      });
+    }
     ctx.dialog.showModal();
     const hit = $("explain-body").querySelector("mark");
     if (hit) hit.scrollIntoView({ block: "center" });
   }
 
-  function openDrawer() {
-    $("steward-drawer").classList.add("open");
+  function drawerShow(id) {
+    $(id).classList.add("open");
     $("drawer-scrim").classList.add("open");
-    $("drawer-close").focus();
+    const closeBtn = $(id).querySelector("button");
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function drawerHide(id) {
+    $(id).classList.remove("open");
+    if (!$("steward-drawer").classList.contains("open")
+      && !$("taxonomy-drawer").classList.contains("open")
+      && !$("similar-drawer").classList.contains("open")) {
+      $("drawer-scrim").classList.remove("open");
+    }
+  }
+
+  async function openTaxonomy(ctx) {
+    const entityType = (ctx.currentEntity && ctx.currentEntity().entityType) || "user";
+    const body = $("taxonomy-drawer-body");
+    body.innerHTML = `<div class="card"><span class="muted">Loading taxonomy…</span></div>`;
+    drawerShow("taxonomy-drawer");
+    try {
+      const data = await ctx.api(`/taxonomy/${entityType}`);
+      const aliases = Object.entries(data.attribute_aliases || {}).map(([attr, names]) =>
+        `<div class="meta"><b>${esc(attr)}</b>: ${(names || []).map((n) => `<span class="mono">${esc(n)}</span>`).join(", ")}</div>`
+      ).join("") || `<div class="meta">No aliases.</div>`;
+      const terms = (data.terms || []).map((t) =>
+        `<div class="meta"><b>${esc(t.term)}</b>: ${(t.synonyms || []).map((s) => `<span class="mono">${esc(s)}</span>`).join(", ") || "—"}</div>`
+      ).join("") || `<div class="meta">No terms.</div>`;
+      body.innerHTML = `<div class="card"><h3>Taxonomy <span class="mono">${esc(data.taxonomy_version)}</span> <span class="tag">read only</span></h3>`
+        + `<div class="meta">Viewing and changing stay separate: new terms are proposed in the Steward Queue, never here.</div>`
+        + `<h3>Attributes + aliases</h3>${aliases}<h3>Canonical terms + synonyms</h3>${terms}</div>`;
+    } catch (error) {
+      body.innerHTML = `<div class="card warn">Taxonomy unreadable: ${esc(error.message)}</div>`;
+    }
+  }
+
+  async function openSimilar(ctx) {
+    const current = (ctx.currentEntity && ctx.currentEntity()) || { entityType: "user", entityId: "" };
+    const body = $("similar-drawer-body");
+    body.innerHTML = `<div class="card"><span class="muted">Loading similar candidates…</span></div>`;
+    drawerShow("similar-drawer");
+    try {
+      const data = await ctx.api(
+        `/similar?entity_type=${encodeURIComponent(current.entityType)}&entity_id=${encodeURIComponent(current.entityId)}&limit=20`
+      );
+      const hits = (data.hits || []).map((h) =>
+        `<div class="card"><b>${esc(h.attribute)}</b> <span class="mono">${esc(h.value)}</span>`
+        + `<div class="meta">${esc(h.source)} · rank ${esc(h.authority_rank)} · ${h.verified ? "verified" : "unverified"} · fact <span class="mono">${esc(h.fact_id)}</span></div></div>`
+      ).join("") || `<div class="card"><span class="muted">No similar candidates.</span></div>`;
+      body.innerHTML = `<div class="card"><h3>Similar candidates <span class="tag">candidate only, never a merge</span></h3>`
+        + `<div class="meta">Structured recall for ${esc(current.entityType)}/${esc(current.entityId)}. Similar is not same — nothing here publishes.</div></div>` + hits;
+    } catch (error) {
+      body.innerHTML = `<div class="card warn">Similar search unreadable: ${esc(error.message)}</div>`;
+    }
+  }
+
+  function openDrawer() {
+    drawerShow("steward-drawer");
   }
 
   function closeDrawer() {
-    $("steward-drawer").classList.remove("open");
+    ["steward-drawer", "taxonomy-drawer", "similar-drawer"].forEach((id) => $(id).classList.remove("open"));
     $("drawer-scrim").classList.remove("open");
   }
 
@@ -418,5 +532,7 @@
     explain,
     openDrawer,
     closeDrawer,
+    openTaxonomy,
+    openSimilar,
   };
 })();

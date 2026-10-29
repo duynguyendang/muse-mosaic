@@ -14,7 +14,8 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse)
 async def health(request: Request) -> HealthResponse:
     current: Settings = request.app.state.settings
-    trust_engine = await _trust_engine_health(current.health_url())
+    killed = bool(getattr(request.app.state, "engine_killed", False))
+    trust_engine = None if killed else await _trust_engine_health(current.health_url())
     splink_status, splink_versions = await _matching_engine_health(current)
     policies = request.app.state.policies
     user_version = policies["user"].policy_version

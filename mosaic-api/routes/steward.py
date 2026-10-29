@@ -186,6 +186,7 @@ async def _steward_accept_taxonomy(steward_id: str, acceptance, request: Request
             request.app.state.taxonomies,
             taxonomy_version=new_version,
             expected_structure=request.app.state.expected_structures.get(entity_type),
+            engine_killed=getattr(request.app.state, "engine_killed", False),
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"re-derive failed: {exc}") from exc
@@ -239,6 +240,7 @@ async def _steward_derive(
             current,
             request.app.state.policies,
             getattr(request.app.state, "taxonomies", None),
+            engine_killed=getattr(request.app.state, "engine_killed", False),
         )
     except PolicyError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

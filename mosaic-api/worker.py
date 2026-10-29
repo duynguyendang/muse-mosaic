@@ -43,7 +43,8 @@ async def run_jobs_loop(app) -> None:
     try:
         while True:
             try:
-                claimed = await run_job_once(*_app_deps(app))
+                killed = bool(getattr(app.state, "engine_killed", False))
+                claimed = await run_job_once(*_app_deps(app), engine_killed=killed)
             except Exception as exc:  # noqa: BLE001 — the loop must survive
                 logger.error("job worker iteration failed (non-fatal): %s", exc)
                 claimed = None

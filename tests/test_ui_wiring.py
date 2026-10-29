@@ -17,9 +17,10 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 def _created_ids() -> set[str]:
     """Ids minted dynamically inside JS templates (present at runtime)."""
     ids: set[str] = set()
-    for name in ("config.js", "drawers.js", "app.js"):
+    for name in ("config.js", "drawers.js", "chat.js", "app.js"):
         src = (WEB / name).read_text(encoding="utf-8")
         ids.update(re.findall(r'id="([^"]+)"', src))
+        ids.update(re.findall(r'\.id = "([^"]+)"', src))
     return ids
 
 
@@ -41,7 +42,7 @@ def _js_ids(name: str) -> set[str]:
 def test_all_js_id_references_exist_in_html():
     html_ids = _html_ids()
     missing: dict[str, list[str]] = {}
-    for name in ("config.js", "drawers.js", "app.js"):
+    for name in ("config.js", "drawers.js", "chat.js", "app.js"):
         for ref in sorted(_js_ids(name)):
             if ref not in html_ids:
                 missing.setdefault(name, []).append(ref)
@@ -51,7 +52,7 @@ def test_all_js_id_references_exist_in_html():
 def test_script_tags_load_in_dependency_order():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     tags = re.findall(r'<script src="([^"]+)"></script>', html)
-    assert tags == ["./config.js", "./drawers.js", "./app.js"], tags
+    assert tags == ["./config.js", "./drawers.js", "./chat.js", "./app.js"], tags
 
 
 def test_no_reference_to_removed_static_layout():
@@ -70,6 +71,8 @@ def test_drawer_namespace_contract():
         "explain",
         "openDrawer",
         "closeDrawer",
+        "openTaxonomy",
+        "openSimilar",
         "stewardAcceptAsk",
         "stewardApproveAsk",
         "stewardRejectAsk",
@@ -77,6 +80,7 @@ def test_drawer_namespace_contract():
     ):
         assert re.search(rf"\b{name}\b", src), name
     assert "window.MosaicDrawers" in src
+    assert "window.MosaicChat" in (WEB / "chat.js").read_text(encoding="utf-8")
     assert "window.MosaicConfig" in (WEB / "config.js").read_text(encoding="utf-8")
 
 
@@ -92,16 +96,45 @@ def test_scene0_panel_ids_exist():
     for ref in (
         "f-scene0",
         "f-config",
+        "f-config-title",
         "f-config-body",
         "f-config-note",
         "f-config-summary",
         "f-config-approve",
+        "f-config-edit",
+        "f-config-reject",
         "f-config-build",
-        "f-config-cancel",
         # created dynamically by approveScene0, wired immediately:
         "f-config-build2",
     ):
         assert ref in html_ids, ref
+    assert "f-config-cancel" not in (WEB / "index.html").read_text(encoding="utf-8")
+
+
+def test_drawer_and_chat_surface_ids_exist():
+    html_ids = _html_ids()
+    for ref in (
+        "taxonomy-drawer",
+        "taxonomy-drawer-body",
+        "taxonomy-drawer-close",
+        "similar-drawer",
+        "similar-drawer-body",
+        "similar-drawer-close",
+        "f-taxonomy",
+        "f-similar",
+        # created dynamically by renderSimulation, scrolled into view:
+        "f-simulation",
+    ):
+        assert ref in html_ids, ref
+    src = (WEB / "app.js").read_text(encoding="utf-8")
+    for handler in (
+        "openTaxonomy",
+        "openSimilar",
+        "announceRunBubbles",
+        "loadGraphForBuild",
+        "renderSimulation",
+    ):
+        assert handler in src, handler
 
 
 def test_bidirectional_highlight_hooks_exist():
@@ -112,3 +145,18 @@ def test_bidirectional_highlight_hooks_exist():
     assert "animateChain" in src
     assert "verifyingChecklist" in src.lower() or "Verifying checklist" in src
     assert "Verify, not Approve" in (WEB / "index.html").read_text(encoding="utf-8")
+
+
+def test_protocol_chat_surface_exists():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    for ref in (
+        "f-scenario-bar",
+        "f-chat-stream",
+        "f-chat-input-bar",
+        "f-chat-input",
+    ):
+        assert f'id="{ref}"' in html, ref
+    for act in ("scene0", "act1", "act2", "act3", "act4", "act5"):
+        assert f'data-act="{act}"' in html, act
+    for question in ("phone", "F6", "datalog", "muse-only"):
+        assert f'data-q="{question}"' in html, question

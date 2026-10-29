@@ -65,6 +65,15 @@ class _BuildContext:
     splink_out: dict[str, Any] = field(default_factory=dict)
     splink_status: str = "unavailable"
     taxonomy_version: str = ""
+    engine_killed: bool = False
+
+
+def _json_safe(value: Any) -> Any:
+    """Best-effort JSON round-trip for proposer payloads (never raises)."""
+    try:
+        return json.loads(json.dumps(value, ensure_ascii=False, sort_keys=True, default=str))
+    except (TypeError, ValueError):
+        return {"unserializable": True}
 
 
 async def _match_documents(
@@ -235,6 +244,7 @@ async def _derive_persist(
                 candidate_facts=facts,
                 links=links,
             ),
+            engine_killed=ctx.engine_killed,
         )
     except TrustEngineError as exc:
         steward_rows = escalate_unavailable(
@@ -343,14 +353,25 @@ async def _build_one_cluster(
     ctx: _BuildContext,
     cluster: dict[str, Any],
     index: int,
-) -> tuple[list[dict[str, Any]], list, list, str]:
-    """Full per-cluster run: ingest + propose, replay-or-derive, gate, persist."""
+) -> tuple[list[dict[str, Any]], list, list, str, dict[str, Any] | None]:
+    """Full per-cluster run: ingest + propose, replay-or-derive, gate, persist.
+
+    Also returns the validated proposer bundle (proposal + links + trace) so
+    /build responses can show *what was claimed* alongside what was derived.
+    Replayed clusters carry a replay marker instead (no re-propose).
+    """
     prepared = await _cluster_inputs(ctx, cluster, index)
     if prepared is None:
-        return [], [], [], "denied"
+        return [], [], [], "denied", None
     entity_type, entity_id, policy, fragments, facts, fact_documents, proposal, links, trace = (
         prepared
     )
+    proposal_info: dict[str, Any] = {
+        "cluster_id": cluster["cluster_id"],
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "policy_version": policy.policy_version,
+    }
     key = f"{ctx.request.idempotency_key}-c{index}"
     payload_hash = hashlib.sha256(
         json.dumps(
@@ -362,8 +383,29 @@ async def _build_one_cluster(
     created_at = utcnow_iso()
     stored = ledger.fetch_decision_by_key(ctx.settings.database_path, key)
     if stored is not None:
-        return _replay_stored(ctx, key, payload_hash, stored)
-    return await _derive_persist(
+        goldens, conflicts, stewards, verdict = _replay_stored(ctx, key, payload_hash, stored)
+        proposal_info["replayed"] = True
+        proposal_info["decision_id"] = stored["decision_id"]
+        return goldens, conflicts, stewards, verdict, proposal_info
+    proposal_info.update(
+        {
+            "mode": proposal.mode,
+            "model": proposal.model,
+            "note": proposal.note,
+            "attributes": proposal.model_dump(mode="json").get("attributes", {}),
+            "links": [
+                link.model_dump(mode="json") if hasattr(link, "model_dump") else link
+                for link in links
+            ],
+            "trace": _json_safe(trace if isinstance(trace, list) else []),
+            "new_terms": [
+                term.model_dump(mode="json") if hasattr(term, "model_dump") else term
+                for term in (proposal.new_terms or [])
+            ],
+            "critiques": _json_safe(list(proposal.critiques or [])),
+        }
+    )
+    goldens, conflicts, stewards, verdict = await _derive_persist(
         ctx,
         cluster,
         entity_type,
@@ -380,6 +422,7 @@ async def _build_one_cluster(
         cluster_decision_id,
         created_at,
     )
+    return goldens, conflicts, stewards, verdict, proposal_info
 
 
 def _build_summary(
@@ -388,6 +431,7 @@ def _build_summary(
     conflicts: list,
     stewards: list,
     verdicts: list[str],
+    proposals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     overall = (
         "published"
@@ -406,6 +450,7 @@ def _build_summary(
         "policy_version_user": ctx.policies["user"].policy_version,
         "taxonomy_version": ctx.taxonomy_version,
         "splink_status": ctx.splink_status,
+        "proposals": proposals or [],
         "splink": {
             "status": ctx.splink_out.get("status", "unavailable"),
             "clusters": ctx.splink_out.get("clusters", []),
@@ -608,4 +653,5 @@ async def build(request: Request) -> dict[str, Any]:
         getattr(request.app.state, "taxonomies", None),
         getattr(request.app.state, "expected_structures", {}) or {},
         build_request,
+        engine_killed=getattr(request.app.state, "engine_killed", False),
     )

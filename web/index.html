@@ -208,6 +208,48 @@
       }
       #steward-drawer .drawer-head h2 { margin: 0; font-size: 16px; }
       #steward-drawer-list { padding: 14px 18px; overflow: auto; display: grid; gap: 12px; align-content: start; }
+      #taxonomy-drawer, #similar-drawer {
+        position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 94vw);
+        background: var(--panel); border-left: 1px solid var(--line-strong);
+        box-shadow: -8px 0 24px rgba(15,23,42,0.12);
+        z-index: 20; display: none; flex-direction: column;
+      }
+      #taxonomy-drawer.open, #similar-drawer.open { display: flex; }
+      #taxonomy-drawer .drawer-head, #similar-drawer .drawer-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 18px; border-bottom: 1px solid var(--line);
+      }
+      #taxonomy-drawer .drawer-head h2, #similar-drawer .drawer-head h2 { margin: 0; font-size: 16px; }
+      #taxonomy-drawer-body, #similar-drawer-body { padding: 14px 18px; overflow: auto; display: grid; gap: 12px; align-content: start; }
+      /* v2.3 protocol chat */
+      .f-scenarios { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+      .f-scenarios button { border: 1px solid #1D4ED8; background: #fff; color: #1D4ED8; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
+      .f-scenarios button.active { background: #1D4ED8; color: #fff; }
+      .f-scenarios button:disabled { opacity: 0.45; cursor: default; }
+      #f-chat-stream { display: grid; gap: 10px; max-height: 46vh; overflow: auto; padding: 4px 2px; }
+      .chat-bubble { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
+      .chat-bubble .chat-head { font-weight: 700; margin-bottom: 4px; }
+      .chat-bubble .chat-badge { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+      .chat-bubble ul { margin: 6px 0 0 18px; padding: 0; }
+      .chat-bubble .chat-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+      .chat-downstream { border: 1px solid #CBD5E1; background: #fff; }
+      .chat-downstream .chat-badge { background: #E2E8F0; color: #475569; }
+      .chat-proposer { border: 1px dashed #2563EB; background: #EFF6FF; }
+      .chat-proposer .chat-badge { background: #DBEAFE; color: #1D4ED8; }
+      .chat-engine { border: 1px solid #15803D; background: #F0FDF4; }
+      .chat-engine.escalated { border-color: #B45309; border-style: dashed; background: #FFFBEB; }
+      .chat-engine.failed { border-color: #B91C1C; background: #FEF2F2; }
+      .chat-engine .chat-badge { background: #DCFCE7; color: #15803D; }
+      .chat-steward { border: 1px dashed #B45309; background: #FFFBEB; }
+      .chat-steward .chat-badge { background: #FEF3C7; color: #92400E; }
+      .f-chat-input { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+      .f-chat-input button { font-size: 12px; padding: 4px 10px; }
+      .f-chat-input input { flex: 1 1 220px; min-height: 34px; }
+      .f-simulation { border: 2px solid #B91C1C; background: #FEF2F2; border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
+      .f-simulation h3 { margin: 0 0 6px 0; color: #991B1B; font-size: 14px; }
+      .tile.trap { border: 2px dashed #64748B !important; background: #F1F5F9 !important; }
+      .tile.trap::after { content: "Not linked"; display: block; font-size: 10px; color: #64748B; }
+      #graph-canvas g[data-node].trap-node circle { fill: #94A3B8 !important; stroke-dasharray: 4 3; }
       #drawer-scrim {
         position: fixed; inset: 0; background: rgba(15,23,42,0.35);
         z-index: 15; display: none;
@@ -421,6 +463,8 @@
       <button class="pill badge-btn detail-only" id="steward-open" type="button">Steward Queue (<span id="steward-count">0</span>)</button>
       <button class="f-only" id="f-show-detail" type="button">Show how it was decided</button>
       <button class="f-only" id="f-pause" type="button">Pause the loop</button>
+      <button id="f-taxonomy" type="button" title="Read-only taxonomy terms and aliases">Taxonomy</button>
+      <button id="f-similar" type="button" title="Structured similar search (candidates only, never a merge)">Similar</button>
       <button class="detail-only" id="f-back" type="button">Back to simple view</button>
     </header>
 
@@ -434,9 +478,28 @@
           <span class="step" id="f-step-3"><span class="n">3</span> <span class="lbl">What you can do (or why we stop)</span></span>
         </div>
 
+  <div class="f-scenarios" id="f-scenario-bar" aria-label="Demo scenario chips">
+          <button type="button" data-act="scene0">1. Scene 0: Clean Messy JSON</button>
+          <button type="button" data-act="act1">2. Act 1: Send OTP (Authority vs Recency)</button>
+          <button type="button" data-act="act2">3. Act 2: Connect 6 Hidden Pieces (F1-F6 Trap)</button>
+          <button type="button" data-act="act3">4. Act 3: Inject Unverified Support Ticket</button>
+          <button type="button" data-act="act4">5. Act 4: Gaming Chair (Taxonomy Accept)</button>
+          <button type="button" data-act="act5">6. Act 5: Stop Trust Engine (Fail-Closed Test)</button>
+        </div>
+
         <div class="f-cols">
           <div>
-            <div class="f-col-h">What we were given</div>
+            <div class="f-col-h">Live Multi-Agent Protocol Chat</div>
+            <div id="f-chat-stream" aria-live="polite"></div>
+            <div class="f-chat-input" id="f-chat-input-bar">
+              <span class="muted">Ask the proof:</span>
+              <button type="button" data-q="phone">Why did this phone win?</button>
+              <button type="button" data-q="F6">Why was F6 excluded?</button>
+              <button type="button" data-q="datalog">Show Datalog</button>
+              <button type="button" data-q="muse-only">Compare with Muse-only</button>
+              <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, datalog" />
+            </div>
+            <div class="f-col-h" style="margin-top:12px">What we were given</div>
             <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
           </div>
           <div>
@@ -477,14 +540,16 @@
         </div>
 
         <div class="f-config" id="f-config" hidden>
-          <h3>Scene 0 — Config proposal <span class="tag">nothing published yet</span></h3>
+          <h3 id="f-config-title">Proposed Pipeline Config — v1 (proposed, not yet in force) <span class="tag">PROPOSED</span></h3>
           <div id="f-config-body"></div>
           <div class="steward-actions">
-            <button id="f-config-approve" class="primary" type="button">Yes, clean like this</button>
+            <button id="f-config-approve" class="primary" type="button">Approve</button>
+            <button id="f-config-edit" type="button">Edit</button>
+            <button id="f-config-reject" type="button">Reject</button>
             <button id="f-config-build" type="button" disabled>Build Mosaic</button>
-            <button id="f-config-cancel" type="button">Cancel</button>
           </div>
           <div class="meta" id="f-config-note"></div>
+          <div class="meta">Config approval is not golden approval. Every golden still has to survive derivation and whole-structure validation.</div>
         </div>
         <div class="f-config-summary" id="f-config-summary" hidden></div>
       </div>
@@ -669,6 +734,22 @@
       <div id="steward-drawer-list"></div>
     </aside>
 
+    <aside id="taxonomy-drawer" aria-labelledby="drawer-taxonomy-title" role="dialog" aria-modal="true">
+      <div class="drawer-head">
+        <h2 id="drawer-taxonomy-title">Taxonomy — read only</h2>
+        <button id="taxonomy-drawer-close" type="button">Close (Esc)</button>
+      </div>
+      <div id="taxonomy-drawer-body"></div>
+    </aside>
+
+    <aside id="similar-drawer" aria-labelledby="drawer-similar-title" role="dialog" aria-modal="true">
+      <div class="drawer-head">
+        <h2 id="drawer-similar-title">Similar candidates — never a merge</h2>
+        <button id="similar-drawer-close" type="button">Close (Esc)</button>
+      </div>
+      <div id="similar-drawer-body"></div>
+    </aside>
+
     <dialog id="explain-dialog">
       <h3 style="margin-top:0">Explain — <span class="mono" id="explain-id"></span></h3>
       <div class="mono" id="explain-body" style="white-space: pre-wrap;"></div>
@@ -686,6 +767,7 @@
 
     <script src="./config.js"></script>
     <script src="./drawers.js"></script>
+    <script src="./chat.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

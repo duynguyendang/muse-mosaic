@@ -21,9 +21,14 @@ class TrustEngineError(RuntimeError):
 
 
 async def derive(
-    settings: Settings, request: DeriveRequest, *, timeout_seconds: float = 20.0
+    settings: Settings, request: DeriveRequest, *, timeout_seconds: float = 20.0, engine_killed: bool = False
 ) -> DeriveResponse:
     """POST /derive and validate the response against the derive contract."""
+    if engine_killed:
+        raise TrustEngineError(
+            "killed",
+            "trust-engine stopped by demo control; fail-closed, no golden published",
+        )
     payload = request.model_dump(mode="json")
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:

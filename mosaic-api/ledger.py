@@ -113,6 +113,36 @@ def fetch_goldens_by_decision(database_path: str | Path, decision_id: str) -> li
     return records
 
 
+def fetch_golden_history(
+    database_path: str | Path, entity_type: str, entity_id: str
+) -> list[dict[str, Any]]:
+    """Golden versions for one entity, newest first (Explain history view)."""
+    connection = connect(database_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT version, decision_id, policy_version, taxonomy_version,
+                   attributes, created_at
+            FROM golden_records
+            WHERE entity_type = ? AND entity_id = ?
+            ORDER BY version DESC
+            """,
+            (entity_type, entity_id),
+        ).fetchall()
+    finally:
+        connection.close()
+    history = []
+    for row in rows:
+        record = dict(row)
+        try:
+            attributes = json.loads(record.get("attributes") or "{}")
+        except ValueError:
+            attributes = {}
+        record["attributes"] = sorted(attributes.keys()) if isinstance(attributes, dict) else []
+        history.append(record)
+    return history
+
+
 def fetch_stewards_by_decision(database_path: str | Path, decision_id: str) -> list[dict[str, Any]]:
     connection = connect(database_path)
     try:

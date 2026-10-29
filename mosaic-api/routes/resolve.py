@@ -36,6 +36,7 @@ async def resolve(request: Request) -> dict[str, Any]:
             current,
             request.app.state.policies,
             request.app.state.taxonomies,
+            engine_killed=getattr(request.app.state, "engine_killed", False),
         )
     except PolicyError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

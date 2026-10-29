@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from policies import PolicyError, load_policies
 from routes import build as build_routes
+from routes import demo as demo_routes
 from routes import downstream as downstream_routes
 from routes import entities as entities_routes
 from routes import explain as explain_routes
@@ -35,6 +36,7 @@ from routes import graph as graph_routes
 from routes import health as health_routes
 from routes import ingest as ingest_routes
 from routes import jobs as jobs_routes
+from routes import reference as reference_routes
 from routes import resolve as resolve_routes
 from routes import similar as similar_routes
 from routes import steward as steward_routes
@@ -91,6 +93,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = app_settings
+    # Demo-only engine kill switch (Act 5). Process-local, defaults off, a
+    # restart always recovers. See routes/demo.py.
+    app.state.engine_killed = False
     try:
         app.state.policies = load_policies()
     except PolicyError as exc:
@@ -104,6 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     for routes_module in (
         health_routes,
         entities_routes,
+        reference_routes,
+        demo_routes,
         resolve_routes,
         jobs_routes,
         ingest_routes,

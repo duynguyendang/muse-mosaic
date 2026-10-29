@@ -164,6 +164,9 @@
       taxonomy_version: payload.taxonomy_version,
     };
     fState.ran = true;
+    window.__lastGolden = payload.golden || null;
+    window.__lastProposals = payload.proposal ? [payload.proposal] : [];
+    window.__lastGoldens = payload.golden ? [payload.golden] : [];
   }
 
   function setFriendlyFromBuild(payload) {
@@ -179,6 +182,23 @@
     };
     fState.splinkPairs = (payload.splink && payload.splink.pairs) || [];
     fState.ran = true;
+    // Ledger-backed stores for the deterministic chat (askAbout/fallback):
+    // golden for attribute answers, proposals for the F6 trap evidence.
+    window.__lastGolden = first;
+    window.__lastProposals = payload.proposals || [];
+    window.__lastGoldens = payload.goldens || [];
+  }
+
+  // After a /build, point the graph canvas at what was just built (first
+  // golden's entity) so highlight, Explain and downstream all agree.
+  async function loadGraphForBuild(payload) {
+    const first = (payload.goldens || []).find((g) => g.golden_id) || null;
+    if (first && first.entity_type && first.entity_id) {
+      fState.activeEntity = { entityType: first.entity_type, entityId: first.entity_id };
+      await loadGraph(first.entity_type, first.entity_id);
+    } else {
+      await loadGraph();
+    }
   }
 
   function showDetail(open) {
@@ -254,6 +274,18 @@
       const lines = arr.map((f) => {
         const conflict = (valuesByAttr[f.attribute] || new Set()).size > 1
           ? ` <span class="f-conflict">Different values — this is what we must decide</span>` : "";
+        // Live survivorship badge: after a run, the piece whose value the
+        // engine published shows Survivor; same-attribute losers kept for
+        // history show Tombstone. Matched on exact attribute + value only —
+        // raw names that never entered derivation get no badge, never a guess.
+        let survive = "";
+        const golden = lastFriendly && lastFriendly.golden && lastFriendly.golden.attributes;
+        const field = golden && golden[f.attribute];
+        if (field && typeof field === "object" && field.value != null) {
+          survive = String(field.value) === String(f.value)
+            ? ` <span class="tag">Survivor</span>`
+            : ` <span class="tag">Tombstone — kept for history</span>`;
+        }
         // Friendly small text is one of two exact forms only, with plain
         // attribute names: verified rank-1 authority is "trusted for [name]",
         // unverified is "not proven yet". Verified non-rank-1 facts carry
@@ -261,7 +293,7 @@
         const tag = f.verified
           ? (f.authority_rank === 1 ? ` <span class="muted">(trusted for ${esc(plainAttr(f.attribute).toLowerCase())})</span>` : "")
           : ` <span class="muted">(not proven yet)</span>`;
-        return `<div>${esc(plainAttr(f.attribute))} ${esc(f.value)}${tag}${conflict}</div>`;
+        return `<div>${esc(plainAttr(f.attribute))} ${esc(f.value)}${tag}${conflict}${survive}</div>`;
       }).join("");
       return `<div class="f-piece"><span class="src"><span class="f-src-dot" style="background:${SRC_COLOR[source] || "#475569"}"></span>${esc(plainSource(source))} says:</span>${lines}</div>`;
     }).join("");
@@ -272,10 +304,21 @@
     return list.find((f) => !f.verified) || list[0] || null;
   }
 
-  function fragmentForFactId(factId) {
+  function fragmentForFactId(factId, attrName) {
+    // Fact ids differ by path: /resolve uses "{entity}-{source_id}", /build
+    // uses "{cluster}-{docId}-{rawAttr}". Match exact, entity-prefixed, and
+    // suffix forms so the friendly sentence never loses its source. Returns
+    // null (caller falls back to a generic line) when nothing matches —
+    // never a guessed fragment.
+    if (!factId) return null;
+    const list = activeFragments();
     const { entityId } = currentEntity();
     return (
-      activeFragments().find((f) => `${entityId}-${f.source_id}` === factId) || null
+      list.find((f) => f.source_id && factId === f.source_id)
+      || list.find((f) => f.source_id && factId === `${entityId}-${f.source_id}`)
+      || list.find((f) => f.source_id && factId.endsWith(`-${f.source_id}`))
+      || list.find((f) => f._docId && attrName && factId.endsWith(`-${f._docId}-${attrName}`))
+      || null
     );
   }
 
@@ -286,7 +329,7 @@
     if (!value || typeof value !== "object") return "Checked by the engine.";
     const attrPlain =
       (attribute === "purchased_products" ? "purchase" : plainAttr(attribute)).toLowerCase();
-    const winner = fragmentForFactId(value.winner_fact_id);
+    const winner = fragmentForFactId(value.winner_fact_id, attribute);
     if (!winner) return "Checked by the engine.";
     const src = plainSource(winner.source);
     const sameAttr = activeFragments().filter((f) => f.attribute === attribute);
@@ -615,6 +658,10 @@
   }
 
   function currentEntity() {
+    // After a build the UI follows the built entity (e.g. cluster-1), not the
+    // fixture selector, so downstream checks, highlight and Explain all refer
+    // to what was actually derived. Changing the selector clears the override.
+    if (fState.activeEntity) return fState.activeEntity;
     const [entityType, entityId] = entitySel.value.split("/");
     return { entityType, entityId };
   }
@@ -664,6 +711,7 @@
   function onEntityChange() {
     fState.ran = false;
     fState.downstream = null;
+    fState.activeEntity = null;
     lastFriendly = null;
     if (entitySel.value === "custom") {
       defineCustomEntity().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
@@ -687,7 +735,9 @@
   }
 
   async function loadFragments() {
-    const { entityType, entityId } = currentEntity();
+    // Fixtures always load from the selector itself, never from a stale
+    // built-entity override (cleared by onEntityChange above).
+    const [entityType, entityId] = entitySel.value.split("/");
     $("graph-path").hidden = true;
     const data = await api(`/fragments/${entityType}/${entityId}`);
     fragments = data.fragments || [];
@@ -773,6 +823,7 @@
       }
       setStatus(`Decision ${payload.decision_id} — verdict: ${payload.verdict}.`);
       setFriendlyFromResolve(payload);
+      announceRunBubbles(payload);
       markRan();
       renderFriendly();
     } catch (error) {
@@ -1159,6 +1210,7 @@
   async function afterBuild(payload, auto) {
       setStatus(`Build ${payload.decision_id} — verdict: ${payload.verdict} (${payload.splink_status}).`);
       setFriendlyFromBuild(payload);
+      announceRunBubbles(payload, (payload.proposals || [])[0]);
       markRan();
       renderFriendly();
       // Show the graph of what was just built (first golden's entity), so the
@@ -1275,6 +1327,7 @@
       }
       setStatus(`Upload resolved — decision ${payload.decision_id}, verdict ${payload.verdict}.`);
       setFriendlyFromResolve(payload);
+      announceRunBubbles(payload);
       markRan();
       renderFriendly();
     } catch (error) {
@@ -1284,6 +1337,705 @@
       fState.working = false;
       renderFStatus();
     }
+  }
+
+  // ---- Protocol chat + 4-Act Scenario Bar (v2.3) --------------------------
+  // Every bubble is rendered from a real API response or ledger row passed
+  // in by the caller. Nothing here invents proposers, derivations, or
+  // steward items. Steward buttons reuse the drawer handlers verbatim.
+  function chatDownstream(lines, opts) {
+    return window.MosaicChat.add(Object.assign({ role: "downstream" }, lines, opts));
+  }
+
+  function chatProposer(lines, opts) {
+    return window.MosaicChat.add(Object.assign({ role: "proposer" }, lines, opts));
+  }
+
+  function chatEngine(lines, opts) {
+    return window.MosaicChat.add(Object.assign({ role: "engine" }, lines, opts));
+  }
+
+  function chatStewardCard(item) {
+    const node = window.MosaicChat.add({
+      role: "steward",
+      title: `Steward decision needed — ${item.attribute}`,
+      lines: [],
+    });
+    if (node) {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = MosaicDrawers.stewardCardHtml(item);
+      node.appendChild(wrap.firstElementChild);
+      MosaicDrawers.bindStewardActions(drawerCtx, node);
+    }
+    return node;
+  }
+
+  function proposerLines(proposal, splink) {
+    if (!proposal) return ["<i>No proposal recorded for this run.</i>"];
+    const lines = [];
+    const trace = proposal.subagent_trace || [];
+    const byAgent = {};
+    trace.forEach((step) => { byAgent[step.agent || "?"] = step; });
+    const scout = byAgent.Scout;
+    if (scout) lines.push(`<b>Scout:</b> ${esc(scout.output_summary || "cleaned the fragments")}`);
+    const linker = byAgent.Linker;
+    if (linker) lines.push(`<b>Linker:</b> ${esc(linker.output_summary || "proposed links")}`);
+    const cluster = byAgent.Cluster;
+    if (cluster) lines.push(`<b>Cluster:</b> ${esc(cluster.output_summary || "proposed clusters")}`);
+    const taxonomist = byAgent.Taxonomist;
+    if (taxonomist) lines.push(`<b>Taxonomist:</b> ${esc(taxonomist.output_summary || "proposed mappings")}`);
+    const attrs = proposal.attributes || {};
+    Object.entries(attrs).forEach(([name, attr]) => {
+      const conf = attr && attr.confidence ? ` <span class="tag">Claim, not a fact · ${esc(attr.confidence)}</span>` : ` <span class="tag">Claim, not a fact</span>`;
+      lines.push(`<b>${esc(name)}:</b> proposes <span class="mono">${esc(attr && attr.proposed_value != null ? attr.proposed_value : "— abstain —")}</span>${conf}`);
+    });
+    (proposal.new_terms || []).forEach((term) => {
+      lines.push(`<b>New term proposed:</b> ${esc(term.raw_value || term)} — PROPOSED, not created.`);
+    });
+    const critic = byAgent.Critic;
+    if (critic) lines.push(`<b>Critic:</b> ${esc(critic.output_summary || "reviewed the merge")}`);
+    (proposal.critiques || []).forEach((c) => {
+      lines.push(`<b>Critic flag:</b> ${esc(typeof c === "string" ? c : (c.kind || c.explain || JSON.stringify(c)))}`);
+    });
+    if (splink && splink.status === "ok" && (splink.pairs || []).length) {
+      lines.push(`<b>Splink:</b> ${splink.pairs.length} candidate pair(s), weights are signals only — <span class="tag">CANDIDATE, NOT A FACT</span>`);
+    } else if (splink && splink.status !== "ok") {
+      lines.push(`<b>Splink:</b> unavailable — fallback to Muse + fuzzy. <span class="tag">No publish on fallback alone.</span>`);
+    }
+    return lines.length ? lines : ["<i>Empty proposal — nothing claimed.</i>"];
+  }
+
+  function engineLinesFor(payload, golden) {
+    const lines = [];
+    const verdict = String(payload.verdict || "unknown");
+    lines.push(`Verdict: <b>${esc(verdict)}</b> — Decision <span class="mono">${esc(payload.decision_id || "—")}</span>`);
+    lines.push(`Policy: <span class="mono">${esc(payload.policy_version || payload.policy_version_user || "—")}</span> · Taxonomy: <span class="mono">${esc(payload.taxonomy_version || "—")}</span>`);
+    if (golden && golden.attributes) {
+      Object.entries(golden.attributes).forEach(([name, value]) => {
+        if (name === "purchased_products" || !value || typeof value !== "object") return;
+        lines.push(`${esc(name)}: <b>${esc(value.value)}</b> wins — ${esc(value.rule_fired || "?")} · loser kept as Tombstone`);
+      });
+      const losers = Object.values(golden.attributes).flatMap((v) => (v && v.loser_fact_ids) || []);
+      if (losers.length) lines.push(`Losers kept as Tombstone: <span class="mono">${esc(losers.slice(0, 4).join(", "))}${losers.length > 4 ? "…" : ""}</span>`);
+    }
+    (payload.conflicts || []).slice(0, 4).forEach((c) => {
+      lines.push(`Escalated: ${esc(c.attribute)} — ${esc(c.rule_fired || c.reason_code || "escalated")}. ${esc(c.fallback || "Steward decides.")}`);
+    });
+    return lines;
+  }
+
+  function wireChatBar() {
+    const bar = $("f-chat-input-bar");
+    if (!bar || bar.dataset.wired) return;
+    bar.dataset.wired = "1";
+    bar.querySelectorAll("[data-q]").forEach((btn) => {
+      btn.addEventListener("click", () => askAbout(btn.getAttribute("data-q")));
+    });
+    const input = $("f-chat-input");
+    if (input) {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && input.value.trim()) {
+          askAbout(input.value.trim());
+          input.value = "";
+        }
+      });
+    }
+    document.querySelectorAll("#f-scenario-bar [data-act]").forEach((btn) => {
+      btn.addEventListener("click", () => runScenario(btn.getAttribute("data-act")));
+    });
+    document.getElementById("f-chat-stream").addEventListener("click", async (event) => {
+      const btn = event.target.closest("[data-chat-act]");
+      if (!btn) return;
+      const act = btn.getAttribute("data-chat-act");
+      if (act === "explain") {
+        const host = btn.closest("[data-decision]");
+        explain(btn.getAttribute("data-chat-arg"), btn.getAttribute("data-chat-arg2") || undefined);
+        void host;
+      } else if (act === "detail") {
+        showDetail(true);
+      } else if (act === "datalog") {
+        toggleChatDatalog(btn);
+      }
+      // NOTE: "restore-engine" is wired directly in act5 (it closes over the
+      // built docs + idempotency key), so the delegated handler ignores it.
+    });
+  }
+
+  // ---- Protocol chat + 4-Act Scenario Bar (v2.3) -----------------------
+  // Every bubble below is rendered from a real API response or ledger row
+  // passed in by the caller. The chat never invents proposers, derivations,
+  // or steward items. Steward buttons reuse the drawer handlers verbatim.
+  function chatProposerLines(proposal, splink) {
+    if (!proposal) return ["<i>No proposal recorded for this run.</i>"];
+    const lines = [];
+    const byAgent = {};
+    (proposal.subagent_trace || []).forEach((s) => { byAgent[s.agent || "?"] = s; });
+    if (byAgent.Scout) lines.push(`<b>Scout:</b> ${esc(byAgent.Scout.output_summary || "cleaned the fragments")}`);
+    if (byAgent.Linker) lines.push(`<b>Linker:</b> ${esc(byAgent.Linker.output_summary || "proposed links")}`);
+    if (byAgent.Cluster) lines.push(`<b>Cluster:</b> ${esc(byAgent.Cluster.output_summary || "proposed clusters")}`);
+    if (byAgent.Taxonomist) lines.push(`<b>Taxonomist:</b> ${esc(byAgent.Taxonomist.output_summary || "proposed mappings")}`);
+    Object.entries(proposal.attributes || {}).forEach(([name, attr]) => {
+      const conf = attr && attr.confidence
+        ? ` <span class="tag">Claim, not a fact · ${esc(attr.confidence)}</span>`
+        : ` <span class="tag">Claim, not a fact</span>`;
+      lines.push(`<b>${esc(name)}:</b> proposes <span class="mono">${esc(attr && attr.proposed_value != null ? attr.proposed_value : "— abstain —")}</span>${conf}`);
+    });
+    (proposal.new_terms || []).forEach((term) => {
+      lines.push(`<b>New term proposed:</b> ${esc(term.raw_value || term)} — PROPOSED, not created.`);
+    });
+    if (byAgent.Critic) lines.push(`<b>Critic:</b> ${esc(byAgent.Critic.output_summary || "reviewed the merge")}`);
+    (proposal.critiques || []).forEach((c) => {
+      lines.push(`<b>Critic flag:</b> ${esc(typeof c === "string" ? c : (c.kind || c.explain || JSON.stringify(c)))}`);
+    });
+    if (splink && splink.status === "ok") {
+      const pairs = splink.pairs || [];
+      lines.push(`<b>Splink:</b> ${pairs.length} candidate pair(s), weights are signals only — <span class="tag">CANDIDATE, NOT A FACT</span>`);
+    } else if (splink) {
+      lines.push(`<b>Splink:</b> unavailable — fallback to Muse + fuzzy. <span class="tag">No publish on fallback alone.</span>`);
+    }
+    return lines.length ? lines : ["<i>Empty proposal — nothing claimed.</i>"];
+  }
+
+  function chatEngineLines(payload, golden) {
+    const lines = [];
+    lines.push(`Verdict: <b>${esc(payload.verdict || "unknown")}</b> — Decision <span class="mono">${esc(payload.decision_id || "—")}</span>`);
+    lines.push(`Policy: <span class="mono">${esc(payload.policy_version || payload.policy_version_user || "—")}</span> · Taxonomy: <span class="mono">${esc(payload.taxonomy_version || "—")}</span>`);
+    if (golden && golden.attributes) {
+      Object.entries(golden.attributes).forEach(([name, v]) => {
+        if (name === "purchased_products" || !v || typeof v !== "object") return;
+        lines.push(`${esc(name)}: <b>${esc(v.value)}</b> wins — ${esc(v.rule_fired || "?")} · loser kept as Tombstone`);
+      });
+    }
+    (payload.conflicts || []).slice(0, 3).forEach((c) => {
+      lines.push(`Escalated: ${esc(c.attribute)} — ${esc(c.rule_fired || c.reason_code || "escalated")}. ${esc(c.fallback || "Steward decides.")}`);
+    });
+    return lines;
+  }
+
+  function announceProposer(proposal, splink, decisionId) {
+    window.MosaicChat.add({
+      role: "proposer",
+      title: "Muse Spark + Matching Engine",
+      lines: chatProposerLines(proposal, splink),
+      policyLine: decisionId ? `Decision: ${decisionId} — claims only, nothing published yet.` : undefined,
+    });
+  }
+
+  function announceEngine(payload, golden, opts) {
+    opts = opts || {};
+    const actions = [];
+    const firstAttr = golden && golden.attributes
+      ? Object.keys(golden.attributes).find((k) => k !== "purchased_products") : null;
+    if (firstAttr && payload.decision_id) {
+      actions.push({ label: "Why this value?", act: "explain", arg: payload.decision_id, arg2: firstAttr });
+    }
+    actions.push({ label: "Show Datalog", act: "datalog" });
+    actions.push({ label: "Open in Detail View", act: "detail" });
+    window.MosaicChat.add({
+      role: "engine",
+      title: "Trust Engine",
+      tone: payload.verdict === "escalated" ? "escalated" : (payload.verdict === "denied" ? "failed" : undefined),
+      lines: chatEngineLines(payload, golden),
+      policyLine: payload.policy_version ? `Policy: ${payload.policy_version}` : undefined,
+      actions,
+    });
+  }
+
+  function announceStewards(stewardQueue) {
+    (stewardQueue || []).forEach((item) => {
+      const node = window.MosaicChat.add({
+        role: "steward",
+        title: `Human Steward — ${item.attribute}`,
+      });
+      if (!node) return;
+      const wrap = document.createElement("div");
+      wrap.innerHTML = MosaicDrawers.stewardCardHtml(item);
+      node.appendChild(wrap.firstElementChild);
+      MosaicDrawers.bindStewardActions(drawerCtx, node);
+      node.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }
+
+  function announceDownstream(payload, agent) {
+    if (!payload) return;
+    const entityType = payload.entity_type || currentEntity().entityType;
+    const entityId = payload.entity_id || currentEntity().entityId;
+    if (payload.answer === "golden") {
+      const label = agent === "search" ? `Search uses ${payload.value}` : `OTP uses ${payload.value}`;
+      window.MosaicChat.add({
+        role: "downstream",
+        title: "Downstream Agent",
+        lines: [`Called GET /golden/${entityType}/${entityId} — Decision: ${payload.decision_id || "—"} — then acted (${label}).`],
+      });
+    } else {
+      window.MosaicChat.add({
+        role: "downstream",
+        title: "Downstream Agent",
+        lines: [`Called GET /golden/${entityType}/${entityId} — No trusted value — downstream stopped.`],
+      });
+    }
+  }
+
+  function setScenario(id) {
+    window.MosaicChat.setScenarioActive(id);
+  }
+
+  // Transcript for every run (resolve, upload-resolve, build): proposer
+  // claims, engine verdict, steward exceptions — all from this payload.
+  function announceRunBubbles(payload, proposal) {
+    if (!payload || typeof payload.decision_id !== "string") return;
+    announceProposer(proposal !== undefined ? proposal : payload.proposal, payload.splink, payload.decision_id);
+    announceEngine(payload, (lastFriendly && lastFriendly.golden) || payload.golden || null);
+    announceStewards(payload.steward_queue || []);
+  }
+
+  async function actScene0() {
+    setScenario("scene0");
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: ["I have a pile of messy JSON. No schema. No config. Can anything here be trusted?"],
+    });
+    loadScene0();
+  }
+
+  function fragmentsFromDocs(docs) {
+    // Convert built documents back to fragment rows for the friendly view
+    // (Invariant A): same fields, same source ids, trap flags preserved.
+    const out = [];
+    (docs || []).forEach((doc) => {
+      const fields = doc.fields || {};
+      Object.entries(fields).forEach(([rawName, field]) => {
+        const value = field && typeof field === "object" ? field.value : field;
+        if (value === undefined || value === null || value === "") return;
+        out.push({
+          attribute: rawName,
+          value: String(value),
+          source: doc.source || "unknown",
+          source_id: `${doc.document_id}-${rawName}`,
+          entity_type: doc.entity_type,
+          authority_rank: (field && field.authority_rank) || 3,
+          verified: !!(field && field.verified),
+          event_time: (field && field.event_time) || "2026-10-27T09:00:00+07:00",
+          ttl_seconds: (field && field.ttl_seconds) || 3600,
+          _docId: doc.document_id,
+          _trap: !!doc.trap,
+        });
+      });
+    });
+    return out;
+  }
+
+  function docLabelFor(entity) {
+    if (!entity) return "";
+    return entity.entity_id || entity.entityId || "";
+  }
+
+  async function act1() {
+    setScenario("act1");
+    entitySel.value = "user/P-001";
+    await loadFragments();
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: ["Requesting verified phone for User P-001 to send login OTP."],
+    });
+    await resolve(true);
+  }
+
+  async function act2() {
+    setScenario("act2");
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: ["Are these five fragments one person, or five different people?"],
+    });
+    let docs;
+    try {
+      const data = await api("/datasets/hidden");
+      docs = data.documents || [];
+    } catch (error) {
+      setStatus(`Hidden dataset unavailable: ${error.message}`);
+      return;
+    }
+    fragments = fragmentsFromDocs(docs);
+    renderFriendly();
+    const trapDocs = docs.filter((d) => d.trap).map((d) => d.document_id);
+    fState.trapDocs = trapDocs;
+    const key = "act2-hidden-v1";
+    const payload = await api("/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } }),
+    });
+    setFriendlyFromBuild(payload);
+    markRan();
+    announceProposer((payload.proposals || [])[0], payload.splink);
+    announceEngine(payload, (payload.goldens || []).find((g) => g.golden_id) || null);
+    renderFriendly();
+    await loadGraphForBuild(payload);
+    animateChain();
+    renderSimulation(payload, trapDocs);
+    markTrapNodes(trapDocs);
+    // Trap exclusion is proactive in Act 2, not only on question: F6's
+    // separation is the point of the scene.
+    if (findTrapEvidence().found) {
+      window.MosaicChat.add({
+        role: "engine",
+        title: "Trap exclusion — F6",
+        lines: trapExclusionLines(),
+        actions: [{ label: "Open in Detail View", act: "detail" }],
+      });
+    }
+    announceStewards(payload.steward_queue || []);
+    await askDownstream("otp", { auto: true });
+    setStatus(`Act 2 complete — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}.`);
+  }
+
+  async function act3() {
+    setScenario("act3");
+    entitySel.value = "user/P-001";
+    ticketBox.checked = true;
+    await loadFragments();
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: ["A support ticket proposes a new phone for P-001. Critical field — I will not act unless the engine proves it."],
+    });
+    await resolve(true);
+  }
+
+  async function act4() {
+    setScenario("act4");
+    entitySel.value = "product/prod-001";
+    await loadFragments();
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: ["Indexing product prod-001 for search. Which category is proven?"],
+    });
+    await resolve(true);
+  }
+
+  async function act5() {
+    setScenario("act5");
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: ["Stopping the trust engine to prove fail-closed. No new golden may publish while it is down."],
+    });
+    await api("/demo/engine/stop", { method: "POST" });
+    await refreshHealth();
+    window.MosaicChat.add({
+      role: "engine",
+      title: "Trust Engine",
+      tone: "failed",
+      lines: ["Trust-engine unavailable. No new golden published. Fail-closed, not a crash."],
+    });
+    const key = "act5-hidden-v1";
+    let docs;
+    try {
+      const data = await api("/datasets/hidden");
+      docs = data.documents || [];
+    } catch (error) {
+      setStatus(`Hidden dataset unavailable: ${error.message}`);
+      return;
+    }
+    fragments = fragmentsFromDocs(docs);
+    renderFriendly();
+    try {
+      await api("/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } }),
+      });
+      feed("Act 5: build unexpectedly succeeded while stopped — investigating.");
+    } catch (error) {
+      window.MosaicChat.add({
+        role: "proposer",
+        title: "Muse Spark + Matching Engine",
+        lines: ["Proposal ready, derivation unavailable.", `Build refused: ${esc(error.message)}`],
+      });
+      announceStewards([]);
+      feed("Act 5: build failed closed while engine stopped — escalated, nothing published.");
+    }
+    const node = window.MosaicChat.add({
+      role: "steward",
+      title: "Fail-closed proof",
+      lines: ["Restore the engine and retry with the same idempotency key."],
+      actions: [{ label: "Restore Trust Engine & Retry Same Key", act: "restore-engine", primary: true }],
+    });
+    if (node) {
+      node.querySelector("[data-chat-act]").addEventListener("click", async () => {
+        await api("/demo/engine/start", { method: "POST" });
+        await refreshHealth();
+        const first = await api("/build", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ work_id: `ui-${key}`, idempotency_key: key, dataset: { documents: docs } }),
+        });
+        const again = await api("/build", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ work_id: `ui-${key}-again`, idempotency_key: key, dataset: { documents: docs } }),
+        });
+        const same = first.decision_id && first.decision_id === again.decision_id;
+        window.MosaicChat.add({
+          role: "engine",
+          title: "Trust Engine",
+          lines: same
+            ? [`Same decision id returned (${esc(first.decision_id)}). No double derivation.`]
+            : [`Restored. Decision: ${esc(first.decision_id || "?")}, retry: ${esc(again.decision_id || "?")}.`],
+        });
+        setStatus(same ? "Same decision id returned. No double derivation." : "Engine restored; build completed.");
+        setFriendlyFromBuild(first);
+        markRan();
+        renderFriendly();
+        await loadGraphForBuild(first);
+        announceStewards(first.steward_queue || []);
+        await askDownstream("otp", { auto: true });
+      });
+    }
+  }
+
+  function runScenario(id) {
+    if (id === "scene0") return actScene0();
+    if (id === "act1") return act1();
+    if (id === "act2") return act2();
+    if (id === "act3") return act3();
+    if (id === "act4") return act4();
+    if (id === "act5") return act5();
+    return null;
+  }
+
+  function renderSimulation(payload, trapDocs) {
+    let host = $("f-simulation");
+    if (!host) {
+      const anchor = $("f-answer");
+      host = document.createElement("div");
+      host.id = "f-simulation";
+      host.className = "f-simulation";
+      anchor.parentNode.insertBefore(host, anchor.nextSibling);
+    }
+    const proposals = (payload && payload.proposals) || [];
+    const goldens = ((payload && payload.goldens) || []).filter((g) => g.golden_id);
+    const byCluster = {};
+    goldens.forEach((g) => { byCluster[g.entity_id] = g; });
+    const rows = [];
+    const trapSet = new Set(trapDocs || []);
+    const trapLinkNotes = [];
+    proposals.forEach((proposal) => {
+      if (!proposal || proposal.replayed) return;
+      const golden = byCluster[proposal.cluster_id] || byCluster[proposal.entity_id];
+      const proposed = (proposal.attributes && proposal.attributes) || {};
+      const won = (golden && golden.attributes) || {};
+      Object.entries(proposed).forEach(([attr, claim]) => {
+        const pv = claim && claim.proposed_value;
+        const wv = won[attr] && won[attr].value;
+        if (pv != null && wv != null && String(pv) !== String(wv)) {
+          rows.push(`Muse proposed <b>${esc(String(pv))}</b> for ${esc(attr)} (newest); engine derived <b>${esc(String(wv))}</b> (${esc((won[attr] || {}).rule_fired || "?")}).`);
+        }
+      });
+      (proposal.links || []).forEach((link) => {
+        const touchesTrap = [link.from_fact_id, link.to_fact_id].some(
+          (fid) => fid && [...trapSet].some((doc) => fid.includes(`-${doc}-`) || fid.endsWith(`-${doc}`) || fid === doc)
+        );
+        if (touchesTrap && !["exact_email", "exact_phone", "exact_order"].includes(link.proof)) {
+          const key = `${link.from_fact_id}→${link.to_fact_id}:${link.proof}`;
+          if (!trapLinkNotes.includes(key)) trapLinkNotes.push(key);
+          rows.push(`Non-sole link <span class="mono">${esc(link.from_fact_id)} → ${esc(link.to_fact_id)} (${esc(link.proof)})</span> touches the trap cluster — without L1 it would merge the neighbour.`);
+        }
+      });
+    });
+    const trapNames = trapDocs && trapDocs.length ? trapDocs.join(", ") : "the trap document";
+    const body = rows.length ? `<ul>${rows.map((r) => `<li>${r}</li>`).join("")}</ul>`
+      : `<p>No proposed-only link reaches the trap. The engine verified every published hop with exact identifiers.</p>`;
+    window.__lastSimulationRows = rows;
+    host.hidden = false;
+    host.innerHTML = `<h3>SIMULATION — Muse only, no trust-engine</h3>`
+      + `<p><b>Wrong golden — would publish the neighbour as the person.</b> Without the engine's sole-proof filter, the trap (${esc(trapNames)}) merges in on address alone.</p>`
+      + body
+      + `<p class="meta">This panel is a what-if rendering of proposer claims already on the ledger — it never writes a golden. Downstream: BLOCKED in real run.</p>`;
+    host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return rows;
+  }
+
+  function markTrapNodes(trapDocIds) {
+    if (!trapDocIds || !trapDocIds.length) return;
+    document.querySelectorAll("#graph-canvas g[data-node]").forEach((g) => {
+      const id = g.getAttribute("data-node") || "";
+      if (trapDocIds.some((doc) => id.includes(`-${doc}-`) || id.endsWith(`-${doc}`))) {
+        g.classList.add("trap-node");
+      }
+    });
+    const info = $("graph-info");
+    if (info) info.textContent += " Grey dashed = trap neighbour (address match only, never merged).";
+  }
+
+  function findTrapEvidence() {
+    // Strongest real evidence first: the trap doc clustered alone (own
+    // cluster, own golden) — exclusion by separation, never merged.
+    const proposals = (window.__lastProposals || []);
+    const goldens = (window.__lastGoldens || (window.__lastGolden ? [window.__lastGolden] : []));
+    const trapDocs = fState.trapDocs || [];
+    if (trapDocs.length) {
+      const alone = proposals.filter((p) => {
+        if (!p || p.replayed) return false;
+        const touched = new Set();
+        (p.links || []).forEach((l) => { touched.add(l.from_fact_id); touched.add(l.to_fact_id); });
+        if (!touched.size) return false;
+        return [...touched].every((fid) => trapDocs.some((doc) => fid && fid.includes(doc)));
+      });
+      if (alone.length) {
+        const p = alone[0];
+        return {
+          found: true,
+          detail: `${trapDocs.join(", ")} clustered alone (${p.cluster_id || p.entity_id || "own cluster"}) with its own golden — address matched, but no exact email, phone, or order proof, so no verified link to F1–F5 was created.`,
+        };
+      }
+      // Replayed runs carry no proposal links; the goldens still prove
+      // separation: the trap doc's winner fact ids live in their own golden.
+      const trapGoldens = (goldens || []).filter((g) => {
+        if (!g || !g.golden_id) return false;
+        const hay = JSON.stringify([g.entity_id, g.attributes || {}]);
+        return trapDocs.some((doc) => hay.includes(doc));
+      });
+      const mainGoldens = (goldens || []).filter((g) => g && g.golden_id && !trapGoldens.includes(g));
+      if (trapGoldens.length && mainGoldens.length) {
+        return {
+          found: true,
+          detail: `${trapDocs.join(", ")} derived into its own golden (${trapGoldens[0].golden_id}) apart from ${(mainGoldens[0] || {}).golden_id || "the main golden"} — address matched, but no exact email, phone, or order proof, so no verified link to F1–F5 was created.`,
+        };
+      }
+      for (const proposal of proposals) {
+        for (const link of (proposal.links || [])) {
+          const touches = [link.from_fact_id, link.to_fact_id].some(
+            (fid) => fid && trapDocs.some((doc) => fid.includes(`-${doc}-`) || fid.endsWith(`-${doc}`) || fid === doc)
+          );
+          if (touches && !["exact_email", "exact_phone", "exact_order"].includes(link.proof)) {
+            return {
+              found: true,
+              detail: `${link.from_fact_id} → ${link.to_fact_id} (${link.proof}) — medium proof only, never verified.`,
+            };
+          }
+        }
+      }
+      for (const proposal of proposals) {
+        const hit = (proposal.critiques || []).find((c) => {
+          const s = typeof c === "string" ? c : JSON.stringify(c);
+          return trapDocs.some((doc) => s.includes(doc));
+        });
+        if (hit) {
+          const s = typeof hit === "string" ? hit : (hit.explanation || hit.explain || JSON.stringify(hit));
+          return { found: true, detail: String(s).slice(0, 280) };
+        }
+      }
+    }
+    return { found: false, detail: "" };
+  }
+
+  function trapExclusionLines() {
+    const trap = findTrapEvidence();
+    return trap.found
+      ? [`F6 shares <b>address only</b> — no exact email, phone, or order proof. Engine rule L1 verifies sole-proof hops only, so no verified link was created.`, `<b>Similar is not same. Manglekit did not merge the neighbour.</b>`, `Evidence: ${esc(trap.detail)}`]
+      : ["Run Act 2 (Hidden Connection) first — I only answer from ledger results, never from memory."];
+  }
+
+  async function toggleChatDatalog(btn) {
+    const host = btn.closest(".chat-bubble");
+    if (!host) return;
+    let box = host.querySelector("[data-datalog]");
+    if (box) {
+      box.hidden = !box.hidden;
+      btn.textContent = box.hidden ? "Show Datalog" : "Hide Datalog";
+      return;
+    }
+    box = document.createElement("div");
+    box.setAttribute("data-datalog", "1");
+    box.className = "meta mono";
+    box.textContent = "Loading policy source…";
+    host.appendChild(box);
+    btn.textContent = "Hide Datalog";
+    try {
+      const data = await api(`/policies/user/${encodeURIComponent(fState.policyUser || "pol-2026-10-28-v1")}`);
+      const src = String((data && data.rules_datalog) || "Policy source unavailable in this run.");
+      const pre = document.createElement("pre");
+      pre.style.whiteSpace = "pre-wrap";
+      pre.textContent = src.split("\n").slice(0, 60).join("\n");
+      box.textContent = "";
+      box.appendChild(pre);
+    } catch (error) {
+      box.textContent = `Policy source unavailable: ${error.message}`;
+    }
+  }
+
+  async function askAbout(query) {
+    const q = String(query || "").toLowerCase();
+    const f = (lastFriendly && lastFriendly.golden) || window.__lastGolden || null;
+    if (/datalog|rule/.test(q)) {
+      chatEngine({ title: "Show Datalog", lines: ["<i>Fetching the runnable policy…</i>"] });
+      try {
+        const data = await api(`/policies/user/${encodeURIComponent(fState.policyUser || "pol-2026-10-28-v1")}`);
+        const src = String((data && data.rules_datalog) || "Policy source unavailable in this run.");
+        window.MosaicChat.add({
+          role: "engine",
+          title: "Trust Engine — Datalog",
+          lines: [`<details open><summary>Runnable policy source (first 60 lines)</summary><pre style="white-space:pre-wrap">${esc(src.split("\n").slice(0, 60).join("\n"))}</pre></details>`],
+        });
+      } catch (error) {
+        window.MosaicChat.add({ role: "engine", title: "Show Datalog", lines: [`Policy source unavailable: ${esc(error.message)}`] });
+      }
+      return;
+    }
+    if (q.includes("f6") || q.includes("trap") || q.includes("excluded") || q.includes("neighbour") || q.includes("neighbor")) {
+      const trap = findTrapEvidence();
+      chatEngine({
+        title: "Why was F6 excluded?",
+        lines: trapExclusionLines(),
+        actions: trap.found ? [{ label: "Open in Detail View", act: "detail" }] : [],
+      });
+      return;
+    }
+    if (q.includes("muse-only") || q.includes("muse only") || q.includes("compare") || q.includes("without the engine")) {
+      renderSimulationBubble();
+      return;
+    }
+    const attr = ["phone", "email", "address", "category", "display_name", "order_id"].find((a) => q.includes(a));
+    if (attr && f && f.attributes && f.attributes[attr]) {
+      const v = f.attributes[attr];
+      chatEngine({
+        title: `Why did ${attr} win?`,
+        lines: [
+          `<b>${esc(String(v.value))}</b> won under <b>${esc(v.rule_fired || "?")}</b> — winner <span class="mono">${esc(v.winner_fact_id || "?")}</span>.`,
+          `Policy: <span class="mono">${esc(v.policy_version || "")}</span> · Taxonomy: <span class="mono">${esc(v.taxonomy_version || "")}</span>`,
+        ],
+        actions: f.decision_id ? [{ label: "Why this value?", act: "explain", arg: f.decision_id, arg2: attr }] : [],
+      });
+      return;
+    }
+    window.MosaicChat.add({
+      role: "steward",
+      title: "Ask from ledger results",
+      lines: ["I only answer from run results: try <b>phone</b>, <b>email</b>, <b>address</b>, <b>F6</b>, <b>datalog</b>, or run a scenario first."],
+    });
+  }
+
+  function renderSimulationBubble() {
+    const rows = window.__lastSimulationRows;
+    if (!rows) {
+      window.MosaicChat.add({
+        role: "engine",
+        title: "Compare with Muse-only",
+        lines: ["Run Act 2 (Hidden Connection) first — the simulation is computed from that run's proposer claims, never invented."],
+      });
+      return;
+    }
+    window.MosaicChat.add({
+      role: "engine",
+      title: "SIMULATION — Muse only, no trust-engine",
+      tone: "failed",
+      lines: rows.length ? rows : ["No proposed-only link reaches the trap. The engine verified every published hop with exact identifiers."],
+    });
   }
 
   async function askDownstream(agent, opts) {
@@ -1297,6 +2049,7 @@
         value: payload.value, reason: payload.reason,
       };
       renderFriendly();
+      if (auto) announceDownstream(payload, agent);
       $("downstream-answer").textContent = JSON.stringify(payload, null, 1);
       const label = agent === "search" ? `Search uses ${payload.value}` : `OTP uses ${payload.value}`;
       if (payload.answer === "golden") {
@@ -1431,14 +2184,18 @@
 
   function renderScene0Config(payload) {
     const inForce = scene0ConfigInForce();
-    const detected = `${esc(payload.detected_entity_type || "unknown")} (${esc(payload.detected_confidence || "?")})`;
+    const version = (fState.scene0 && fState.scene0.version) || 1;
+    const edited = version > 1 ? ` <span class="tag">edited fields highlighted</span>` : "";
+    $("f-config-title").innerHTML = `Proposed Pipeline Config — v${version} (proposed, not yet in force) <span class="tag">PROPOSED</span>${edited}`;
+    const entityType = window.__uploadedEntityType || payload.detected_entity_type || "user";
+    const detected = `${esc(entityType)} (${esc(payload.detected_confidence || "?")})`;
     const rawAttrs = [...new Set((payload.fragments || []).map((f) => f.attribute))];
     const links = payload.link_proposals || [];
     const linkRows = links.length
       ? links.map((l) => `<div class="cfg-row">Linker proposes: <span class="mono">${esc(l.from_fact_id)} —${esc(l.proof)}→ ${esc(l.to_fact_id)}</span> <span class="tag">${esc(l.proposer || "Muse")}</span></div>`).join("")
       : `<div class="cfg-row">Linker proposes: no exact-identifier links — nothing claimed.</div>`;
     $("f-config-body").innerHTML =
-      `<div class="cfg-row"><b>Scout</b> detected: ${detected} — ${payload.fragments_parsed} fragment(s) parsed`
+      `<div class="cfg-row"${version > 1 ? ` style="outline:2px solid #B45309"` : ""}><b>Scout</b> detected: ${detected} — ${payload.fragments_parsed} fragment(s) parsed`
       + `${(payload.fragments_rejected || []).length ? `, ${(payload.fragments_rejected || []).length} rejected` : ""}. <span class="tag">claim, not a decision</span></div>`
       + `<div class="cfg-row"><b>Taxonomist</b> will map raw names (${rawAttrs.map((a) => `<span class="mono">${esc(a)}</span>`).join(", ") || "—"}) at build time under taxonomy <span class="mono">${esc(inForce.taxonomy)}</span>. No terms are auto-created. <span class="tag">claim, not a decision</span></div>`
       + linkRows
@@ -1449,6 +2206,16 @@
     $("f-config-build").disabled = true;
     $("f-config-approve").disabled = false;
     feed("Scene 0 config proposed — Scout/Linker claims rendered, Taxonomist mapping queued for build time. Nothing published.");
+    window.MosaicChat.add({
+      role: "proposer",
+      title: "Muse Spark — config proposal",
+      lines: [
+        `<b>Scout:</b> detected ${esc(window.__uploadedEntityType || payload.detected_entity_type || "unknown")} — ${payload.fragments_parsed} fragment(s). <span class="tag">Claim, not a fact</span>`,
+        `<b>Linker:</b> ${(payload.link_proposals || []).length} link proposal(s). <span class="tag">Claim, not a fact</span>`,
+        `<b>Taxonomist:</b> raw names mapped at build time under <span class="mono">${esc(inForce.taxonomy)}</span>. No terms auto-created.`,
+        "Here is how we would clean this mess. This approves how we clean, not the final answer.",
+      ],
+    });
   }
 
   async function loadScene0() {
@@ -1478,15 +2245,17 @@
     input.files = transfer.files;
   }
 
-  function approveScene0() {
+  async function approveScene0() {
     const inForce = scene0ConfigInForce();
     const staged = (window.__uploadedFragments || []).slice();
     if (!staged.length) {
       $("f-config-note").textContent = "Nothing staged — upload the Scene 0 file first.";
       return;
     }
+    const version = (fState.scene0 && fState.scene0.version) || 1;
     fState.scene0 = {
       decided: true,
+      version,
       approvedAt: new Date().toISOString(),
       policyVersion: inForce.policy,
       taxonomyVersion: inForce.taxonomy,
@@ -1496,23 +2265,63 @@
     $("f-config").hidden = true;
     const summary = $("f-config-summary");
     summary.hidden = false;
-    summary.innerHTML = `Config approved — Policy: ${esc(inForce.policy)} — Taxonomy: ${esc(inForce.taxonomy)} — Config approval is not golden approval. `
+    summary.innerHTML = `Config approved — Policy: ${esc(inForce.policy)} — Config approval is not golden approval. `
       + `<button id="f-config-build2" class="primary" type="button">Build Mosaic</button>`;
     $("f-config-build2").addEventListener("click", buildScene0);
     $("f-config-build").disabled = false;
+    window.MosaicChat.add({
+      role: "downstream",
+      title: "Downstream Agent",
+      lines: [`Config approved — Policy ${esc(inForce.policy)} pinned. Building now; nothing publishes until the engine derives it.`],
+    });
     feed(`Scene 0 config approved — Policy: ${inForce.policy}. No golden published; the engine has not run yet.`);
-    setStatus("Config approved. Press Build Mosaic — nothing publishes until the engine derives it.");
+    // After approval the loop runs the first build — no extra click needed.
+    await buildScene0();
   }
 
-  function cancelScene0() {
+  // Edit: the steward corrects the proposed entity type, producing a new
+  // proposed version (v2) that must be approved again. Never silent.
+  function editScene0() {
+    const staged = (window.__uploadedFragments || []);
+    if (!staged.length) {
+      $("f-config-note").textContent = "Nothing staged — upload the Scene 0 file first.";
+      return;
+    }
+    const current = window.__uploadedEntityType || "user";
+    window.__uploadedEntityType = current === "user" ? "product" : "user";
+    const version = ((fState.scene0 && fState.scene0.version) || 1) + 1;
+    fState.scene0 = { decided: false, version };
+    feed(`Scene 0 edited — entity type ${current} → ${window.__uploadedEntityType} (v${version}). Approve again; nothing runs on edit alone.`);
+    setStatus(`Config v${version} proposed — entity type ${window.__uploadedEntityType}. Approve to pin it.`);
+    renderScene0Config({
+      detected_entity_type: window.__uploadedEntityType,
+      detected_confidence: "?",
+      fragments: staged,
+      fragments_parsed: staged.length,
+      fragments_rejected: [],
+      link_proposals: [],
+    });
+  }
+
+  function rejectScene0() {
     fState.scene0 = null;
     $("f-config").hidden = true;
-    $("f-config-summary").hidden = true;
+    $("f-config-summary").hidden = false;
+    $("f-config-summary").innerHTML = "Config rejected. No pipeline run. No golden published.";
     const input = $("f-upload-file");
     if (input) input.value = "";
     window.__uploadedFragments = [];
-    setStatus("Scene 0 cancelled — no config pinned, nothing published.");
-    feed("Scene 0 config discarded by the steward — no config pinned, nothing published.");
+    window.MosaicChat.add({
+      role: "steward",
+      title: "Human Steward",
+      lines: ["Config rejected. No pipeline run. No golden published."],
+    });
+    setStatus("Config rejected. No pipeline run. No golden published.");
+    feed("Scene 0 config rejected by the steward — nothing runs, nothing published.");
+  }
+
+  function cancelScene0() {
+    rejectScene0();
   }
 
   function scene0Documents() {
@@ -1677,6 +2486,7 @@
     stewardBody,
     dialog,
     loop,
+    currentEntity,
     get lastResolve() { return lastResolve; },
     set lastResolve(v) { lastResolve = v; },
     get lastStewardItems() { return lastStewardItems; },
@@ -1735,8 +2545,9 @@
   $("f-try-example").addEventListener("click", () => resolve(false));
   $("f-scene0").addEventListener("click", loadScene0);
   $("f-config-approve").addEventListener("click", approveScene0);
+  $("f-config-edit").addEventListener("click", editScene0);
+  $("f-config-reject").addEventListener("click", rejectScene0);
   $("f-config-build").addEventListener("click", buildScene0);
-  $("f-config-cancel").addEventListener("click", cancelScene0);
   $("f-upload-btn").addEventListener("click", async () => {
     await uploadFile(false, $("f-upload-file"));
     if ((window.__uploadedFragments || []).length) {
@@ -1756,6 +2567,16 @@
   $("steward-open").addEventListener("click", () => MosaicDrawers.openDrawer());
   $("drawer-close").addEventListener("click", () => MosaicDrawers.closeDrawer());
   $("drawer-scrim").addEventListener("click", () => MosaicDrawers.closeDrawer());
+  $("taxonomy-drawer-close").addEventListener("click", () => MosaicDrawers.closeDrawer());
+  $("similar-drawer-close").addEventListener("click", () => MosaicDrawers.closeDrawer());
+  $("f-taxonomy").addEventListener("click", () => MosaicDrawers.openTaxonomy(drawerCtx));
+  $("f-similar").addEventListener("click", () => MosaicDrawers.openSimilar(drawerCtx));
+  $("taxonomy-badge").addEventListener("click", () => MosaicDrawers.openTaxonomy(drawerCtx));
+  $("policy-badge").addEventListener("click", () => {
+    const decisionId = lastFriendly && lastFriendly.decision_id;
+    if (decisionId) explain(decisionId);
+    else setStatus("Run the picture first — Explain needs a decision id.");
+  });
   $("feed-toggle-inline").addEventListener("click", () => {
     const list = $("feed-list");
     const hidden = list.style.display === "none";
@@ -1769,6 +2590,12 @@
   renderLoop();
   applyPreRunState();
   renderFriendly();
+  wireChatBar();
+  MosaicChat.add({
+    role: "downstream",
+    title: "Downstream Agent",
+    lines: ["Waiting for a first run — pick a scenario above, or press Build Mosaic. I only act on published goldens, never on proposals."],
+  });
   feed("Autonomous Loop started — Running. Next auto check: on next upload.");
   refreshHealth();
   window.setInterval(refreshHealth, 5000);

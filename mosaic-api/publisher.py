@@ -225,6 +225,7 @@ async def resolve_flow(
     taxonomy_version: str | None = None,
     expected_structure: dict[str, Any] | None = None,
     documents: list[dict[str, Any]] | None = None,
+    engine_killed: bool = False,
 ) -> tuple[ResolveResponse, Proposal]:
     """Run ingest -> MATCH (Splink + Muse sub-agents) -> GRAPH -> DERIVE ->
     STRUCTURE -> publish-or-escalate. Only derived + validated values publish.
@@ -276,6 +277,7 @@ async def resolve_flow(
         payload_hash,
         decision_id,
         created_at,
+        engine_killed=engine_killed,
     )
     golden, conflicts, steward_queue, nested, purchased = _gate_structure(
         request,
@@ -412,6 +414,7 @@ async def _run_derive(
     payload_hash: str,
     decision_id: str,
     created_at: str,
+    engine_killed: bool = False,
 ):
     """Trust-engine derive; engine failure escalates, never publishes."""
     try:
@@ -428,6 +431,7 @@ async def _run_derive(
                 candidate_facts=facts,
                 links=links,
             ),
+            engine_killed=engine_killed,
         )
     except TrustEngineError as exc:
         steward_rows = escalate_unavailable(

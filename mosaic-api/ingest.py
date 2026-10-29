@@ -281,7 +281,8 @@ def parse_upload(filename: str, raw_text: str) -> tuple[list[dict], list[dict]]:
         items = [data]
     else:
         raise ValueError(
-            f"Upload {filename!r} must be one object, an array of objects, or {{fragments: [...]}}."
+            "File must be JSON: one fragment, an array of fragments, "
+            "or an object with a fragments array."
         )
     fragments: list[dict] = []
     rejected: list[dict] = []
