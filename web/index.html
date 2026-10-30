@@ -535,7 +535,7 @@
       .btn-how { background: #fff !important; border: 2px solid #1D4ED8 !important; color: #1D4ED8 !important; font-weight: 600; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
       .btn-how:hover { background: #EFF6FF !important; }
       .btn-split { border: 2px solid #0F172A !important; color: #0F172A !important; background: #fff !important; }
-      #friendly button:not(.primary):not(.btn-approve):not(.btn-reject):not(.btn-accept):not(.btn-split):not(#f-loop-more-btn) { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
+      #friendly button:not(.tile):not(.primary):not(.btn-how):not(.btn-approve):not(.btn-reject):not(.btn-accept):not(.btn-split):not(#f-loop-more-btn):not(#f-step3-otp-btn):not(#f-export-clean-btn) { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
       header .f-only { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
       .btn-reject { border-color: var(--bad) !important; color: var(--bad) !important; background: #fff !important; font-weight: 600; }
       .btn-accept { border-color: var(--good) !important; color: var(--good) !important; background: #F0FDF4 !important; font-weight: 600; }
@@ -656,6 +656,12 @@
       mark.f-hit { background: #FEF3C7; color: #0F172A; padding: 0 2px; }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
       #f-status-pill { font: inherit; cursor: pointer; }
+      #app-header button, #app-side button, #app-dock button, .btn-how, .tile,
+      #friendly .steward-actions button { min-height: 0; }
+      #realtime-bar { display: none; }
+      body.detail #app-side, body.detail #app-dock { display: none; }
+      #friendly { display: flex; flex-direction: column; gap: 14px; }
+      #app-main { margin: 0; max-width: none; padding: 16px; }
       .friendly #hdr-entity-wrap { display: none !important; }
       /* ==== App shell: frozen header + sidebar + center + dock + trust bar ==== */
       html, body { height: 100vh; overflow: hidden; margin: 0; background: #F8FAFC; }
@@ -677,10 +683,17 @@
       #app-header .hdr-actions { margin-left: 0; }
       #app-shell { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
       #app-side {
-        width: 236px; flex: 0 0 236px; overflow-y: auto;
-        background: #F1F5F9; border-right: 1px solid #E2E8F0;
+        width: 240px; flex: 0 0 240px; overflow-y: auto;
+        background: #F8FAFC; border-right: 1px solid #E2E8F0;
         padding: 12px; display: flex; flex-direction: column; gap: 14px;
       }
+      .side-boundary {
+        display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px;
+        background: #fff; border: 1px solid #E2E8F0;
+        font-size: 11.5px; color: #334155; font-weight: 600;
+      }
+      .side-boundary .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; background: #94A3B8; }
+      .side-boundary .dot.ok { background: #15803D; }
       .side-sec { display: flex; flex-direction: column; gap: 8px; }
       .side-h {
         font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -715,8 +728,9 @@
       #app-side .f-plan { font-size: 12px; }
       #app-main { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 16px; }
       #app-dock {
-        width: 380px; flex: 0 0 380px; border-left: 1px solid #E2E8F0; background: #FFFFFF;
-        height: calc(100vh - 76px); display: flex; flex-direction: column; min-height: 0;
+        width: 360px; flex: 0 0 360px; align-self: stretch; height: auto;
+        border-left: 1px solid #E2E8F0; background: #FFFFFF;
+        display: flex; flex-direction: column; min-height: 0;
       }
       .dock-head { flex: 0 0 auto; padding: 10px 12px 8px; border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px; }
       .dock-title-row { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #0F172A; }
@@ -756,7 +770,7 @@
     </style>
   </head>
   <body class="friendly">
-    <header>
+    <header id="app-header">
       <div class="brand">
         <div style="display:flex;align-items:center;gap:10px;">
           <!-- 4 colored mosaic dots in a 2x2 grid (UX 2.4) -->
@@ -770,13 +784,13 @@
         </div>
         <span>Clean, trustworthy records from scattered data.</span>
       </div>
-      <div class="f-steps" id="f-steps" aria-label="Three-step user workflow">
-        <span class="step active" id="f-step-1" title="Jump to Step 1: Dataset Status"><span class="n">1</span> <span class="lbl">Check Dataset Status</span></span>
+      <nav class="f-steps f-only" id="f-steps" aria-label="How this page works">
+        <span class="step active" id="f-step-1" title="Jump to Step 1: Dataset Status"><span class="n">1</span> <span class="lbl">Dataset Status</span></span>
         <span class="arrow">→</span>
         <span class="step" id="f-step-2" title="Jump to Step 2: Review Gaps"><span class="n">2</span> <span class="lbl">Review Gaps</span></span>
         <span class="arrow">→</span>
-        <span class="step" id="f-step-3" title="Jump to Step 3: Clean Mosaic Picture"><span class="n">3</span> <span class="lbl">Use Clean Mosaic Picture</span></span>
-      </div>
+        <span class="step" id="f-step-3" title="Jump to Step 3: Clean Mosaic Picture"><span class="n">3</span> <span class="lbl">Clean Mosaic</span></span>
+      </nav>
       <div class="hdr-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
         <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
         <span class="pill ver-badge detail-only" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
@@ -799,18 +813,18 @@
           <option value="product/prod-002">Product — prod-002</option>
         </select>
       </label>
-      <span class="pill ver-badge f-only" id="entity-active" title="Entity actually derived in the last run" hidden></span>
+      <span class="pill ver-badge f-only" id="entity-active" title="Record currently in view">user/P-001</span>
     </header>
 
       <div id="app-shell">
         <aside id="app-side" aria-label="Datasets and audit tools">
           <div class="side-sec">
-            <button type="button" id="f-intake-upload" class="side-upload" title="Upload a JSON file via POST /upload">↑ Drop or Choose JSON File</button>
+            <button type="button" id="f-intake-upload" class="side-upload" title="Upload a JSON file via POST /upload">↑ Upload JSON File</button>
             <input type="file" id="f-intake-file" accept=".json,application/json" hidden />
             <span class="muted side-loaded" id="f-intake-name" title="Currently loaded dataset">No dataset loaded</span>
           </div>
           <div class="side-sec">
-            <div class="side-h">Sample datasets</div>
+            <div class="side-h">Sample Datasets</div>
             <nav id="f-intake-samples" aria-label="Sample dataset presets">
               <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Messy JSON (No schema)</button>
               <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer: 2 Phones (P-001)</button>
@@ -820,15 +834,23 @@
             </nav>
           </div>
           <div class="side-sec">
-            <div class="side-h">Inspect &amp; audit</div>
+            <div class="side-h">Workspace Tools</div>
             <div class="side-tools">
               <button type="button" id="f-side-steward" class="side-item" title="Open the Steward Queue drawer">⚑ Steward Queue (<span id="f-side-steward-count">0</span>)</button>
               <button type="button" id="f-taxonomy" class="side-item" title="Read-only taxonomy terms and aliases">◇ Taxonomy Terms</button>
               <button type="button" id="f-similar" class="side-item" title="Structured similar search (candidates only, never a merge)">⌕ Similar Search</button>
-              <button type="button" id="f-side-detail" class="side-item" title="Switch to the technical Detail View">⇄ Switch to Detail / Graph View</button>
+              <button type="button" id="f-side-detail" class="side-item" title="Switch to the technical Detail View">⇄ Detail / Graph View</button>
             </div>
           </div>
-          <details class="f-plan side-sec" id="f-plan">
+          <div class="side-sec" id="f-side-boundary" aria-label="System boundary">
+            <div class="side-h">System Boundary</div>
+            <div class="side-boundary">
+              <div><span class="dot ok"></span>Meta API: REAL</div>
+              <div><span class="dot ok"></span>manglekit: REAL</div>
+              <div><span class="dot"></span>Sources: SYNTHETIC</div>
+            </div>
+          </div>
+          <details class="f-plan side-sec" id="f-plan" hidden>
             <summary>Cleaning rules &amp; background status</summary>
             <div id="f-plan-body"></div>
             <div class="f-plan-foot">This is the approved plan in force. Approving a new plan is not yet available in this view.</div>
@@ -852,6 +874,19 @@
 
         <main id="app-main">
           <div id="friendly">
+            <div class="f-config" id="f-config" hidden>
+              <h3 id="f-config-title">Proposed Pipeline Config — v1 (proposed, not yet in force) <span class="tag">PROPOSED</span></h3>
+              <div id="f-config-body"></div>
+              <div class="steward-actions">
+                <button id="f-config-approve" class="primary" type="button">Approve</button>
+                <button id="f-config-edit" type="button">Edit</button>
+                <button id="f-config-reject" type="button">Reject</button>
+                <button id="f-config-build" type="button" disabled>Build Mosaic</button>
+              </div>
+              <div class="meta" id="f-config-note"></div>
+              <div class="meta">Config approval is not golden approval. Every golden still has to survive derivation and whole-structure validation.</div>
+            </div>
+            <div class="f-config-summary" id="f-config-summary" hidden></div>
             <div class="f-dataset-card" id="f-dataset-status" role="region" aria-label="Step 1: Dataset status summary">
               <div class="f-ds-head">
                 <strong><span class="f-step-badge">Step 1</span>Dataset status — What we found in your data</strong>
@@ -874,6 +909,7 @@
                 <strong id="f-mosaic-title"><span class="f-step-badge">Step 3</span>Clean mosaic picture — Ready to safely use</strong>
                 <div class="f-viewing" id="f-viewing"></div>
                 <span><span class="tag" id="f-mosaic-tag">Assembled data tiles</span>
+                <button type="button" id="f-step3-otp-btn" class="primary" hidden title="Use the verified value downstream">✓ Send OTP</button>
                 <button type="button" id="f-export-record" class="btn-how" title="Download this record with proof">⬇ Export</button></span>
               </div>
 
@@ -895,19 +931,6 @@
           </div>
 
           </div><!-- /#friendly -->
-        <div class="f-config" id="f-config" hidden>
-          <h3 id="f-config-title">Proposed Pipeline Config — v1 (proposed, not yet in force) <span class="tag">PROPOSED</span></h3>
-          <div id="f-config-body"></div>
-          <div class="steward-actions">
-            <button id="f-config-approve" class="primary" type="button">Approve</button>
-            <button id="f-config-edit" type="button">Edit</button>
-            <button id="f-config-reject" type="button">Reject</button>
-            <button id="f-config-build" type="button" disabled>Build Mosaic</button>
-          </div>
-          <div class="meta" id="f-config-note"></div>
-          <div class="meta">Config approval is not golden approval. Every golden still has to survive derivation and whole-structure validation.</div>
-        </div>
-        <div class="f-config-summary" id="f-config-summary" hidden></div>
       <div id="detail-view" hidden>
       <div><button id="f-back-top" type="button">Back to simple view</button></div>
       <section class="panel" id="detail-empty" style="margin-bottom: 16px;">
@@ -1094,19 +1117,18 @@
           <div class="dock-head">
             <div class="dock-title-row">
               <span class="material-symbols-outlined" style="font-size:18px;color:#0F172A">forum</span>
-              <span id="tab-card-title">Live Multi-Agent Protocol Chat</span>
+              <span id="tab-card-title">⚡ Multi-Agent Protocol</span>
               <div class="f-tab-group" style="display:inline-flex;background:#E2E8F0;padding:2px;border-radius:8px;font-size:11.5px;font-weight:600">
-                <button type="button" id="tab-btn-chat" class="f-tab-btn active" style="padding:4px 10px;border-radius:6px;border:none;background:#fff;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer">💬 Protocol Chat</button>
-                <button type="button" id="tab-btn-pieces" class="f-tab-btn" style="padding:4px 10px;border-radius:6px;border:none;background:transparent;color:#475569;cursor:pointer">📋 Source Pieces</button>
+                <button type="button" id="tab-btn-chat" class="f-tab-btn active" style="padding:4px 10px;border-radius:6px;border:none;background:#fff;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer">Protocol Chat</button>
+                <button type="button" id="tab-btn-pieces" class="f-tab-btn" style="padding:4px 10px;border-radius:6px;border:none;background:transparent;color:#475569;cursor:pointer">Pieces</button>
               </div>
             </div>
             <div class="dock-chips" id="f-dock-chips" aria-label="Quick inquiries">
-              <button type="button" data-q="phone">Why this phone?</button>
-              <button type="button" data-q="F6">Why not neighbour F6?</button>
-              <button type="button" data-q="datalog">How do we know?</button>
-              <button type="button" data-q="muse-only">Without checker</button>
+              <button type="button" data-q="phone">Why phone?</button>
+              <button type="button" data-q="F6">Why not F6?</button>
+              <button type="button" data-q="datalog">How?</button>
+              <button type="button" data-q="muse-only">No checker?</button>
             </div>
-            <div class="f-side-sub" id="tab-card-sub">Every message is backed by a real proposer trace, Datalog derivation, or ledger decision.</div>
           </div>
           <div id="f-dock-scroll">
             <div id="f-chat-panel" style="display:flex;flex-direction:column;">

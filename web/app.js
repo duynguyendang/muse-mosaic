@@ -287,9 +287,9 @@
   function renderFSteps() {
     const s1 = $("f-step-1"), s2 = $("f-step-2"), s3 = $("f-step-3");
     if (!s1 || !s2 || !s3) return;
-    s1.querySelector(".lbl").textContent = "Check Dataset Status";
+    s1.querySelector(".lbl").textContent = "Dataset Status";
     s2.querySelector(".lbl").textContent = "Review Gaps";
-    s3.querySelector(".lbl").textContent = "Use Clean Mosaic Picture";
+    s3.querySelector(".lbl").textContent = "Clean Mosaic";
     if (!s1.dataset.wired) {
       s1.dataset.wired = "1";
       s1.addEventListener("click", () => { const el = $("f-dataset-status"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
@@ -311,6 +311,11 @@
   function renderFPieces() {
     const box = $("f-pieces");
     const list = activeFragments();
+    // Live piece count on the dock tab.
+    try {
+      const piecesTab = $("tab-btn-pieces");
+      if (piecesTab) piecesTab.textContent = `Pieces (${list.length})`;
+    } catch (error) { /* label is best-effort, never blocking */ }
     if (!list.length) {
       box.innerHTML = `<div class="f-piece">No pieces loaded yet.</div>`;
       return;
@@ -477,6 +482,9 @@
     const box = $("f-answer");
     const body = $("f-answer-body");
     box.className = "f-answer";
+    box.hidden = false;
+    const otpBtn = $("f-step3-otp-btn");
+    if (otpBtn) otpBtn.hidden = true;
     if (!fState.ran || !lastFriendly) {
       box.classList.add("idle");
       setFHead("○ Ask about a person", "");
@@ -569,6 +577,18 @@
     const golden = f.golden;
     if (golden && Object.keys(golden.attributes || {}).length > 0) {
       box.classList.add("ok");
+      // Clean record: the answer card collapses — the tiles below ARE the
+      // answer. The primary action lives in the Step 3 header.
+      box.hidden = true;
+      if (otpBtn) {
+        const goldenType = golden.entity_type || currentEntity().entityType;
+        const agent = fState.downstream && fState.downstream.agent
+          ? fState.downstream.agent
+          : (goldenType === "product" ? "search" : "otp");
+        otpBtn.textContent = goldenType === "product" ? "✓ Use for search" : "✓ Send OTP";
+        otpBtn.hidden = false;
+        otpBtn.onclick = () => askDownstream(agent, { auto: true });
+      }
       const personName = (golden.attributes.display_name && golden.attributes.display_name.value)
         || (golden.attributes.name && golden.attributes.name.value)
         || (golden.entity_id || entityId || "This person");
@@ -791,8 +811,7 @@
         + `<div class="f-ds-metric"><b>✓ ${dClean} of ${dTotal} Clean (${dPct}%)</b>All records verified and agreed</div>`
         + `<div class="f-ds-metric"><b>✓ 0 Disagreements</b>Zero conflicts remain</div>`
         + `<div class="f-ds-metric"><b>● Checker active</b>Verified before use</div>`
-        + `</div>`
-        + `<div>We matched and checked <b>${dPieces} pieces of data</b> across <b>${dSystems.length} systems</b> (${esc(dSystems.join(", ") || "—")}). All <b>${dTotal} records are verified</b> with zero unresolved conflicts.</div>`;
+        + `</div>`;
     } else {
       dsBadgeEl.textContent = `${dNeed} record${dNeed === 1 ? "" : "s"} need you`;
       dsBadgeEl.className = "tag tag-need";
@@ -802,8 +821,7 @@
         + `<div class="f-ds-metric"><b>✓ ${dClean} of ${dTotal} Clean (${dPct}%)</b>Verified records ready to use</div>`
         + `<div class="f-ds-metric"><b>⚠ ${dNeed} Record${dNeed === 1 ? "" : "s"} need review</b>${isHiddenScene ? "1 lookalike neighbour separated" : "Disagreements after matching"}</div>`
         + `<div class="f-ds-metric"><b>● Checker active</b>Rules isolating conflicts</div>`
-        + `</div>`
-        + `<div>We automatically matched and checked <b>${dTotal} records</b> across <b>${dSystems.length} systems</b> (${esc(dSystems.join(", ") || "—")}). <b>${dClean} records are clean</b>, and only <b>${dNeed} record${dNeed === 1 ? "" : "s"} ha${dNeed === 1 ? "s" : "ve"} conflicts or lookalikes</b> needing your 1-click decision below.</div>`;
+        + `</div>`;
     }
 
     // Step 2: Render Exception-Only Error Triage Queue
@@ -929,16 +947,12 @@
         + `</div>`;
     }
 
-    // 3. Clean banner when 0 records need review
+    // 3. Compact clean summary when 0 records need review (no banner).
     const cleanList = scopeSet ? scopedClean : (summary ? (summary.clean_list || []) : []);
     if (dNeed === 0) {
       if (gapsWrapEl) gapsWrapEl.classList.add("all-clean");
       gapsBadgeEl.textContent = hasSummary ? "0 gaps · all clean" : "Not checked yet";
-      gapsHtml = `<div class="f-gap-item ok" style="padding:16px;text-align:center;">`
-        + `<div style="font-size:16px;font-weight:700;color:#15803D;margin-bottom:6px">✓ 100% Clean! All records in this dataset are verified.</div>`
-        + `<div class="muted" style="margin-bottom:12px">Zero disagreements or conflicts remain across systems. All ${dTotal} records are ready to use.</div>`
-        + `<button id="f-export-clean-btn" class="btn-how" style="background:#15803D;color:#fff;border:none;padding:6px 14px;font-weight:700;" type="button">⬇ Export All Clean Records</button>`
-        + `</div>`
+      gapsHtml = `<div class="f-gap-item ok">✓ All ${dTotal} record${dTotal === 1 ? "" : "s"} verified — zero gaps.</div>`
         + autoHtml;
     } else {
       if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
@@ -946,18 +960,13 @@
       gapsHtml += autoHtml;
     }
 
-    // 4. Clean Records Collapsed Accordion (from the live ledger summary)
+    // 4. Compact clean-record rows (no accordion).
     if (cleanList.length > 0) {
-      const cleanRowsHtml = cleanList.map((r) =>
+      gapsHtml += cleanList.map((r) =>
         `<div class="f-clean-row">`
         + `<div><span class="f-clean-badge">✓ Clean</span> <b>${esc(r.display_name || r.entity_id)}</b> <span class="muted">(${esc(r.entity_type)} ${esc(r.entity_id)})</span></div>`
         + `</div>`
       ).join("");
-
-      gapsHtml += `<details class="f-clean-acc">`
-        + `<summary>▶ View Clean Records (${cleanList.length} verified with zero conflicts)</summary>`
-        + `<div class="f-clean-list">${cleanRowsHtml}</div>`
-        + `</details>`;
     }
 
     gapsEl.innerHTML = gapsHtml;
@@ -978,11 +987,6 @@
       trapProofBtn.addEventListener("click", () => askAbout("neighbour F6"));
     }
 
-    const exportCleanBtn = $("f-export-clean-btn");
-    if (exportCleanBtn) {
-      exportCleanBtn.addEventListener("click", () => openExport("batch"));
-    }
-
   }
 
   function renderFriendly() {
@@ -999,6 +1003,14 @@
     // "Show how it was decided" only makes sense once a decision exists.
     $("f-show-detail").hidden = !fState.ran;
     $("f-show-detail-2").hidden = !fState.ran;
+    // Active-record badge is always visible: derived entity or current key.
+    try {
+      const badge = $("entity-active");
+      if (badge) {
+        const ae = fState.activeEntity;
+        badge.textContent = ae ? `${ae.entityType}/${ae.entityId}` : recordKey(currentEntity().entityType, currentEntity().entityId);
+      }
+    } catch (error) { /* badge is best-effort, never blocking */ }
     // Block 3 viewing header: which record is on screen.
     const viewingEl = $("f-viewing");
     if (viewingEl) {
@@ -2824,6 +2836,12 @@
   }
 
   async function askAbout(query) {
+    // Inquiries always land on the Protocol Chat tab.
+    try {
+      const chatTab = $("tab-btn-chat");
+      const chatPanel = $("f-chat-panel");
+      if (chatTab && chatPanel && chatPanel.style.display === "none") chatTab.click();
+    } catch (error) { /* tab switch is best-effort, never blocking */ }
     const q = String(query || "").toLowerCase();
     const f = (lastFriendly && lastFriendly.golden) || window.__lastGolden || null;
     if (/datalog|rule|how|proof/.test(q)) {
@@ -3849,10 +3867,6 @@
       tabPieces.style.background = "transparent";
       tabPieces.style.color = "#475569";
       tabPieces.style.boxShadow = "none";
-      const title = $("tab-card-title");
-      if (title) title.textContent = "Live Multi-Agent Protocol Chat";
-      const sub = $("tab-card-sub");
-      if (sub) sub.textContent = "Every message is backed by a real proposer trace, Datalog derivation, or ledger decision.";
     });
     tabPieces.addEventListener("click", () => {
       chatPanel.style.display = "none";
@@ -3863,10 +3877,6 @@
       tabChat.style.background = "transparent";
       tabChat.style.color = "#475569";
       tabChat.style.boxShadow = "none";
-      const title = $("tab-card-title");
-      if (title) title.textContent = "Raw Input Pieces";
-      const sub = $("tab-card-sub");
-      if (sub) sub.textContent = "Inspect raw pieces and authority ranks from each connected system.";
     });
   }
 

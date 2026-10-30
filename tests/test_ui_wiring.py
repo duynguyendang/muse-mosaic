@@ -117,10 +117,14 @@ def test_demo_controls_and_badges_exist():
     assert "Demo controls: DEMO ONLY" in html
     html_ids = _html_ids()
     for ref in (
+        "app-header",
         "demo-stop",
         "demo-start",
         "demo-ticket",
         "entity-active",
+        "f-side-detail",
+        "f-side-steward-count",
+        "f-step3-otp-btn",
         "graph-candidates",
         "realtime-bar",
         "upload-collapse",
@@ -133,6 +137,8 @@ def test_demo_controls_and_badges_exist():
         "similar-open",
     ):
         assert ref in html_ids, ref
+    # realtime-bar stays in DOM for the contract but never renders.
+    assert "#realtime-bar { display: none; }" in html
     # Mock/Real bar is exact copy and lives outside detail view (always visible).
     assert "REAL: Meta API call" in html
     assert html.index('id="realtime-bar"') > html.index("/#detail-view")
@@ -244,6 +250,7 @@ def test_protocol_chat_surface_exists():
         "f-intake-samples",
         "f-side-steward",
         "f-side-steward-count",
+        "f-side-boundary",
         "f-side-detail",
         "f-status-pill",
         "f-dock-chips",
