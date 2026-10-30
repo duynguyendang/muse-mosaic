@@ -11,25 +11,25 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: #F8FAFC;
+        --bg: #F1F5F9;
         --panel: #FFFFFF;
         --line: #E2E8F0;
         --line-strong: #CBD5E1;
         --text: #0F172A;
         --body: #334155;
-        --muted: #475569;
+        --muted: #64748B;
         --accent: #2563EB;
-        --warm: #B45309;
+        --warm: #D97706;
         --warm-bg: #FFFBEB;
-        --good: #15803D;
-        --good-bg: #F0FDF4;
-        --bad: #B91C1C;
+        --good: #059669;
+        --good-bg: #ECFDF5;
+        --bad: #DC2626;
         --bad-bg: #FEF2F2;
         --proposed-bg: #EFF6FF;
         --splink: #7C3AED;
         --splink-bg: #F5F3FF;
         --tomb: #64748B;
-        --tomb-bg: #F1F5F9;
+        --tomb-bg: #F8FAFC;
         --src-salesforce: #2563EB;
         --src-sap: #0F766E;
         --src-ciam: #7C3AED;
@@ -37,16 +37,21 @@
         --src-erp: #475569;
         --src-market: #DB2777;
         --src-ticket: #D97706;
+        --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+        --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+        --shadow-lg: 0 10px 25px -3px rgba(15, 23, 42, 0.08), 0 4px 10px -4px rgba(15, 23, 42, 0.04);
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100vh;
-        background: var(--bg);
+        background: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #F8FAFC 45%, #F1F5F9 100%);
+        background-attachment: fixed;
         color: var(--text);
         font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
         font-size: 13.5px;
-        line-height: 1.5;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
         selection-background-color: #E2E8F0;
       }
       .mono, code, pre {
@@ -58,49 +63,54 @@
         line-height: 1;
         vertical-align: middle;
       }
-      :focus-visible { outline: 3px solid #1D4ED8; outline-offset: 2px; }
+      :focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
       header {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
-        gap: 10px 14px;
-        padding: 10px 24px;
-        border-bottom: 1px solid var(--line);
-        background: var(--panel);
+        gap: 12px 16px;
+        padding: 12px 28px;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         position: sticky;
         top: 0;
-        z-index: 10;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        z-index: 30;
+        box-shadow: var(--shadow-sm);
       }
-      .brand h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A; }
-      .brand span { color: var(--muted); font-size: 12.5px; }
+      .brand h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.025em; color: #0F172A; }
+      .brand span { color: var(--muted); font-size: 12.5px; font-weight: 400; }
       .scenario-chip {
         display: inline-flex; align-items: center; gap: 6px;
-        padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
-        border: 1px solid #CBD5E1; background: #fff; color: #334155;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.15s ease; cursor: pointer;
+        padding: 6px 13px; border-radius: 999px; font-size: 12px; font-weight: 600;
+        border: 1px solid #CBD5E1; background: #FFFFFF; color: #334155;
+        min-height: 32px;
+        box-shadow: var(--shadow-sm); transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1); cursor: pointer;
       }
-      .scenario-chip:hover { border-color: #94A3B8; color: #0F172A; }
-      .scenario-chip.active { background: #0F172A; color: #fff; border-color: #0F172A; }
-      .chip-dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; shrink: 0; }
+      .scenario-chip:hover { border-color: #94A3B8; color: #0F172A; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+      .scenario-chip.active { background: #0F172A !important; color: #FFFFFF !important; border-color: #0F172A !important; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18); }
+      .chip-dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; flex-shrink: 0; }
       .pill {
         display: inline-flex; align-items: center; gap: 7px;
-        padding: 4px 10px; border-radius: 999px;
+        padding: 5px 12px; border-radius: 999px;
         border: 1px solid var(--line); background: var(--panel);
-        font-size: 12px; color: var(--body);
+        font-size: 12px; font-weight: 500; color: var(--body);
+        min-height: 32px;
+        box-shadow: var(--shadow-sm);
       }
-      .pill.badge-btn { cursor: pointer; font: inherit; }
+      .pill.badge-btn { cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
       .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-      .dot.ok { background: var(--good); }
-      .dot.down { background: var(--bad); }
+      .dot.ok { background: var(--good); box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15); }
+      .dot.down { background: var(--bad); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15); }
       .hdr-select {
-        font: inherit; color: var(--text);
-        background: var(--panel); border: 1px solid var(--line-strong);
-        border-radius: 8px; padding: 8px 10px;
+        font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text);
+        background: #F8FAFC; border: 1px solid var(--line-strong);
+        border-radius: 8px; padding: 6px 10px;
       }
-      .ver-badge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
-      main { padding: 20px 24px 40px; max-width: 1440px; margin: 0 auto; }
+      .ver-badge { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 11.5px; }
+      main { padding: 20px 28px 48px; max-width: 1480px; margin: 0 auto; }
       #engine-banner {
         display: none;
         margin-bottom: 16px; padding: 12px 16px;
@@ -312,15 +322,6 @@
       .f-gaps-card .f-step-badge { background: #FEF3C7; color: #92400E; }
       .f-gaps-card.all-clean .f-step-badge { background: #DCFCE7; color: #15803D; }
       .f-mosaic-card .f-step-badge { background: #DCFCE7; color: #15803D; }
-      .f-step-sub {
-        font-size: 13px; color: #475569; margin: -2px 0 12px 0; line-height: 1.4;
-      }
-      .f-flow-arrow {
-        display: flex; align-items: center; gap: 8px;
-        padding: 4px 14px; margin: 2px 0 6px 18px;
-        border-left: 2px dashed #94A3B8;
-        font-size: 12px; font-weight: 600; color: #475569;
-      }
       .f-side-box {
         border: 1px solid #CBD5E1; border-radius: 14px; background: #F8FAFC;
         padding: 14px 16px; margin-bottom: 14px;
@@ -403,9 +404,6 @@
       .f-trap-desc {
         font-size: 13px; color: #334155; margin: 6px 0 10px; line-height: 1.5;
       }
-      .btn-view-mosaic {
-        font-size: 12px; font-weight: 600; padding: 4px 10px;
-      }
       .f-gap-compare {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 8px; margin: 8px 0;
@@ -455,18 +453,8 @@
       #taxonomy-drawer .drawer-head h2, #similar-drawer .drawer-head h2 { margin: 0; font-size: 16px; }
       #taxonomy-drawer-body, #similar-drawer-body { padding: 14px 18px; overflow: auto; display: grid; gap: 12px; align-content: start; }
       /* v2.3 protocol chat */
-      .f-intake {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
-        margin: 12px 0; padding: 10px 14px;
-        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
-      }
-      .f-intake.drag-over { border: 2px dashed #1D4ED8; background: #EFF6FF; }
-      .f-intake-upload { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-      .scenario-chip-upload { border-style: dashed; }
-      .scenario-chip-upload.loaded { background: #0F172A; color: #fff; border-color: #0F172A; border-style: solid; }
-      #f-intake-name { font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .f-intake-samples { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-      #f-chat-stream { display: grid; gap: 10px; max-height: 46vh; overflow: auto; padding: 4px 2px; }
+      #app-side.drag-over { background: #EFF6FF; outline: 2px dashed #1D4ED8; outline-offset: -2px; }
+      #f-chat-stream { display: grid; gap: 10px; }
       .chat-bubble { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
       .chat-bubble .chat-head { font-weight: 700; margin-bottom: 4px; }
       .chat-bubble .chat-badge { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
@@ -669,6 +657,100 @@
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
       #f-status-pill { font: inherit; cursor: pointer; }
       .friendly #hdr-entity-wrap { display: none !important; }
+      /* ==== App shell: frozen header + sidebar + center + dock + trust bar ==== */
+      html, body { height: 100vh; overflow: hidden; margin: 0; background: #F8FAFC; }
+      body { display: flex; flex-direction: column; }
+      #app-header {
+        height: 52px; flex: 0 0 52px;
+        display: flex; align-items: center; gap: 16px;
+        padding: 0 16px; position: sticky; top: 0; z-index: 50;
+        background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+        border-bottom: 1px solid #E2E8F0;
+      }
+      #app-header .brand h1 { font-size: 15px; }
+      #app-header .brand span { display: none; }
+      #app-header .f-steps {
+        margin: 0; padding: 0; border: none; background: transparent;
+        font-size: 12.5px; flex: 1 1 auto; justify-content: center;
+      }
+      #app-header .f-steps .step .n { width: 20px; height: 20px; font-size: 11px; }
+      #app-header .hdr-actions { margin-left: 0; }
+      #app-shell { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
+      #app-side {
+        width: 236px; flex: 0 0 236px; overflow-y: auto;
+        background: #F1F5F9; border-right: 1px solid #E2E8F0;
+        padding: 12px; display: flex; flex-direction: column; gap: 14px;
+      }
+      .side-sec { display: flex; flex-direction: column; gap: 8px; }
+      .side-h {
+        font-size: 11px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; color: #64748B; padding: 0 2px;
+      }
+      .side-upload {
+        background: #0F172A; color: #FFFFFF; border: none; border-radius: 8px;
+        height: 36px; font-weight: 600; font-size: 13px; cursor: pointer; width: 100%;
+      }
+      .side-upload.loaded { background: #15803D; }
+      .side-loaded { font-size: 11.5px; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #f-intake-samples { display: flex; flex-direction: column; gap: 2px; }
+      #f-intake-samples .scenario-chip {
+        justify-content: flex-start; width: 100%;
+        padding: 7px 10px; border-radius: 6px; font-size: 13px; font-weight: 400;
+        border: 1px solid transparent; background: transparent; color: #334155;
+        box-shadow: none; text-align: left; cursor: pointer;
+      }
+      #f-intake-samples .scenario-chip:hover { background: #E2E8F0; border-color: transparent; color: #0F172A; }
+      #f-intake-samples .scenario-chip.active {
+        background: #FFFFFF; color: #0F172A; font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06); border-color: #E2E8F0;
+      }
+      .side-tools { display: flex; flex-direction: column; gap: 2px; }
+      .side-item {
+        display: flex; align-items: center; gap: 8px; width: 100%;
+        padding: 7px 10px; border-radius: 6px; font-size: 13px; font-weight: 400;
+        border: 1px solid transparent; background: transparent; color: #334155;
+        cursor: pointer; text-align: left; font-family: inherit;
+      }
+      .side-item:hover { background: #E2E8F0; color: #0F172A; }
+      #app-side .f-plan { font-size: 12px; }
+      #app-main { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 16px; }
+      #app-dock {
+        width: 380px; flex: 0 0 380px; border-left: 1px solid #E2E8F0; background: #FFFFFF;
+        height: calc(100vh - 76px); display: flex; flex-direction: column; min-height: 0;
+      }
+      .dock-head { flex: 0 0 auto; padding: 10px 12px 8px; border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px; }
+      .dock-title-row { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #0F172A; }
+      .dock-title-row .f-tab-group { margin-left: auto; }
+      .dock-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .dock-chips button {
+        font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+        border: 1px solid #CBD5E1; background: #fff; color: #1D4ED8; cursor: pointer;
+      }
+      .dock-chips button:hover { border-color: #1D4ED8; }
+      #f-dock-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px; }
+      .dock-foot { flex: 0 0 auto; border-top: 1px solid #E2E8F0; padding: 8px 12px; background: #fff; }
+      .dock-foot #f-chat-input-bar { margin: 0; }
+      .dock-foot #f-chat-input { width: 100%; }
+      #f-chat-stream .chat-bubble [data-chat-act], #f-chat-stream .chat-bubble .btn-how {
+        height: 26px; font-size: 11.5px; padding: 0 8px; margin: 2px 4px 2px 0;
+        display: inline-flex; align-items: center;
+      }
+      #trust-bar {
+        height: 24px; flex: 0 0 24px; overflow: hidden; white-space: nowrap;
+        display: flex; align-items: center; padding: 0 12px;
+        font-size: 10.5px; letter-spacing: 0.02em; color: #64748B;
+        background: #FFFFFF; border-top: 1px solid #E2E8F0;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+      }
+      /* Compact steps so 1-3 fit a 720p viewport */
+      #friendly-steps .f-dataset-card, #friendly-steps .f-gaps-card, #friendly-steps .f-mosaic-card { margin-bottom: 10px; }
+      #friendly-steps .f-ds-body .f-ds-metrics { gap: 8px; }
+      #friendly-steps .f-ds-metric { padding: 8px 10px; }
+      #friendly-steps .f-gap-item, #friendly-steps .f-error-card { padding: 10px 12px; margin-top: 8px; }
+      #friendly-steps .f-gap-compare { margin: 6px 0; }
+      #friendly-steps .f-answer { padding: 10px 14px; margin-bottom: 10px; }
+      #friendly-steps .f-answer h2 { font-size: 16px; }
+      #friendly-steps .legend { margin-top: 6px; }
       @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
     </style>
@@ -687,6 +769,13 @@
           <h1>Muse Mosaic</h1>
         </div>
         <span>Clean, trustworthy records from scattered data.</span>
+      </div>
+      <div class="f-steps" id="f-steps" aria-label="Three-step user workflow">
+        <span class="step active" id="f-step-1" title="Jump to Step 1: Dataset Status"><span class="n">1</span> <span class="lbl">Check Dataset Status</span></span>
+        <span class="arrow">→</span>
+        <span class="step" id="f-step-2" title="Jump to Step 2: Review Gaps"><span class="n">2</span> <span class="lbl">Review Gaps</span></span>
+        <span class="arrow">→</span>
+        <span class="step" id="f-step-3" title="Jump to Step 3: Clean Mosaic Picture"><span class="n">3</span> <span class="lbl">Use Clean Mosaic Picture</span></span>
       </div>
       <div class="hdr-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
         <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
@@ -713,61 +802,72 @@
       <span class="pill ver-badge f-only" id="entity-active" title="Entity actually derived in the last run" hidden></span>
     </header>
 
-    <main>
-      <div id="friendly">
-        <div class="f-steps" aria-label="Three-step user workflow">
-          <strong style="color:#0F172A;margin-right:4px;display:inline-flex;align-items:center;gap:4px">
-            <span class="material-symbols-outlined" style="font-size:15px">timeline</span>
-            Workflow:
-          </strong>
-          <span class="step active" id="f-step-1" title="Jump to Step 1: Dataset Status"><span class="n">1</span> <span class="lbl">Check Dataset Status</span></span>
-          <span class="arrow">→</span>
-          <span class="step" id="f-step-2" title="Jump to Step 2: Review Gaps"><span class="n">2</span> <span class="lbl">Review Gaps</span></span>
-          <span class="arrow">→</span>
-          <span class="step" id="f-step-3" title="Jump to Step 3: Clean Mosaic Picture"><span class="n">3</span> <span class="lbl">Use Clean Mosaic Picture</span></span>
-        </div>
-
-        <div class="f-intake" id="f-intake-bar" aria-label="Data intake: upload a file or load a sample dataset">
-          <span class="f-intake-upload">
-            <button type="button" id="f-intake-upload" class="scenario-chip scenario-chip-upload" title="Upload a JSON file via POST /upload">↑ Drop JSON file</button>
+      <div id="app-shell">
+        <aside id="app-side" aria-label="Datasets and audit tools">
+          <div class="side-sec">
+            <button type="button" id="f-intake-upload" class="side-upload" title="Upload a JSON file via POST /upload">↑ Drop or Choose JSON File</button>
             <input type="file" id="f-intake-file" accept=".json,application/json" hidden />
-            <span class="muted" id="f-intake-name" title="Currently loaded dataset">No dataset loaded</span>
-          </span>
-          <span class="f-intake-samples" id="f-intake-samples" aria-label="Sample dataset presets">
-            <span class="muted" style="font-weight:700;">Or load sample:</span>
-            <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Messy JSON (No schema)</button>
-            <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer: 2 Phones (P-001)</button>
-            <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span>5 Hidden Pieces + Trap</button>
-            <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span>Unverified Ticket Conflict</button>
-            <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span>Product: New Category</button>
-          </span>
-        </div>
+            <span class="muted side-loaded" id="f-intake-name" title="Currently loaded dataset">No dataset loaded</span>
+          </div>
+          <div class="side-sec">
+            <div class="side-h">Sample datasets</div>
+            <nav id="f-intake-samples" aria-label="Sample dataset presets">
+              <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Messy JSON (No schema)</button>
+              <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer: 2 Phones (P-001)</button>
+              <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span>5 Hidden Pieces + Trap</button>
+              <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span>Unverified Ticket Conflict</button>
+              <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span>Product: New Category</button>
+            </nav>
+          </div>
+          <div class="side-sec">
+            <div class="side-h">Inspect &amp; audit</div>
+            <div class="side-tools">
+              <button type="button" id="f-side-steward" class="side-item" title="Open the Steward Queue drawer">⚑ Steward Queue (<span id="f-side-steward-count">0</span>)</button>
+              <button type="button" id="f-taxonomy" class="side-item" title="Read-only taxonomy terms and aliases">◇ Taxonomy Terms</button>
+              <button type="button" id="f-similar" class="side-item" title="Structured similar search (candidates only, never a merge)">⌕ Similar Search</button>
+              <button type="button" id="f-side-detail" class="side-item" title="Switch to the technical Detail View">⇄ Switch to Detail / Graph View</button>
+            </div>
+          </div>
+          <details class="f-plan side-sec" id="f-plan">
+            <summary>Cleaning rules &amp; background status</summary>
+            <div id="f-plan-body"></div>
+            <div class="f-plan-foot">This is the approved plan in force. Approving a new plan is not yet available in this view.</div>
+            <div class="f-stakes" id="f-stakes" style="margin-top:8px"></div>
+            <div class="f-proof" id="f-proof" style="margin-top:8px">
+              <span id="f-proof-text">Every suggestion is checked before use. Nothing checked yet.</span>
+              <button id="f-show-detail-2" type="button">Show how it was decided</button>
+            </div>
+            <div class="f-loop" id="f-loop" style="margin-top:8px;margin-bottom:0">
+              <span id="f-loop-text">Mosaic is watching.</span>
+              <button id="f-loop-review" type="button" hidden>Review in Steward Queue</button>
+              <button id="f-loop-more-btn" type="button">See what it did by itself</button>
+              <ol id="f-loop-more" hidden></ol>
+            </div>
+            <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #CBD5E1;display:flex;flex-wrap:wrap;gap:6px;">
+              <button class="f-only" id="f-how-it-works" type="button" title="How checking works and recent activity">How it works / Log</button>
+              <button class="f-only" id="f-pause" type="button">Pause the loop</button>
+            </div>
+          </details>
+        </aside>
 
-        <div class="f-cols">
-          <!-- PRIMARY LEFT COLUMN (7fr): Guided 3-Step Flow (1. Dataset Status -> 2. Gaps -> 3. Clean Mosaic Picture) -->
-          <div>
+        <main id="app-main">
+          <div id="friendly">
             <div class="f-dataset-card" id="f-dataset-status" role="region" aria-label="Step 1: Dataset status summary">
               <div class="f-ds-head">
                 <strong><span class="f-step-badge">Step 1</span>Dataset status — What we found in your data</strong>
                 <span><span class="tag" id="f-ds-badge">Loading dataset…</span>
                 <button type="button" id="f-export-batch" class="btn-how" title="Download verified records with proof">⬇ Export</button></span>
               </div>
-              <p class="f-step-sub">Overview of how many pieces arrived from your systems, which fields already agree, and whether any conflicts exist.</p>
               <div class="f-ds-body" id="f-ds-body">Checking pieces and systems…</div>
             </div>
-
-            <div class="f-flow-arrow" aria-hidden="true">↓ Next: Check if any systems disagree before using the record</div>
 
             <div class="f-gaps-card" id="f-gaps-wrap" role="region" aria-label="Step 2: Gap by gap review">
               <div class="f-ds-head">
                 <strong><span class="f-step-badge">Step 2</span>Gaps to review — Disagreements &amp; choices</strong>
                 <span class="tag" id="f-gaps-badge">0 gaps</span>
               </div>
-              <p class="f-step-sub">When critical fields disagree or cannot be proven, we pause and ask you to pick the right value in 1 click.</p>
               <div id="f-gaps"></div>
             </div>
-
-            <div class="f-flow-arrow" aria-hidden="true">↓ Result: Assembled profile &amp; verified data tiles ready to use</div>
 
             <div class="f-mosaic-card" id="f-mosaic-card" role="region" aria-label="Step 3: Clean mosaic picture and verified answer">
               <div class="f-mosaic-head">
@@ -776,7 +876,6 @@
                 <span><span class="tag" id="f-mosaic-tag">Assembled data tiles</span>
                 <button type="button" id="f-export-record" class="btn-how" title="Download this record with proof">⬇ Export</button></span>
               </div>
-              <p class="f-step-sub">Plain-language summary and color-coded data tiles assembled from verified sources. Click any tile or "How do we know?" for proof.</p>
 
               <div class="f-answer" id="f-answer" role="status">
                 <h2 id="f-answer-head">Ask about a person</h2>
@@ -795,66 +894,7 @@
             </div>
           </div>
 
-          <!-- SUPPORTING RIGHT SIDEBAR (5fr): Input Source Pieces + Ask Questions + Upload/Rules -->
-          <div>
-            <div class="f-side-box" style="display:flex;flex-direction:column;">
-              <div class="f-side-head" style="margin-bottom:8px">
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span class="material-symbols-outlined" style="font-size:18px;color:#0F172A">forum</span>
-                  <span id="tab-card-title">Live Multi-Agent Protocol Chat</span>
-                </div>
-                <div class="f-tab-group" style="display:inline-flex;background:#E2E8F0;padding:2px;border-radius:8px;font-size:11.5px;font-weight:600">
-                  <button type="button" id="tab-btn-chat" class="f-tab-btn active" style="padding:4px 10px;border-radius:6px;border:none;background:#fff;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer">💬 Protocol Chat</button>
-                  <button type="button" id="tab-btn-pieces" class="f-tab-btn" style="padding:4px 10px;border-radius:6px;border:none;background:transparent;color:#475569;cursor:pointer">📋 Source Pieces</button>
-                </div>
-              </div>
-              <div class="f-side-sub" id="tab-card-sub" style="margin-bottom:10px">Every message is backed by a real proposer trace, Datalog derivation, or ledger decision.</div>
-
-              <!-- Tab 1: Protocol Chat Stream -->
-              <div id="f-chat-panel" style="display:flex;flex-direction:column;">
-                <div class="f-chat-input" id="f-chat-input-bar" style="margin-top:0;margin-bottom:10px">
-                  <button type="button" data-q="phone">Why this phone?</button>
-                  <button type="button" data-q="F6">Why not neighbour F6?</button>
-                  <button type="button" data-q="datalog">How do we know?</button>
-                  <button type="button" data-q="muse-only">Without checker</button>
-                  <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, how" />
-                </div>
-                <div id="f-chat-stream" aria-live="polite"></div>
-              </div>
-
-              <!-- Tab 2: Raw Source Pieces -->
-              <div id="f-pieces-panel" style="display:none;flex-direction:column;">
-                <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
-              </div>
-            </div>
-
-
-
-            <details class="f-plan" id="f-plan">
-              <summary>Cleaning rules &amp; background status</summary>
-              <div id="f-plan-body"></div>
-              <div class="f-plan-foot">This is the approved plan in force. Approving a new plan is not yet available in this view.</div>
-              <div class="f-stakes" id="f-stakes" style="margin-top:8px"></div>
-              <div class="f-proof" id="f-proof" style="margin-top:8px">
-                <span id="f-proof-text">Every suggestion is checked before use. Nothing checked yet.</span>
-                <button id="f-show-detail-2" type="button">Show how it was decided</button>
-              </div>
-              <div class="f-loop" id="f-loop" style="margin-top:8px;margin-bottom:0">
-                <span id="f-loop-text">Mosaic is watching.</span>
-                <button id="f-loop-review" type="button" hidden>Review in Steward Queue</button>
-                <button id="f-loop-more-btn" type="button">See what it did by itself</button>
-                <ol id="f-loop-more" hidden></ol>
-              </div>
-              <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #CBD5E1;display:flex;flex-wrap:wrap;gap:6px;">
-                <button class="f-only" id="f-how-it-works" type="button" title="How checking works and recent activity">How it works / Log</button>
-                <button class="f-only" id="f-pause" type="button">Pause the loop</button>
-                <button id="f-taxonomy" type="button" title="Read-only taxonomy terms and aliases">Taxonomy</button>
-                <button id="f-similar" type="button" title="Structured similar search (candidates only, never a merge)">Similar</button>
-              </div>
-            </details>
-          </div>
-        </div>
-
+          </div><!-- /#friendly -->
         <div class="f-config" id="f-config" hidden>
           <h3 id="f-config-title">Proposed Pipeline Config — v1 (proposed, not yet in force) <span class="tag">PROPOSED</span></h3>
           <div id="f-config-body"></div>
@@ -868,8 +908,6 @@
           <div class="meta">Config approval is not golden approval. Every golden still has to survive derivation and whole-structure validation.</div>
         </div>
         <div class="f-config-summary" id="f-config-summary" hidden></div>
-      </div>
-
       <div id="detail-view" hidden>
       <div><button id="f-back-top" type="button">Back to simple view</button></div>
       <section class="panel" id="detail-empty" style="margin-bottom: 16px;">
@@ -1051,7 +1089,44 @@
       </div>
 
       </div><!-- /#detail-view -->
-    </main>
+        </main>
+        <aside id="app-dock" aria-label="Multi-agent protocol">
+          <div class="dock-head">
+            <div class="dock-title-row">
+              <span class="material-symbols-outlined" style="font-size:18px;color:#0F172A">forum</span>
+              <span id="tab-card-title">Live Multi-Agent Protocol Chat</span>
+              <div class="f-tab-group" style="display:inline-flex;background:#E2E8F0;padding:2px;border-radius:8px;font-size:11.5px;font-weight:600">
+                <button type="button" id="tab-btn-chat" class="f-tab-btn active" style="padding:4px 10px;border-radius:6px;border:none;background:#fff;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer">💬 Protocol Chat</button>
+                <button type="button" id="tab-btn-pieces" class="f-tab-btn" style="padding:4px 10px;border-radius:6px;border:none;background:transparent;color:#475569;cursor:pointer">📋 Source Pieces</button>
+              </div>
+            </div>
+            <div class="dock-chips" id="f-dock-chips" aria-label="Quick inquiries">
+              <button type="button" data-q="phone">Why this phone?</button>
+              <button type="button" data-q="F6">Why not neighbour F6?</button>
+              <button type="button" data-q="datalog">How do we know?</button>
+              <button type="button" data-q="muse-only">Without checker</button>
+            </div>
+            <div class="f-side-sub" id="tab-card-sub">Every message is backed by a real proposer trace, Datalog derivation, or ledger decision.</div>
+          </div>
+          <div id="f-dock-scroll">
+            <div id="f-chat-panel" style="display:flex;flex-direction:column;">
+              <div id="f-chat-stream" aria-live="polite"></div>
+            </div>
+            <div id="f-pieces-panel" style="display:none;flex-direction:column;">
+              <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
+            </div>
+          </div>
+          <div class="dock-foot">
+            <div class="f-chat-input" id="f-chat-input-bar">
+              <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, how" />
+            </div>
+          </div>
+        </aside>
+      </div><!-- /#app-shell -->
+      <footer id="trust-bar">REAL: Meta API call, mosaic-api, trust-engine, ledger, graph, UI &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream</footer>
+
+      </div>
+
 
     <div id="realtime-bar">
       REAL: Meta API call, mosaic-api, trust-engine, ledger, graph, UI

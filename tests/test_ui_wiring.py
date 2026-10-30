@@ -233,14 +233,29 @@ def test_bidirectional_highlight_hooks_exist():
 def test_protocol_chat_surface_exists():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     for ref in (
-        "f-intake-bar",
+        # App shell: frozen header + left sidebar + center + right dock.
+        "app-shell",
+        "app-side",
+        "app-main",
+        "app-dock",
+        "trust-bar",
         "f-intake-upload",
         "f-intake-file",
         "f-intake-samples",
+        "f-side-steward",
+        "f-side-steward-count",
+        "f-side-detail",
         "f-status-pill",
+        "f-dock-chips",
+        "f-dock-scroll",
         "f-chat-stream",
         "f-chat-input-bar",
         "f-chat-input",
+        "f-plan",
+        "f-steps",
+        "f-step-1",
+        "f-step-2",
+        "f-step-3",
     ):
         assert f'id="{ref}"' in html, ref
     assert 'id="f-simulate"' not in html, "header Simulate box must be gone"
@@ -249,10 +264,17 @@ def test_protocol_chat_surface_exists():
     assert 'id="f-scenario-bar"' not in html, "standalone Scenarios strip must be gone"
     assert 'id="f-upload"' not in html, "duplicate sidebar upload box must be gone"
     assert 'id="f-answer-cta"' not in html, "duplicate Step 3 CTA buttons must be gone"
-    # All five sample dataset presets live in the intake bar.
+    assert 'id="f-intake-bar"' not in html, "old intake bar replaced by the sidebar"
+    assert "f-flow-arrow" not in html, "spacer banners must be gone"
+    assert "btn-view-mosaic" not in html, "full-width View Mosaic buttons must be gone"
+    assert "f-step-sub" not in html, "redundant step paragraphs must be gone"
+    # All five sample dataset presets live in the sidebar.
     for act in ("scene0", "act1", "act2", "act3", "act4"):
         assert f'data-act="{act}"' in html, act
     src = (WEB / "app.js").read_text(encoding="utf-8")
     assert '$("f-status-pill").addEventListener("click"' in src
+    # Dataset isolation: runs pin their entity keys; steps filter by them.
+    assert "activeKeys" in src
+    assert "scopedNeeds" in src
     for question in ("phone", "F6", "datalog", "muse-only"):
         assert f'data-q="{question}"' in html, question

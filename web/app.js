@@ -125,6 +125,8 @@
     $("steward-count").textContent = String(k);
     const c2 = $("steward-count-2");
     if (c2) c2.textContent = String(k);
+    const cside = $("f-side-steward-count");
+    if (cside) cside.textContent = String(k);
     renderDetailLoopLine();
     fState.needCount = needCounts().mine;
     renderFStatus();
@@ -132,7 +134,7 @@
   }
 
   /* ---- Friendly View (v2.2 default): same endpoints, same decisions ---- */
-  const fState = { ran: false, working: false, downstream: null, needCount: 0, splinkPairs: [], policyUser: "", policyProduct: "", allEntities: [], entityFragments: {}, datasetSummary: null };
+  const fState = { ran: false, working: false, downstream: null, needCount: 0, splinkPairs: [], policyUser: "", policyProduct: "", allEntities: [], entityFragments: {}, datasetSummary: null, activeKeys: null };
   let healthSeq = 0;
   let lastFriendly = null;
   let hasRun = false;
@@ -172,6 +174,11 @@
     window.__lastGolden = payload.golden || null;
     window.__lastProposals = payload.proposal ? [payload.proposal] : [];
     window.__lastGoldens = payload.golden ? [payload.golden] : [];
+    // Isolation: a resolve run covers exactly the current record.
+    try {
+      const { entityType, entityId } = currentEntity();
+      fState.activeKeys = [`${entityType}/${entityId}`];
+    } catch (error) { fState.activeKeys = null; }
     refreshDatasetData().catch(() => {});
     try {
       const snap = activeFragments();
@@ -211,6 +218,15 @@
         if (g && g.golden_id) fState.entityFragments[`${g.entity_type}/${g.entity_id}`] = snap;
       });
     } catch (error) { /* snapshot is best-effort, never blocking */ }
+    // Isolation: a build covers exactly the entities it derived (e.g. the
+    // hidden main + trap clusters), never the whole ledger.
+    try {
+      const keys = [];
+      for (const g of payload.goldens || []) {
+        if (g && g.entity_type && g.entity_id) keys.push(`${g.entity_type}/${g.entity_id}`);
+      }
+      fState.activeKeys = keys.length ? [...new Set(keys)] : null;
+    } catch (error) { fState.activeKeys = null; }
     // Ledger-backed stores for the deterministic chat (askAbout/fallback):
     // golden for attribute answers, proposals for the F6 trap evidence.
     window.__lastGolden = first;
@@ -732,23 +748,40 @@
 
     // Dataset health metrics: live ledger summary when available, else the
     // current-entity fallback (never invented record counts).
+    // Isolation: once a dataset is explicitly loaded (sample pill / upload),
+    // every list below is scoped to that dataset's records, so records from
+    // other datasets never leak into Step 1 or Step 2.
     const summary = fState.datasetSummary;
+    const scopeSet = (fState.activeKeys && fState.activeKeys.length)
+      ? new Set(fState.activeKeys) : null;
+    const scopeKey = (r) => `${r.entity_type}/${r.entity_id}`;
+    const scopedNeeds = scopeSet
+      ? (summary ? summary.needs_review || [] : []).filter((r) => scopeSet.has(scopeKey(r)))
+      : (summary ? summary.needs_review || [] : []);
+    const scopedClean = scopeSet
+      ? (summary ? summary.clean_list || [] : []).filter((r) => scopeSet.has(scopeKey(r)))
+      : (summary ? summary.clean_list || [] : []);
     const sumRecords = summary ? summary.total_records : 0;
     const sumPieces = summary ? summary.total_pieces : totalPieces;
     const sumSystems = summary ? (summary.systems || []) : srcNames;
     const sumClean = summary ? summary.clean_records : 0;
     const sumPct = summary ? summary.clean_pct : 0;
-    const sumNeeds = summary ? (summary.needs_review || []) : [];
+    const sumNeeds = scopedNeeds;
     const hasSummary = !!summary && sumRecords > 0;
+    const hasScoped = !!summary && (scopedNeeds.length + scopedClean.length > 0);
 
     // Step 1: Render Dataset Status Block — live ledger counts when the
     // summary is available, else the current-entity fallback (never invented).
-    const dTotal = hasSummary ? sumRecords : totalPieces > 0 ? 1 : 0;
-    const dPieces = hasSummary ? sumPieces : totalPieces;
-    const dSystems = hasSummary ? summary.systems : srcNames;
-    const dClean = hasSummary ? sumClean : 0;
-    const dPct = hasSummary ? sumPct : 0;
-    const dNeed = hasSummary ? (summary.needs_review || []).length : (gapCount > 0 ? 1 : 0);
+    const dTotal = scopeSet
+      ? (hasScoped ? scopedNeeds.length + scopedClean.length : (totalPieces > 0 ? 1 : 0))
+      : (hasSummary ? sumRecords : totalPieces > 0 ? 1 : 0);
+    const dPieces = (scopeSet || !hasSummary) ? totalPieces : sumPieces;
+    const dSystems = (scopeSet || !hasSummary) ? srcNames : summary.systems;
+    const dClean = scopeSet ? (hasScoped ? scopedClean.length : 0) : (hasSummary ? sumClean : 0);
+    const dPct = scopeSet ? (dTotal ? Math.round((dClean / dTotal) * 100) : 0) : (hasSummary ? sumPct : 0);
+    const dNeed = scopeSet
+      ? (hasScoped ? scopedNeeds.length : (gapCount > 0 ? 1 : 0))
+      : (hasSummary ? sumNeeds.length : (gapCount > 0 ? 1 : 0));
     if (dNeed === 0) {
       dsBadgeEl.textContent = hasSummary ? "All clean" : `${totalPieces} pieces loaded`;
       dsBadgeEl.className = hasSummary ? "tag tag-ok" : "tag";
@@ -786,11 +819,11 @@
     };
     const recordName = (entityType, entityId, pool) =>
       recordDisplayName(entityType, entityId, pool);
-    // Records that need a person: every entity with open steward items
-    // across the whole dataset (ledger summary), falling back to the
-    // current record's queue when no summary is cached yet.
-    const reviewRecords = hasSummary
-      ? (summary.needs_review || []).map((r) => ({
+    // Records that need a person: open steward items scoped to the loaded
+    // dataset (never the whole ledger), falling back to the current
+    // record's queue when no summary is cached yet.
+    const reviewRecords = (hasScoped || (!scopeSet && hasSummary))
+      ? scopedNeeds.map((r) => ({
           key: `${r.entity_type}/${r.entity_id}`,
           entityType: r.entity_type,
           entityId: r.entity_id,
@@ -810,7 +843,6 @@
         const name = group.name || recordName(group.entityType, group.entityId, pool) || group.entityId;
         const head = `<div class="f-error-record-title">`
           + `<span class="f-error-badge">⚠ RECORD: ${esc(name)} (${esc(group.entityType)} ${esc(group.entityId)})</span>`
-          + `<button type="button" class="btn-how btn-view-mosaic" data-view-entity="${esc(group.key)}">View Mosaic Details</button>`
           + `</div>`;
         const cards = group.issues.map((item, idx) => {
         const attr = item.attribute;
@@ -838,7 +870,9 @@
             + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
             + `</div>`;
         } else if (item.suggested_action) {
-          title = `Unrecognised ${plainName}: "${esc(item.suggested_action)}". What should we do?`;
+          // Single escape only: the outer esc(title) below does the HTML
+          // escaping. Pre-escaping here would render as literal &quot;.
+          title = `Unrecognised ${plainName}: "${item.suggested_action}". What should we do?`;
           choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
             + `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept "${esc(item.suggested_action)}"</button>`
             + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
@@ -896,7 +930,7 @@
     }
 
     // 3. Clean banner when 0 records need review
-    const cleanList = summary ? (summary.clean_list || []) : [];
+    const cleanList = scopeSet ? scopedClean : (summary ? (summary.clean_list || []) : []);
     if (dNeed === 0) {
       if (gapsWrapEl) gapsWrapEl.classList.add("all-clean");
       gapsBadgeEl.textContent = hasSummary ? "0 gaps · all clean" : "Not checked yet";
@@ -917,7 +951,6 @@
       const cleanRowsHtml = cleanList.map((r) =>
         `<div class="f-clean-row">`
         + `<div><span class="f-clean-badge">✓ Clean</span> <b>${esc(r.display_name || r.entity_id)}</b> <span class="muted">(${esc(r.entity_type)} ${esc(r.entity_id)})</span></div>`
-        + `<button type="button" class="btn-how btn-view-mosaic" data-view-entity="${esc(r.entity_type)}/${esc(r.entity_id)}" data-view-name="${esc(r.display_name || r.entity_id)}">View Mosaic Details</button>`
         + `</div>`
       ).join("");
 
@@ -950,24 +983,6 @@
       exportCleanBtn.addEventListener("click", () => openExport("batch"));
     }
 
-    // View Mosaic Details: read-only record switch (no re-derive), then
-    // scroll to the mosaic picture for that record.
-    gapsEl.querySelectorAll(".btn-view-mosaic").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const entVal = btn.getAttribute("data-view-entity");
-        if (!entVal) return;
-        const [t, ...rest] = entVal.split("/");
-        const id = rest.join("/");
-        try {
-          await switchRecord(t, id);
-        } catch (error) {
-          setStatus(`Cannot open record ${entVal}: ${error.message}`);
-          return;
-        }
-        const target = $("f-mosaic-card");
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
   }
 
   function renderFriendly() {
@@ -2164,7 +2179,9 @@
     const bar = $("f-chat-input-bar");
     if (!bar || bar.dataset.wired) return;
     bar.dataset.wired = "1";
-    bar.querySelectorAll("[data-q]").forEach((btn) => {
+    // Quick-inquiry chips live in the dock header; the input stays pinned
+    // at the dock bottom. Both are wired here, once.
+    document.querySelectorAll("#app-dock [data-q]").forEach((btn) => {
       btn.addEventListener("click", () => askAbout(btn.getAttribute("data-q")));
     });
     const input = $("f-chat-input");
@@ -2175,6 +2192,16 @@
           input.value = "";
         }
       });
+    }
+    // Auto-scroll the dock transcript to the newest message on every run.
+    const stream = $("f-chat-stream");
+    if (stream && !stream.dataset.autoscroll) {
+      stream.dataset.autoscroll = "1";
+      new MutationObserver(() => {
+        const scroller = $("f-dock-scroll");
+        if (scroller) scroller.scrollTop = scroller.scrollHeight;
+        else stream.scrollTop = stream.scrollHeight;
+      }).observe(stream, { childList: true, subtree: true });
     }
     document.querySelectorAll("#f-intake-samples [data-act]").forEach((btn) => {
       btn.addEventListener("click", () => runScenario(btn.getAttribute("data-act")));
@@ -3608,9 +3635,9 @@
   $("f-intake-file").addEventListener("change", async () => {
     await runIntakeFile($("f-intake-file"));
   });
-  // Real drag-and-drop onto the intake bar (the button promises "Drop").
+  // Real drag-and-drop onto the sidebar (the button promises "Drop").
   // Dropping anywhere else on the page must not navigate away either.
-  const intakeBar = $("f-intake-bar");
+  const intakeBar = $("app-side");
   ["dragover", "drop"].forEach((evt) => {
     document.addEventListener(evt, (event) => event.preventDefault());
   });
@@ -3648,6 +3675,9 @@
     feed("Checker turned off from the header pill — new runs fail closed, nothing publishes.");
   });
   $("f-loop-review").addEventListener("click", () => MosaicDrawers.openDrawer());
+  // Left sidebar: Steward Queue opens the drawer; Detail toggle switches views.
+  $("f-side-steward").addEventListener("click", () => MosaicDrawers.openDrawer());
+  $("f-side-detail").addEventListener("click", () => showDetail(true));
   $("f-show-detail").addEventListener("click", () => showDetail(true));
   $("f-show-detail-2").addEventListener("click", () => showDetail(true));
   $("f-back").addEventListener("click", () => showDetail(false));
