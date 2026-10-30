@@ -249,6 +249,43 @@ def update_steward_status(database_path: str | Path, steward_id: str, status: st
         connection.close()
 
 
+def supersede_sibling_stewards(
+    database_path: str | Path,
+    entity_type: str,
+    entity_id: str,
+    attribute: str,
+    keep_id: str,
+) -> list[str]:
+    """Mark stale duplicate questions as superseded.
+
+    One steward decision answers the question for its (entity, attribute):
+    other still-pending items asking the same thing (created by earlier
+    derivations of the same conflict) are closed as superseded so the gap
+    leaves every surface at once. The rows stay in the ledger for audit;
+    only ``pending`` items drive the queue, the summary, and the UI.
+    Returns the superseded steward ids.
+    """
+    connection = connect(database_path)
+    try:
+        rows = connection.execute(
+            "SELECT steward_id FROM steward_queue "
+            "WHERE status = 'pending' AND entity_type = ? AND entity_id = ? "
+            "AND attribute = ? AND steward_id != ?",
+            (entity_type, entity_id, attribute, keep_id),
+        ).fetchall()
+        ids = [row["steward_id"] for row in rows]
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            connection.execute(
+                f"UPDATE steward_queue SET status = 'superseded' WHERE steward_id IN ({placeholders})",
+                tuple(ids),
+            )
+            connection.commit()
+        return ids
+    finally:
+        connection.close()
+
+
 def fetch_steward(database_path: str | Path, steward_id: str) -> dict[str, Any] | None:
     connection = connect(database_path)
     try:

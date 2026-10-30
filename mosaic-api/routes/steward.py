@@ -91,7 +91,15 @@ def steward_reject(steward_id: str, request: Request) -> dict[str, Any]:
             detail=f"steward item {steward_id} is {item['status']}, not pending",
         )
     ledger.update_steward_status(current.database_path, steward_id, "rejected")
-    return {"steward_id": steward_id, "status": "rejected"}
+    item = ledger.fetch_steward(current.database_path, steward_id) or {}
+    superseded = ledger.supersede_sibling_stewards(
+        current.database_path,
+        item.get("entity_type", ""),
+        item.get("entity_id", ""),
+        item.get("attribute", ""),
+        steward_id,
+    )
+    return {"steward_id": steward_id, "status": "rejected", "superseded_stewards": superseded}
 
 
 @router.post("/steward/{steward_id}/split")
@@ -276,9 +284,13 @@ async def _steward_derive(
             },
         ) from exc
     ledger.update_steward_status(current.database_path, item["steward_id"], new_status)
+    superseded = ledger.supersede_sibling_stewards(
+        current.database_path, item["entity_type"], item["entity_id"], item["attribute"], item["steward_id"]
+    )
     payload = response.model_dump(mode="json")
     payload["proposal"] = proposal.model_dump(mode="json")
     payload["steward_item"] = item["steward_id"]
+    payload["superseded_stewards"] = superseded
     payload["overruled_claims"] = [
         {"source": source, "source_id": source_id, "attribute": item["attribute"]}
         for source, source_id in sorted(overruled_ids)

@@ -265,3 +265,27 @@ def test_steward_approve_clears_gap_and_publishes(api_client):
     assert all(
         not (item["entity_id"] == "P-001" and item["attribute"] == "phone") for item in pending
     )
+
+
+def test_steward_decision_supersedes_repeat_questions(api_client):
+    """Deciding one duplicate question closes its stale siblings.
+
+    Each derivation of the same unresolved conflict files its own pending
+    item; answering one must not leave identical cards behind.
+    """
+    first = resolve(api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-sup-1")
+    assert first.status_code == 200, first.text
+    first_id = first.json()["steward_queue"][0]["steward_id"]
+    second = resolve(api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-sup-2")
+    assert second.status_code == 200, second.text
+    second_id = second.json()["steward_queue"][0]["steward_id"]
+    assert second_id != first_id
+
+    approved = api_client.post(f"/steward/{second_id}/approve", json={"value": "+84 900 000 001"})
+    assert approved.status_code == 200, approved.text
+    assert first_id in approved.json().get("superseded_stewards", [])
+
+    pending = api_client.get("/steward/pending").json()["pending"]
+    assert all(
+        not (item["entity_id"] == "P-001" and item["attribute"] == "phone") for item in pending
+    )
