@@ -94,7 +94,8 @@ def test_config_holds_no_dom_or_network():
 def test_scene0_panel_ids_exist():
     html_ids = _html_ids()
     for ref in (
-        "f-scene0",
+        # Scene 0 entry point is the intake-bar sample pill (the old
+        # f-scene0 sidebar button was removed with the duplicate upload box).
         "f-config",
         "f-config-title",
         "f-config-body",
@@ -232,13 +233,26 @@ def test_bidirectional_highlight_hooks_exist():
 def test_protocol_chat_surface_exists():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     for ref in (
-        "f-scenario-bar",
+        "f-intake-bar",
+        "f-intake-upload",
+        "f-intake-file",
+        "f-intake-samples",
+        "f-status-pill",
         "f-chat-stream",
         "f-chat-input-bar",
         "f-chat-input",
     ):
         assert f'id="{ref}"' in html, ref
-    for act in ("scene0", "act1", "act2", "act3", "act4", "act5"):
+    assert 'id="f-simulate"' not in html, "header Simulate box must be gone"
+    assert 'id="f-sim-ticket"' not in html, "ticket trigger lives in the intake bar now"
+    assert 'id="f-sim-engine"' not in html, "engine toggle lives on the status pill now"
+    assert 'id="f-scenario-bar"' not in html, "standalone Scenarios strip must be gone"
+    assert 'id="f-upload"' not in html, "duplicate sidebar upload box must be gone"
+    assert 'id="f-answer-cta"' not in html, "duplicate Step 3 CTA buttons must be gone"
+    # All five sample dataset presets live in the intake bar.
+    for act in ("scene0", "act1", "act2", "act3", "act4"):
         assert f'data-act="{act}"' in html, act
+    src = (WEB / "app.js").read_text(encoding="utf-8")
+    assert '$("f-status-pill").addEventListener("click"' in src
     for question in ("phone", "F6", "datalog", "muse-only"):
         assert f'data-q="{question}"' in html, question

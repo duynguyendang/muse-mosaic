@@ -455,10 +455,16 @@
       #taxonomy-drawer .drawer-head h2, #similar-drawer .drawer-head h2 { margin: 0; font-size: 16px; }
       #taxonomy-drawer-body, #similar-drawer-body { padding: 14px 18px; overflow: auto; display: grid; gap: 12px; align-content: start; }
       /* v2.3 protocol chat */
-      .f-scenarios { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-      .f-scenarios button { border: 1px solid #1D4ED8; background: #fff; color: #1D4ED8; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; }
-      .f-scenarios button.active { background: #1D4ED8; color: #fff; }
-      .f-scenarios button:disabled { opacity: 0.45; cursor: default; }
+      .f-intake {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+        margin: 12px 0; padding: 10px 14px;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+      }
+      .f-intake-upload { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+      .scenario-chip-upload { border-style: dashed; }
+      .scenario-chip-upload.loaded { background: #0F172A; color: #fff; border-color: #0F172A; border-style: solid; }
+      #f-intake-name { font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .f-intake-samples { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
       #f-chat-stream { display: grid; gap: 10px; max-height: 46vh; overflow: auto; padding: 4px 2px; }
       .chat-bubble { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
       .chat-bubble .chat-head { font-weight: 700; margin-bottom: 4px; }
@@ -651,12 +657,6 @@
       .f-loop b { color: #B45309; }
       .f-loop button { min-height: 0; padding: 4px 10px; font-size: 12.5px; }
       #f-loop-more { margin: 8px 0 0; padding-left: 18px; color: #334155; font-size: 12.5px; }
-      .f-upload {
-        margin-bottom: 12px; padding: 12px 14px; text-align: left;
-        border: 2px dashed #CBD5E1; border-radius: 12px; background: var(--panel);
-        color: #0F172A;
-      }
-      .f-upload p { margin: 0 0 8px; font-size: 13.5px; }
       .f-status-ready { border-color: #15803D; color: #15803D; }
       .f-status-working { border-color: #1D4ED8; color: #1D4ED8; }
       .f-status-need { border-color: #B45309; color: #B45309; font-weight: 700; }
@@ -666,7 +666,7 @@
       #f-back-top { margin-bottom: 16px; }
       mark.f-hit { background: #FEF3C7; color: #0F172A; padding: 0 2px; }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
-      .friendly #f-status-pill { display: none !important; }
+      #f-status-pill { font: inherit; cursor: pointer; }
       .friendly #hdr-entity-wrap { display: none !important; }
       @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
@@ -701,7 +701,7 @@
         <button class="detail-only" id="f-back" type="button">Back to simple view</button>
       </div>
       <!-- Hidden technical holders for test contract & background state -->
-      <span class="pill f-only" id="f-status-pill" role="status">● Ready</span>
+      <button class="pill f-only" id="f-status-pill" role="status" type="button" title="Toggle the checker offline/online">● Checker active</button>
       <label class="muted" id="hdr-entity-wrap">Record
         <select id="entity" class="hdr-select" aria-label="Record selector">
           <option value="user/P-001">Nguyen Van An — User P-001</option>
@@ -726,17 +726,20 @@
           <span class="step" id="f-step-3" title="Jump to Step 3: Clean Mosaic Picture"><span class="n">3</span> <span class="lbl">Use Clean Mosaic Picture</span></span>
         </div>
 
-        <div class="f-scenarios" id="f-scenario-bar" aria-label="Demo scenario chips">
-          <span class="muted" style="align-self:center;font-weight:700;margin-right:6px;display:inline-flex;align-items:center;gap:4px">
-            <span class="material-symbols-outlined" style="font-size:14px;color:#64748B">auto_stories</span>
-            Scenarios:
+        <div class="f-intake" id="f-intake-bar" aria-label="Data intake: upload a file or load a sample dataset">
+          <span class="f-intake-upload">
+            <button type="button" id="f-intake-upload" class="scenario-chip scenario-chip-upload" title="Upload a JSON file via POST /upload">↑ Drop JSON file</button>
+            <input type="file" id="f-intake-file" accept=".json,application/json" hidden />
+            <span class="muted" id="f-intake-name" title="Currently loaded dataset">No dataset loaded</span>
           </span>
-          <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Clean messy JSON file</button>
-          <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer with 2 phones</button>
-          <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span>Connect 5 pieces (+ neighbour trap)</button>
-          <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span>Unverified support ticket conflict</button>
-          <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span>Product with new category</button>
-          <button type="button" data-act="act5" class="scenario-chip"><span class="chip-dot" style="background:#FB7185"></span>Test when checker is offline</button>
+          <span class="f-intake-samples" id="f-intake-samples" aria-label="Sample dataset presets">
+            <span class="muted" style="font-weight:700;">Or load sample:</span>
+            <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Messy JSON (No schema)</button>
+            <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer: 2 Phones (P-001)</button>
+            <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span>5 Hidden Pieces + Trap</button>
+            <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span>Unverified Ticket Conflict</button>
+            <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span>Product: New Category</button>
+          </span>
         </div>
 
         <div class="f-cols">
@@ -777,7 +780,6 @@
               <div class="f-answer" id="f-answer" role="status">
                 <h2 id="f-answer-head">Ask about a person</h2>
                 <div class="f-body" id="f-answer-body">Ask about a person. We'll answer only if we're sure, or we'll say we don't know.</div>
-                <div class="f-act" id="f-answer-cta" hidden><button id="f-try-answer" class="primary" type="button">Try the messy example</button> <button id="f-upload-scroll" type="button">Upload your messy JSON</button></div>
               </div>
 
               <div class="mosaic" id="f-mosaic" aria-label="Friendly mosaic picture"></div>
@@ -825,14 +827,7 @@
               </div>
             </div>
 
-            <div class="f-upload" id="f-upload">
-              <p><b>Drop JSON or CSV files here, or click to choose files.</b> — we will show you one trusted picture, or tell you honestly when we cannot.</p>
-              <label class="check">Your JSON file <input type="file" id="f-upload-file" accept=".json,.csv,application/json,text/csv" /></label>
-              <button id="f-upload-btn" type="button">Upload + show the picture</button>
-              <button id="f-try-example" type="button">Try the messy example</button>
-              <button id="f-scene0" type="button">Messy JSON (Scene 0)</button>
-              <span class="muted" style="display:block;margin-top:6px;font-size:12px">Synthetic or non-sensitive data only for the demo. Uploaded data is sent to the Muse builder via the Meta Model API in real mode, so do not upload real PII in the demo.</span>
-            </div>
+
 
             <details class="f-plan" id="f-plan">
               <summary>Cleaning rules &amp; background status</summary>

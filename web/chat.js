@@ -65,7 +65,7 @@
   }
 
   function setScenarioActive(id) {
-    document.querySelectorAll("#f-scenario-bar [data-act]").forEach((btn) => {
+    document.querySelectorAll("#f-intake-samples [data-act]").forEach((btn) => {
       btn.classList.toggle("active", btn.getAttribute("data-act") === id);
     });
   }

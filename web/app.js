@@ -133,6 +133,7 @@
 
   /* ---- Friendly View (v2.2 default): same endpoints, same decisions ---- */
   const fState = { ran: false, working: false, downstream: null, needCount: 0, splinkPairs: [], policyUser: "", policyProduct: "", allEntities: [], entityFragments: {}, datasetSummary: null };
+  let healthSeq = 0;
   let lastFriendly = null;
   let hasRun = false;
   function markRan() {
@@ -254,17 +255,13 @@
     const { mine } = needCounts();
     fState.needCount = mine;
     pill.className = "pill f-only";
+    // The header pill is the checker toggle: it shows only the live checker
+    // state ("Needs you" lives in the Steps/Gaps badges, not here).
     if (loop.engineDown) {
-      pill.textContent = "○ Checker off — we stopped";
+      pill.textContent = "■ Checker offline — Click to turn on";
       pill.classList.add("f-status-down");
-    } else if (fState.working) {
-      pill.textContent = "○ Working…";
-      pill.classList.add("f-status-working");
-    } else if (fState.needCount > 0) {
-      pill.textContent = `⚠ Needs you (${fState.needCount})`;
-      pill.classList.add("f-status-need");
     } else {
-      pill.textContent = "● Ready";
+      pill.textContent = "● Checker active";
       pill.classList.add("f-status-ready");
     }
     const fp = $("f-pause");
@@ -463,7 +460,6 @@
   function renderFAnswer() {
     const box = $("f-answer");
     const body = $("f-answer-body");
-    $("f-answer-cta").hidden = fState.ran;
     box.className = "f-answer";
     if (!fState.ran || !lastFriendly) {
       box.classList.add("idle");
@@ -681,7 +677,7 @@
         + `<div class="f-ds-metric"><b>○ Ready to check</b>Zero rules applied yet</div>`
         + `<div class="f-ds-metric"><b>● Checker ready</b>Engine online & waiting</div>`
         + `</div>`
-        + `<div>We found <b>${knownEntities.length} records with ${totalPieces} pieces of data</b> from <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). Run verification or pick a scenario above to match and verify.</div>`;
+        + `<div>We found <b>${knownEntities.length} records with ${totalPieces} pieces of data</b> from <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). Run verification or pick a sample above to match and verify.</div>`;
       gapsBadgeEl.textContent = "Not checked yet";
       gapsEl.innerHTML = `<div class="f-gap-item"><span class="muted">Run verification to inspect gaps and see if systems agree.</span></div>`;
       return;
@@ -701,7 +697,12 @@
         + `</div>`
         + `<div><b>${totalPieces} pieces</b> loaded across <b>${uniqueSources.length} systems</b>, but the checker is turned off. We stop — we do not guess without the checker.</div>`;
       gapsBadgeEl.textContent = "Blocked";
-      gapsEl.innerHTML = `<div class="f-gap-item stop">The checker is off. Turn the checker back on to check for gaps.</div>`;
+      gapsEl.innerHTML = `<div class="f-gap-item stop">The checker is off. Turn the checker back on to check for gaps.</div>`
+        + `<div class="steward-actions" style="margin-top:8px"><button data-f-gaps-restore type="button" class="primary">Turn the checker back on &amp; try again</button></div>`;
+      const grs = gapsEl.querySelector("[data-f-gaps-restore]");
+      if (grs) grs.addEventListener("click", () => {
+        restoreEngineAndRetry().catch((error) => setStatus(`Restore failed: ${error.message}`));
+      });
       return;
     }
 
@@ -1135,15 +1136,21 @@
   }
 
   async function refreshHealth() {
+    // Guard against stale polls: a slow /health response that started
+    // before a newer one must never overwrite fresher state (e.g. an
+    // "ok" observed before the kill-switch flips would un-ring the
+    // offline pill while a slow resolve keeps Working lit).
+    const mySeq = ++healthSeq;
     try {
       const data = await api("/health");
+      if (mySeq !== healthSeq) return;
       const apiOk = data.mosaic_api === "ok";
       $("api-dot").className = "dot " + (apiOk ? "ok" : "down");
       $("api-status").textContent = "mosaic-api: " + (apiOk ? "ok" : "down");
       const engOk = data.trust_engine === "ok";
       loop.engineDown = !engOk;
       $("engine-dot").className = "dot " + (engOk ? "ok" : "down");
-      $("engine-status").textContent = engOk ? "● Checker active" : "○ Checker off — we stopped";
+      $("engine-status").textContent = engOk ? "● Checker active" : "■ Checker offline — Click to turn on";
       const splinkOk = data.splink === "ok";
       loop.splink = {
         status: data.splink || "unknown",
@@ -2169,7 +2176,7 @@
         }
       });
     }
-    document.querySelectorAll("#f-scenario-bar [data-act]").forEach((btn) => {
+    document.querySelectorAll("#f-intake-samples [data-act]").forEach((btn) => {
       btn.addEventListener("click", () => runScenario(btn.getAttribute("data-act")));
     });
     document.getElementById("f-chat-stream").addEventListener("click", async (event) => {
@@ -2319,6 +2326,29 @@
 
   function setScenario(id) {
     window.MosaicChat.setScenarioActive(id);
+    markIntakeSample(id);
+  }
+
+  // Intake bar: show which dataset is loaded — the active sample pill, or
+  // the uploaded filename. Pills and uploads are mutually exclusive.
+  function markIntakeSample(id) {
+    const up = $("f-intake-upload");
+    if (up) up.classList.remove("loaded");
+    const nm = $("f-intake-name");
+    if (nm) {
+      const btn = document.querySelector(`#f-intake-samples [data-act="${id}"]`);
+      nm.textContent = btn ? btn.textContent.trim() : "No dataset loaded";
+    }
+  }
+
+  function markIntakeUpload(fileName) {
+    document.querySelectorAll("#f-intake-samples [data-act]").forEach((btn) => {
+      btn.classList.remove("active");
+    });
+    const up = $("f-intake-upload");
+    if (up) up.classList.add("loaded");
+    const nm = $("f-intake-name");
+    if (nm) nm.textContent = fileName;
   }
 
   // Transcript for every run (resolve, upload-resolve, build): proposer
@@ -3048,20 +3078,16 @@
 
   async function loadScene0() {
     if (fState.scene0 && fState.scene0.decided) {
-      // Subsequent loads auto-run like any other upload when the loop runs.
-      if (loop.mode === "running") {
-        stageScene0File();
-        const uploaded = await uploadFile(true, $("f-upload-file"));
-        if (uploaded && (window.__uploadedFragments || []).length) {
-          await resolveUpload(true);
-        }
-      } else {
-        setStatus("Loop Paused: Scene 0 already decided — click Upload to run manually.");
+      // Re-selecting the sample always re-runs (UX 13.1 rule 2).
+      stageScene0File();
+      const uploaded = await uploadFile(true, $("f-intake-file"));
+      if (uploaded && (window.__uploadedFragments || []).length) {
+        await resolveUpload(true);
       }
       return;
     }
     stageScene0File();
-    const payload = await uploadFile(false, $("f-upload-file"));
+    const payload = await uploadFile(false, $("f-intake-file"));
     if (payload) {
       fragments = (payload.fragments || []).map((f) => Object.assign({}, f, { _uploaded: true }));
       tickets = [];
@@ -3072,7 +3098,7 @@
   }
 
   function stageScene0File() {
-    const input = $("f-upload-file");
+    const input = $("f-intake-file");
     const file = new File([JSON.stringify(SCENE0_FRAGMENTS, null, 1)], SCENE0_FILE, { type: "application/json" });
     const transfer = new DataTransfer();
     transfer.items.add(file);
@@ -3142,7 +3168,7 @@
     $("f-config").hidden = true;
     $("f-config-summary").hidden = false;
     $("f-config-summary").innerHTML = "Config rejected. No pipeline run. No golden published.";
-    const input = $("f-upload-file");
+    const input = $("f-intake-file");
     if (input) input.value = "";
     window.__uploadedFragments = [];
     window.MosaicChat.add({
@@ -3550,11 +3576,34 @@
     await loadFragments();
     await resolve(true);
   });
-  $("f-loop-review").addEventListener("click", () => MosaicDrawers.openDrawer());
-  $("f-try-answer").addEventListener("click", () => runScenario("scene0"));
-  $("f-upload-scroll").addEventListener("click", () => {
-    $("f-upload").scrollIntoView({ behavior: "smooth", block: "center" });
+  // Data Intake Bar: primary upload (left) + sample dataset presets (right).
+  $("f-intake-upload").addEventListener("click", () => $("f-intake-file").click());
+  $("f-intake-file").addEventListener("change", async () => {
+    const input = $("f-intake-file");
+    if (!input.files || !input.files.length) return;
+    const fileName = input.files[0].name;
+    // Explicit file selection always auto-runs (UX 13.1 rule 2), even when
+    // the background loop is paused — the user asked for this run.
+    const uploaded = await uploadFile(true, input);
+    if (uploaded && (window.__uploadedFragments || []).length) {
+      markIntakeUpload(fileName);
+      await resolveUpload(true);
+    }
+    input.value = "";
   });
+  // Header checker pill: the single Simulate control. Click toggles the
+  // checker offline/online; the label always shows the live state.
+  $("f-status-pill").addEventListener("click", async () => {
+    if (loop.engineDown) {
+      await restoreEngineAndRetry().catch((error) => setStatus(`Restore failed: ${error.message}`));
+      return;
+    }
+    await api("/demo/engine/stop", { method: "POST" });
+    await refreshHealth();
+    renderFriendly();
+    feed("Checker turned off from the header pill — new runs fail closed, nothing publishes.");
+  });
+  $("f-loop-review").addEventListener("click", () => MosaicDrawers.openDrawer());
   $("f-show-detail").addEventListener("click", () => showDetail(true));
   $("f-show-detail-2").addEventListener("click", () => showDetail(true));
   $("f-back").addEventListener("click", () => showDetail(false));
@@ -3659,8 +3708,6 @@
     more.hidden = !more.hidden;
     $("f-loop-more-btn").textContent = more.hidden ? "See what it did by itself" : "Hide";
   });
-  $("f-try-example").addEventListener("click", () => runScenario("scene0"));
-  $("f-scene0").addEventListener("click", () => runScenario("scene0"));
   $("f-config-approve").addEventListener("click", approveScene0);
   $("f-config-edit").addEventListener("click", editScene0);
   $("f-config-reject").addEventListener("click", rejectScene0);
@@ -3680,22 +3727,6 @@
     rejectScene0();
   });
   $("f-config-build").addEventListener("click", buildScene0);
-  $("f-upload-btn").addEventListener("click", async () => {
-    await uploadFile(false, $("f-upload-file"));
-    if ((window.__uploadedFragments || []).length) {
-      await resolveUpload(false);
-    }
-  });
-  $("f-upload-file").addEventListener("change", async () => {
-    if (loop.mode !== "running") {
-      setStatus("Loop Paused: file staged — click Upload to run manually.");
-      return;
-    }
-    const uploaded = await uploadFile(true, $("f-upload-file"));
-    if (uploaded && (window.__uploadedFragments || []).length) {
-      await resolveUpload(true);
-    }
-  });
   $("steward-open").addEventListener("click", () => MosaicDrawers.openDrawer());
   $("steward-open-2").addEventListener("click", () => MosaicDrawers.openDrawer());
   $("similar-open").addEventListener("click", () => MosaicDrawers.openSimilar(drawerCtx));
