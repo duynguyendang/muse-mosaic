@@ -712,8 +712,7 @@
         + `<div class="f-ds-metric"><b>○ Ready to match</b>Clustering & entity resolution queued</div>`
         + `<div class="f-ds-metric"><b>○ Ready to check</b>Zero rules applied yet</div>`
         + `<div class="f-ds-metric"><b>● Checker ready</b>Engine online & waiting</div>`
-        + `</div>`
-        + `<div>We found <b>${knownEntities.length} records with ${totalPieces} pieces of data</b> from <b>${uniqueSources.length} systems</b> (${esc(srcNames.join(", "))}). Run verification or pick a sample above to match and verify.</div>`;
+        + `</div>`;
       gapsBadgeEl.textContent = "Not checked yet";
       gapsEl.innerHTML = `<div class="f-gap-item"><span class="muted">Run verification to inspect gaps and see if systems agree.</span></div>`;
       return;
@@ -1003,14 +1002,16 @@
     // "Show how it was decided" only makes sense once a decision exists.
     $("f-show-detail").hidden = !fState.ran;
     $("f-show-detail-2").hidden = !fState.ran;
-    // Active-record badge is always visible: derived entity or current key.
-    try {
-      const badge = $("entity-active");
-      if (badge) {
-        const ae = fState.activeEntity;
-        badge.textContent = ae ? `${ae.entityType}/${ae.entityId}` : recordKey(currentEntity().entityType, currentEntity().entityId);
-      }
-    } catch (error) { /* badge is best-effort, never blocking */ }
+    // Active-record badge: always visible. After a build it follows the
+    // built entity (e.g. user/cluster-1); otherwise the current record.
+    const activeBadge = $("entity-active");
+    if (activeBadge) {
+      activeBadge.hidden = false;
+      const ae2 = fState.activeEntity;
+      activeBadge.textContent = ae2
+        ? `${ae2.entityType}/${ae2.entityId}`
+        : recordKey(currentEntity().entityType, currentEntity().entityId);
+    }
     // Block 3 viewing header: which record is on screen.
     const viewingEl = $("f-viewing");
     if (viewingEl) {
@@ -1031,18 +1032,7 @@
         viewingEl.textContent = "";
       }
     }
-    // Active-cluster badge: after a build, the UI follows the built entity
-    // (e.g. user/cluster-1), even when the fixture selector shows another.
-    const activeBadge = $("entity-active");
-    if (activeBadge) {
-      if (fState.activeEntity) {
-        activeBadge.hidden = false;
-        activeBadge.textContent = `Active: ${fState.activeEntity.entityType}/${fState.activeEntity.entityId}`;
-      } else {
-        activeBadge.hidden = true;
-        activeBadge.textContent = "";
-      }
-    }
+    // (badge text is set once above; nothing to clear)
   }
 
   function renderFPlan() {

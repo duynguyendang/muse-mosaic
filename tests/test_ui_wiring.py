@@ -275,6 +275,13 @@ def test_protocol_chat_surface_exists():
     assert "f-flow-arrow" not in html, "spacer banners must be gone"
     assert "btn-view-mosaic" not in html, "full-width View Mosaic buttons must be gone"
     assert "f-step-sub" not in html, "redundant step paragraphs must be gone"
+    for cls in ("left-sidebar", "center-workspace", "right-agent-dock", "app-shell-body"):
+        assert f'class="{cls}"' in html or f' {cls}"' in html or f"{cls} " in html, cls
+    # Entity badge is always visible (no hidden attr); realtime bar stays
+    # in DOM for the contract but never renders.
+    badge_line = next(line for line in html.splitlines() if 'id="entity-active"' in line)
+    assert "hidden" not in badge_line, "entity badge must always render"
+    assert "#realtime-bar { display: none; }" in html
     # All five sample dataset presets live in the sidebar.
     for act in ("scene0", "act1", "act2", "act3", "act4"):
         assert f'data-act="{act}"' in html, act

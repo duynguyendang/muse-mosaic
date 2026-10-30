@@ -42,6 +42,7 @@
         --shadow-lg: 0 10px 25px -3px rgba(15, 23, 42, 0.08), 0 4px 10px -4px rgba(15, 23, 42, 0.04);
       }
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
       body {
         margin: 0;
         min-height: 100vh;
@@ -681,11 +682,21 @@
       }
       #app-header .f-steps .step .n { width: 20px; height: 20px; font-size: 11px; }
       #app-header .hdr-actions { margin-left: 0; }
-      #app-shell { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
+      /* Main 3-column shell between 52px header and 24px footer */
+      .app-shell-body, #friendly-view {
+        display: grid !important;
+        grid-template-columns: 236px minmax(0, 1fr) 360px !important;
+        height: calc(100vh - 76px) !important;
+        width: 100vw;
+        overflow: hidden;
+        align-items: stretch;
+      }
+      body.detail #app-shell { grid-template-columns: minmax(0, 1fr) !important; }
       #app-side {
-        width: 240px; flex: 0 0 240px; overflow-y: auto;
+        width: 236px; overflow-y: auto;
         background: #F8FAFC; border-right: 1px solid #E2E8F0;
         padding: 12px; display: flex; flex-direction: column; gap: 14px;
+        height: 100%; box-sizing: border-box;
       }
       .side-boundary {
         display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px;
@@ -726,13 +737,20 @@
       }
       .side-item:hover { background: #E2E8F0; color: #0F172A; }
       #app-side .f-plan { font-size: 12px; }
-      #app-main { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 16px; }
+      #app-main {
+        height: 100%; overflow-y: auto; padding: 14px 18px; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 12px; min-width: 0;
+      }
       #app-dock {
-        width: 360px; flex: 0 0 360px; align-self: stretch; height: auto;
+        width: 360px; height: 100%;
         border-left: 1px solid #E2E8F0; background: #FFFFFF;
-        display: flex; flex-direction: column; min-height: 0;
+        display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
+        min-height: 0; min-width: 0;
       }
       .dock-head { flex: 0 0 auto; padding: 10px 12px 8px; border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px; }
+      .right-agent-dock .chat-header-area { flex-shrink: 0; padding: 12px 14px 8px; border-bottom: 1px solid #F1F5F9; }
+      .right-agent-dock .chat-stream-area { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+      .right-agent-dock .chat-input-area { flex-shrink: 0; padding: 10px 14px; border-top: 1px solid #E2E8F0; background: #F8FAFC; }
       .dock-title-row { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #0F172A; }
       .dock-title-row .f-tab-group { margin-left: auto; }
       .dock-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -816,8 +834,8 @@
       <span class="pill ver-badge f-only" id="entity-active" title="Record currently in view">user/P-001</span>
     </header>
 
-      <div id="app-shell">
-        <aside id="app-side" aria-label="Datasets and audit tools">
+      <div id="app-shell" class="app-shell-body">
+        <aside id="app-side" class="left-sidebar" aria-label="Datasets and audit tools">
           <div class="side-sec">
             <button type="button" id="f-intake-upload" class="side-upload" title="Upload a JSON file via POST /upload">↑ Upload JSON File</button>
             <input type="file" id="f-intake-file" accept=".json,application/json" hidden />
@@ -872,7 +890,7 @@
           </details>
         </aside>
 
-        <main id="app-main">
+        <main id="app-main" class="center-workspace">
           <div id="friendly">
             <div class="f-config" id="f-config" hidden>
               <h3 id="f-config-title">Proposed Pipeline Config — v1 (proposed, not yet in force) <span class="tag">PROPOSED</span></h3>
@@ -930,7 +948,6 @@
             </div>
           </div>
 
-          </div><!-- /#friendly -->
       <div id="detail-view" hidden>
       <div><button id="f-back-top" type="button">Back to simple view</button></div>
       <section class="panel" id="detail-empty" style="margin-bottom: 16px;">
@@ -1113,8 +1130,8 @@
 
       </div><!-- /#detail-view -->
         </main>
-        <aside id="app-dock" aria-label="Multi-agent protocol">
-          <div class="dock-head">
+        <aside id="app-dock" class="right-agent-dock" aria-label="Multi-agent protocol">
+          <div class="dock-head chat-header-area">
             <div class="dock-title-row">
               <span class="material-symbols-outlined" style="font-size:18px;color:#0F172A">forum</span>
               <span id="tab-card-title">⚡ Multi-Agent Protocol</span>
@@ -1130,7 +1147,7 @@
               <button type="button" data-q="muse-only">No checker?</button>
             </div>
           </div>
-          <div id="f-dock-scroll">
+          <div id="f-dock-scroll" class="chat-stream-area">
             <div id="f-chat-panel" style="display:flex;flex-direction:column;">
               <div id="f-chat-stream" aria-live="polite"></div>
             </div>
@@ -1138,7 +1155,7 @@
               <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
             </div>
           </div>
-          <div class="dock-foot">
+          <div class="dock-foot chat-input-area">
             <div class="f-chat-input" id="f-chat-input-bar">
               <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, how" />
             </div>
@@ -1146,8 +1163,6 @@
         </aside>
       </div><!-- /#app-shell -->
       <footer id="trust-bar">REAL: Meta API call, mosaic-api, trust-engine, ledger, graph, UI &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream</footer>
-
-      </div>
 
 
     <div id="realtime-bar">
