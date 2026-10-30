@@ -232,3 +232,36 @@ def test_similar_returns_structured_evidence_without_vectors(api_client):
     for hit in payload["results"]:
         assert hit["vector_score"] is None
         assert "shared_tokens" in hit["evidence"]
+
+
+def test_steward_approve_clears_gap_and_publishes(api_client):
+    """Approving the verified value disposes the overruled ticket claim.
+
+    Regression: the approve re-derivation used to carry the live ticket
+    claim back in, so the proposer gate re-escalated the exact question
+    just answered and the gap never left the list. The overruled
+    (unverified, contradicting) fragments are now set aside for that
+    re-derivation and reported on the response.
+    """
+    escalated = resolve(api_client, USER_FRAGMENTS + [TICKET_CLAIM], "flow-approve-1")
+    assert escalated.status_code == 200, escalated.text
+    steward_id = escalated.json()["steward_queue"][0]["steward_id"]
+
+    approved = api_client.post(f"/steward/{steward_id}/approve", json={"value": "+84 900 000 001"})
+    assert approved.status_code == 200, approved.text
+    payload = approved.json()
+    # The overruled ticket claim is recorded, not silently dropped.
+    overruled = payload.get("overruled_claims", [])
+    assert {"source": "ticket", "source_id": "tck-001-phone", "attribute": "phone"} in overruled
+
+    # Phone publishes from the approved value; no phone gap remains.
+    phone = payload["golden"]["attributes"]["phone"]
+    assert phone["value"] == "+84900000001"
+    assert phone["rule_fired"] == "R1"
+    reasons = {c["attribute"]: c["reason_code"] for c in payload.get("conflicts", [])}
+    assert "phone" not in reasons
+
+    pending = api_client.get("/steward/pending").json()["pending"]
+    assert all(
+        not (item["entity_id"] == "P-001" and item["attribute"] == "phone") for item in pending
+    )

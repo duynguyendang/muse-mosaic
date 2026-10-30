@@ -212,18 +212,36 @@ async def _steward_derive(
     entity_type, entity_id = item["entity_type"], item["entity_id"]
     stored_facts = ledger.fetch_candidate_facts(current.database_path, entity_type, entity_id)
     fragments = [Fragment.model_validate(_row_to_fact(row)) for row in stored_facts]
+    approved_value = normalize_value(item["attribute"], value)
     fragments.append(
         Fragment(
             source=source,
             source_id=source_id,
             attribute=item["attribute"],
-            value=normalize_value(item["attribute"], value),
+            value=approved_value,
             authority_rank=1,
             event_time=datetime.now(UTC).isoformat(),
             verified=True,
             ttl_seconds=86400,
         )
     )
+    # The steward just adjudicated this attribute: unverified claims that
+    # contradict the approved value were reviewed and overruled. Carrying
+    # them into this re-derivation would re-escalate the exact question just
+    # answered (an infinite approve loop with the gap never clearing), so
+    # they are set aside for this derivation only. Nothing is deleted: the
+    # fragments stay in the ledger, and the exclusion is reported on the
+    # response so the decision trail stays complete.
+    overruled = [
+        f
+        for f in fragments
+        if f.attribute == item["attribute"]
+        and not f.verified
+        and str(f.value) != str(approved_value)
+    ]
+    overruled_ids = {(f.source, f.source_id) for f in overruled}
+    if overruled_ids:
+        fragments = [f for f in fragments if (f.source, f.source_id) not in overruled_ids]
     steward_request = ResolveRequest(
         work_id=f"steward-{item['steward_id']}",
         entity_type=entity_type,
@@ -261,6 +279,10 @@ async def _steward_derive(
     payload = response.model_dump(mode="json")
     payload["proposal"] = proposal.model_dump(mode="json")
     payload["steward_item"] = item["steward_id"]
+    payload["overruled_claims"] = [
+        {"source": source, "source_id": source_id, "attribute": item["attribute"]}
+        for source, source_id in sorted(overruled_ids)
+    ]
     return payload
 
 
