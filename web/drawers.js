@@ -24,6 +24,7 @@
     const lastFriendly = ctx.lastFriendly;
     return ctx.lastStewardItems.find((s) => s.steward_id === id)
       || ((lastFriendly && lastFriendly.steward_queue) || []).find((s) => s.steward_id === id)
+      || ((ctx.summaryStewards || []).find((s) => s.steward_id === id))
       || null;
   }
 
@@ -271,13 +272,28 @@
     }
   }
 
+  // Ledger recount scoped to the loaded dataset so badges never show
+  // stale items after a decision on any run (not just the current one).
+  async function recountStewards(ctx) {
+    try {
+      const data = await ctx.api("/steward/pending");
+      let items = data.pending || [];
+      const keys = ctx.activeKeys;
+      if (keys && keys.length) {
+        const set = new Set(keys);
+        items = items.filter((s) => set.has(`${s.entity_type}/${s.entity_id}`));
+      }
+      ctx.renderEscalatedCount(items.length);
+    } catch (error) { /* count stays as-is when the ledger is unreachable */ }
+  }
+
   function dropFriendlySteward(ctx, id) {
     const lastFriendly = ctx.lastFriendly;
     if (lastFriendly && lastFriendly.steward_queue) {
       ctx.setLastStewardItems(ctx.lastStewardItems.filter((s) => s.steward_id !== id));
       lastFriendly.steward_queue = lastFriendly.steward_queue.filter((s) => s.steward_id !== id);
       renderSteward(ctx, ctx.lastStewardItems.length ? ctx.lastStewardItems : lastFriendly.steward_queue);
-      ctx.renderEscalatedCount(lastFriendly.steward_queue.length);
+      recountStewards(ctx);
       ctx.renderFriendly();
     if (ctx.refreshDatasets) ctx.refreshDatasets();
     } else {

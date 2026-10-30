@@ -1269,6 +1269,21 @@
     return `${entityType}/${entityId}`;
   }
 
+  // Every pending steward item the ledger still holds (any run), with its
+  // entity attached: gap cards render from the dataset summary, so the
+  // confirm dialogs must resolve those ids too — never fail a real click
+  // with "not found" just because the item came from an earlier run.
+  function summaryStewards() {
+    const out = [];
+    const summary = fState.datasetSummary;
+    for (const r of (summary ? summary.needs_review || [] : [])) {
+      for (const item of (r.issues || [])) {
+        out.push({ ...item, entity_type: item.entity_type || r.entity_type, entity_id: item.entity_id || r.entity_id });
+      }
+    }
+    return out;
+  }
+
   function ensureEntityOptions() {
     const summary = fState.datasetSummary;
     if (!summary) return;
@@ -3558,6 +3573,8 @@
     set lastResolve(v) { lastResolve = v; },
     get lastStewardItems() { return lastStewardItems; },
     setLastStewardItems(v) { lastStewardItems = v; },
+    get activeKeys() { return fState.activeKeys; },
+    get summaryStewards() { return summaryStewards(); },
     setPendingAll(v) { pendingAll = v; },
     get lastFriendly() { return lastFriendly; },
   };
