@@ -3578,19 +3578,63 @@
   });
   // Data Intake Bar: primary upload (left) + sample dataset presets (right).
   $("f-intake-upload").addEventListener("click", () => $("f-intake-file").click());
-  $("f-intake-file").addEventListener("change", async () => {
-    const input = $("f-intake-file");
+  // One shared path for click-selected and dropped files: parse, then
+  // immediately execute the pipeline (UX 13.1 rule 2). Failures and
+  // zero-fragment uploads are shown ON the intake bar itself — the
+  // friendly view has no visible status line, so silence is not an option.
+  async function runIntakeFile(input) {
     if (!input.files || !input.files.length) return;
     const fileName = input.files[0].name;
-    // Explicit file selection always auto-runs (UX 13.1 rule 2), even when
-    // the background loop is paused — the user asked for this run.
     const uploaded = await uploadFile(true, input);
-    if (uploaded && (window.__uploadedFragments || []).length) {
+    const parsed = uploaded ? uploaded.fragments_parsed || 0 : 0;
+    if (uploaded && parsed > 0 && (window.__uploadedFragments || []).length) {
       markIntakeUpload(fileName);
       await resolveUpload(true);
+    } else {
+      const nm = $("f-intake-name");
+      const reason = uploaded
+        ? `${parsed} usable fragments (${(uploaded.fragments_rejected || []).length} rejected)`
+        : "rejected — see activity log";
+      if (nm) {
+        nm.textContent = `✕ ${fileName} — ${reason}`;
+        nm.title = reason;
+      }
+      const up = $("f-intake-upload");
+      if (up) up.classList.remove("loaded");
+      feed(`Intake: ${fileName} not usable — ${reason}; nothing runs.`);
     }
     input.value = "";
+  }
+  $("f-intake-file").addEventListener("change", async () => {
+    await runIntakeFile($("f-intake-file"));
   });
+  // Real drag-and-drop onto the intake bar (the button promises "Drop").
+  // Dropping anywhere else on the page must not navigate away either.
+  const intakeBar = $("f-intake-bar");
+  ["dragover", "drop"].forEach((evt) => {
+    document.addEventListener(evt, (event) => event.preventDefault());
+  });
+  if (intakeBar) {
+    intakeBar.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      intakeBar.classList.add("drag-over");
+    });
+    intakeBar.addEventListener("dragleave", () => intakeBar.classList.remove("drag-over"));
+    intakeBar.addEventListener("drop", async (event) => {
+      event.preventDefault();
+      intakeBar.classList.remove("drag-over");
+      const files = (event.dataTransfer && event.dataTransfer.files) || [];
+      if (!files.length) return;
+      const input = $("f-intake-file");
+      try {
+        input.files = files;
+      } catch (error) {
+        setStatus(`Drop failed: ${error.message}`);
+        return;
+      }
+      await runIntakeFile(input);
+    });
+  }
   // Header checker pill: the single Simulate control. Click toggles the
   // checker offline/online; the label always shows the live state.
   $("f-status-pill").addEventListener("click", async () => {
