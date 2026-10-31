@@ -1582,15 +1582,34 @@
     return true;
   }
 
+  // Deterministic idempotency: the same dataset re-clicked must replay the
+  // same decision instead of minting duplicate transcripts and steward items.
+  // Keys hash the entity plus the exact fragment set, so genuinely new
+  // inputs (new ticket, new upload) still derive a fresh decision.
+  function fingerprintRun(entityType, entityId, list) {
+    const canon = JSON.stringify({
+      e: [entityType, entityId],
+      f: (list || []).map((f) => [f.source, f.source_id, f.attribute, String(f.value), f.authority_rank, !!f.verified]).sort(),
+    });
+    let h = 5381;
+    for (let i = 0; i < canon.length; i++) h = ((h << 5) + h + canon.charCodeAt(i)) | 0;
+    return `ui-${(h >>> 0).toString(36)}`;
+  }
+
   async function resolve(auto) {
     resolveBtn.disabled = true;
     if (!runGuard("Resolve")) { resolveBtn.disabled = false; return; }
     try {
       const { entityType, entityId } = currentEntity();
       const list = activeFragments();
-      const key = `ui-${Date.now()}`;
+      const key = fingerprintRun(entityType, entityId, list);
+      if (key === fState.lastCompletedKey) {
+        try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["This exact dataset already derived this record — nothing new to derive."] }); } catch (error) { /* best-effort */ }
+        setStatus("Already showing this exact dataset — nothing re-derived.");
+        return;
+      }
       const reqBody = {
-        work_id: `ui-${key}`,
+        work_id: key,
         entity_type: entityType,
         entity_id: entityId,
         idempotency_key: key,
@@ -1629,6 +1648,7 @@
       markRan();
       renderFriendly();
       await askDownstream(entityType === "product" ? "search" : "otp", { auto: true });
+      fState.lastCompletedKey = key;
     } catch (error) {
       setStatus(`Resolve failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto run failed (fail-closed): ${error.message} — nothing published`);
@@ -2114,21 +2134,28 @@
       setStatus("Upload a file first.");
       return;
     }
+    if (!runGuard("Upload resolve")) return;
+    const upKey = fingerprintRun(window.__uploadedEntityType || "user", currentEntity().entityId, list);
+    if (upKey === fState.lastCompletedKey) {
+      try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["This exact upload already derived — nothing re-derived."] }); } catch (error) { /* best-effort */ }
+      setStatus("Already showing this exact upload — nothing re-derived.");
+      fState.working = false;
+      renderFStatus();
+      return;
+    }
     // The answer below is about the uploaded pieces, so the Friendly View
     // must describe those — not the fixture fragments for this entity.
     fragments = list.map((f) => Object.assign({}, f, { _uploaded: true }));
     tickets = [];
-    if (!runGuard("Upload resolve")) return;
     renderFStakes();
     renderFPieces();
     try {
       const { entityId } = currentEntity();
-      const key = `ui-upload-${Date.now()}`;
       const reqBody = {
-        work_id: `ui-${key}`,
+        work_id: upKey,
         entity_type: window.__uploadedEntityType || "user",
         entity_id: entityId,
-        idempotency_key: key,
+        idempotency_key: upKey,
         fragments: list,
       };
       rememberLastRun("/resolve", reqBody);
@@ -2164,6 +2191,7 @@
       markRan();
       renderFriendly();
       await askDownstream((window.__uploadedEntityType || "user") === "product" ? "search" : "otp", { auto: true });
+      fState.lastCompletedKey = upKey;
     } catch (error) {
       setStatus(`Upload resolve failed (fail-closed): ${error.message}`);
       if (auto) feed(`Auto run failed (fail-closed): ${error.message} — nothing published`);
@@ -2445,6 +2473,19 @@
     renderAgents(AGENTS.map((a) => ({ ...a, status: "", badge: "QUEUED" })));
   }
 
+  // UX 2.5: switching the active profile/dataset wipes the Step 2
+  // derivation view (agent cards, telemetry ticker, reasoning rows) so
+  // stale results from the previous dataset never linger next to the
+  // newly loading fragments. Pure UI reset — no ledger or engine state.
+  function resetDerivationPanel() {
+    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
+    try { window.MosaicChat.clear(); } catch (error) { /* best-effort */ }
+    try {
+      const host = document.getElementById("f-reasoning");
+      if (host) host.innerHTML = "";
+    } catch (error) { /* best-effort */ }
+  }
+
   function renderAgentsRunning() {
     renderAgents(AGENTS.map((a) => ({ ...a, status: "running", badge: "RUNNING" })));
   }
@@ -2496,7 +2537,7 @@
   // Every shard below is real demo data with explicit provenance; the engine
   // still decides what publishes. Nothing is invented or merged by hand.
   async function enrichShard(kind) {
-    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
+    resetDerivationPanel();
     if (kind === "ticket") {
       switchEntity("user/P-001");
       ticketBox.checked = true;
@@ -2539,6 +2580,7 @@
   // UX 2.5 add-shard: merge an uploaded file into the ACTIVE profile.
   async function runAddShard(input) {
     if (!input.files || !input.files.length) return;
+    resetDerivationPanel();
     const fileName = input.files[0].name;
     const uploaded = await uploadFile(true, input);
     const incoming = (uploaded && uploaded.fragments) || [];
@@ -2615,7 +2657,7 @@
   }
 
   async function runReplay() {
-    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
+    resetDerivationPanel();
     const last = fState.lastRun;
     if (!last) {
       setStatus("Nothing to replay yet — run a dataset first.");
@@ -2643,7 +2685,7 @@
         await askDownstream(agent, { auto: true });
       }
     } catch (error) {
-      renderAgentsReset();
+      resetDerivationPanel();
       setStatus(`Replay failed (fail-closed): ${error.message}`);
       feed(`Replay failed (fail-closed): ${error.message}`);
     } finally {
@@ -2745,6 +2787,13 @@
 
   async function act2() {
     if (!runGuard("Hidden connection")) return;
+    if (fState.lastCompletedKey === "act2-hidden-v1") {
+      try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["Hidden connection already assembled — nothing re-derived."] }); } catch (error) { /* best-effort */ }
+      setStatus("Hidden connection already assembled — nothing re-derived.");
+      fState.working = false;
+      renderFStatus();
+      return;
+    }
     try {
     setScenario("act2");
     window.MosaicChat.add({
@@ -2798,6 +2847,7 @@
     announceStewards(payload.steward_queue || []);
     await askDownstream("otp", { auto: true });
     setStatus(`Act 2 complete — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}.`);
+    fState.lastCompletedKey = key;
     } finally {
       fState.working = false;
       renderFStatus();
@@ -2921,7 +2971,7 @@
   }
 
   function runScenario(id) {
-    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
+    resetDerivationPanel();
     if (id === "scene0") return actScene0();
     if (id === "act1") return act1();
     if (id === "act2") return act2();
@@ -3412,6 +3462,7 @@
   }
 
   async function loadScene0() {
+    resetDerivationPanel();
     if (fState.scene0 && fState.scene0.decided) {
       // Re-selecting the sample always re-runs (UX 13.1 rule 2).
       stageScene0File();
@@ -3549,6 +3600,14 @@
     // proving approval alone publishes nothing.
     if (note) note.textContent = "Config approved — proving no golden publishes without the engine…";
     if (!runGuard("Scene 0 build")) return;
+    const scene0Key = `scene0-v${(fState.scene0 && fState.scene0.version) || 1}`;
+    if (fState.lastCompletedKey === scene0Key) {
+      try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["Scene 0 already built from the approved config — nothing re-derived."] }); } catch (error) { /* best-effort */ }
+      setStatus("Scene 0 already built — nothing re-derived.");
+      fState.working = false;
+      renderFStatus();
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       const documents = scene0Documents();
@@ -3557,8 +3616,8 @@
       renderFragments();
       renderFriendly();
       const scene0Body = {
-        work_id: `ui-scene0-${Date.now()}`,
-        idempotency_key: `ui-scene0-${Date.now()}`,
+        work_id: scene0Key,
+        idempotency_key: scene0Key,
         dataset: { documents },
       };
       rememberLastRun("/build", scene0Body);
@@ -3569,6 +3628,7 @@
       });
       await afterBuild(payload, false);
       feed(`Scene 0 built — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}. Config approval published nothing; the engine did.`);
+      fState.lastCompletedKey = scene0Key;
     } catch (error) {
       setStatus(`Scene 0 build failed (fail-closed): ${error.message}`);
       feed(`Scene 0 build failed (fail-closed): ${error.message} — nothing published`);
@@ -3921,6 +3981,7 @@
       setStatus("Loop Paused: file staged — click Upload to run manually.");
       return;
     }
+    resetDerivationPanel();
     const uploaded = await uploadFile(true);
     if (uploaded && (window.__uploadedFragments || []).length) {
       await resolveUpload(true);
@@ -3960,6 +4021,7 @@
   // friendly view has no visible status line, so silence is not an option.
   async function runIntakeFile(input) {
     if (!input.files || !input.files.length) return;
+    resetDerivationPanel();
     const fileName = input.files[0].name;
     const uploaded = await uploadFile(true, input);
     const parsed = uploaded ? uploaded.fragments_parsed || 0 : 0;
