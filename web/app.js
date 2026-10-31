@@ -1564,10 +1564,27 @@
     }
   }
 
-  async function resolve(auto) {
-    resolveBtn.disabled = true;
+  // Single-flight guard: a second click while deriving would launch a
+  // duplicate pipeline (duplicate transcript rows and duplicate gaps).
+  // Returns true when this call owns the run; the owner must reset
+  // fState.working in a finally block. Feedback goes to the ticker,
+  // which is always visible (the status line is detail-view only).
+  function runGuard(label) {
+    if (fState.working) {
+      setStatus(`${label || "A run"} is already in progress — wait for it to finish before starting another.`);
+      try {
+        window.MosaicChat.add({ role: "downstream", title: "Already running", lines: ["A run is already in progress — wait for it to finish before starting another."] });
+      } catch (error) { /* ticker is best-effort, never blocking */ }
+      return false;
+    }
     fState.working = true;
     renderFStatus();
+    return true;
+  }
+
+  async function resolve(auto) {
+    resolveBtn.disabled = true;
+    if (!runGuard("Resolve")) { resolveBtn.disabled = false; return; }
     try {
       const { entityType, entityId } = currentEntity();
       const list = activeFragments();
@@ -1971,8 +1988,7 @@
   }
 
   async function buildMosaic(auto) {
-    fState.working = true;
-    renderFStatus();
+    if (!runGuard("Build")) return;
     const buildBtn = $("build");
     const prevLabel = buildBtn ? buildBtn.textContent : "";
     if (buildBtn) { buildBtn.disabled = true; buildBtn.textContent = "Building…"; }
@@ -2102,10 +2118,9 @@
     // must describe those — not the fixture fragments for this entity.
     fragments = list.map((f) => Object.assign({}, f, { _uploaded: true }));
     tickets = [];
-    fState.working = true;
+    if (!runGuard("Upload resolve")) return;
     renderFStakes();
     renderFPieces();
-    renderFStatus();
     try {
       const { entityId } = currentEntity();
       const key = `ui-upload-${Date.now()}`;
@@ -2607,6 +2622,7 @@
       feed("Replay requested with no prior run; nothing re-derived.");
       return;
     }
+    if (!runGuard("Replay")) return;
     renderAgentsRunning();
     feed("Replay: re-running the last assembly through all 5 agents + gate.");
     try {
@@ -2630,6 +2646,9 @@
       renderAgentsReset();
       setStatus(`Replay failed (fail-closed): ${error.message}`);
       feed(`Replay failed (fail-closed): ${error.message}`);
+    } finally {
+      fState.working = false;
+      renderFStatus();
     }
   }
 
@@ -2725,6 +2744,8 @@
   }
 
   async function act2() {
+    if (!runGuard("Hidden connection")) return;
+    try {
     setScenario("act2");
     window.MosaicChat.add({
       role: "downstream",
@@ -2777,6 +2798,10 @@
     announceStewards(payload.steward_queue || []);
     await askDownstream("otp", { auto: true });
     setStatus(`Act 2 complete — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}.`);
+    } finally {
+      fState.working = false;
+      renderFStatus();
+    }
   }
 
   async function act3() {
@@ -3523,8 +3548,7 @@
     // 2-second visual pause: config approval must visibly precede any golden,
     // proving approval alone publishes nothing.
     if (note) note.textContent = "Config approved — proving no golden publishes without the engine…";
-    fState.working = true;
-    renderFStatus();
+    if (!runGuard("Scene 0 build")) return;
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       const documents = scene0Documents();
@@ -3549,9 +3573,11 @@
       setStatus(`Scene 0 build failed (fail-closed): ${error.message}`);
       feed(`Scene 0 build failed (fail-closed): ${error.message} — nothing published`);
     }
+    finally {
+      fState.working = false;
+      renderFStatus();
+    }
     if (fState.scene0) fState.scene0.done = true;
-    fState.working = false;
-    renderFStatus();
   }
 
   async function enqueueCurrentView() {
