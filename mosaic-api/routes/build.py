@@ -388,6 +388,19 @@ async def _build_one_cluster(
         goldens, conflicts, stewards, verdict = _replay_stored(ctx, key, payload_hash, stored)
         proposal_info["replayed"] = True
         proposal_info["decision_id"] = stored["decision_id"]
+        # Replays skip the proposer, but the ledger keeps the original
+        # sub-agent trace: re-attach it so inspectors and the agent ribbon
+        # show the real derivation instead of an empty run.
+        try:
+            for record in ledger.fetch_agent_traces(ctx.settings.database_path, stored["decision_id"]):
+                payload = (record or {}).get("payload") or {}
+                steps = payload.get("trace") or []
+                if record.get("kind") == "subagents" and isinstance(steps, list) and steps:
+                    proposal_info["trace"] = steps
+                    proposal_info["subagent_trace"] = steps
+                    break
+        except Exception:
+            pass
         return goldens, conflicts, stewards, verdict, proposal_info
     proposal_info.update(
         {

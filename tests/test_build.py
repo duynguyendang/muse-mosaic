@@ -230,3 +230,26 @@ def test_downstream_two_answers(api_client):
     assert payload["answer"] == "no_trusted_value"
     assert payload["value"] is None
     assert "fallback" in payload and payload["fallback"]
+
+
+def test_build_replay_reattaches_subagent_trace(api_client):
+    """Idempotent replay returns the original sub-agent trace.
+
+    Regression: replayed builds omitted the proposer trace, so the agent
+    ribbon and inspector showed an empty run for replayed decisions.
+    """
+    first = build(api_client, hidden_documents(), "build-replay-trace")
+    assert first.status_code == 200, first.text
+    first_proposals = first.json().get("proposals", [])
+    assert first_proposals, "expected proposer bundles on first build"
+    first_trace = first_proposals[0].get("subagent_trace") or first_proposals[0].get("trace") or []
+    assert first_trace, "expected a non-empty sub-agent trace on first build"
+
+    second = build(api_client, hidden_documents(), "build-replay-trace")
+    assert second.status_code == 200, second.text
+    second_proposals = second.json().get("proposals", [])
+    assert any(p.get("replayed") for p in second_proposals), "expected a replayed bundle"
+    replayed = [p for p in second_proposals if p.get("replayed")]
+    replay_trace = replayed[0].get("subagent_trace") or replayed[0].get("trace") or []
+    assert replay_trace, "replayed build must carry the original sub-agent trace"
+    assert {s.get("agent") for s in replay_trace} == {s.get("agent") for s in first_trace}
