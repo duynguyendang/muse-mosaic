@@ -158,13 +158,30 @@
     if (empty) empty.hidden = false;
   }
 
+  // One card per question: stale duplicate steward rows from earlier
+  // derivations of the same conflict pile up in the ledger. The UI asks
+  // each (record, field) question once — deciding it clears every sibling
+  // (backend supersedes on decide). The merged count stays visible so the
+  // collapse is honest, never silent.
+  function dedupStewards(items) {
+    const seen = new Map();
+    for (const item of (items || [])) {
+      const k = `${item.entity_type || ""}/${item.entity_id || ""}/${item.attribute || ""}`;
+      if (!seen.has(k)) seen.set(k, item);
+    }
+    const unique = [...seen.values()];
+    return { unique, merged: (items || []).length - unique.length };
+  }
+
   function setFriendlyFromResolve(payload) {
     const sim = $("f-simulation");
     if (sim) sim.hidden = true;
+    const deduped = dedupStewards(payload.steward_queue || []);
     lastFriendly = {
       verdict: payload.verdict,
       golden: payload.golden || null,
-      steward_queue: payload.steward_queue || [],
+      steward_queue: deduped.unique,
+      steward_merged: deduped.merged,
       conflicts: payload.conflicts || [],
       decision_id: payload.decision_id,
       policy_version: payload.policy_version,
@@ -198,10 +215,12 @@
       loop.taxonomy = payload.taxonomy_version;
       renderTaxonomyBadge();
     }
+    const deduped = dedupStewards(payload.steward_queue || []);
     lastFriendly = {
       verdict: payload.verdict,
       golden: first,
-      steward_queue: payload.steward_queue || [],
+      steward_queue: deduped.unique,
+      steward_merged: deduped.merged,
       conflicts: payload.conflicts || [],
       decision_id: payload.decision_id,
       policy_version: payload.policy_version_user,
@@ -843,7 +862,18 @@
         const head = `<div class="f-error-record-title">`
           + `<span class="f-error-badge">⚠ RECORD: ${esc(name)} (${esc(group.entityType)} ${esc(group.entityId)})</span>`
           + `</div>`;
-        const cards = group.issues.map((item, idx) => {
+        // One card per field: the summary carries every still-pending row,
+        // including stale duplicates from earlier derivations. Collapse to
+        // the first ask per attribute; deciding it supersedes the rest.
+        const seenAttrs = new Set();
+        const issues = (group.issues || []).filter((item) => {
+          const k = item.attribute || "";
+          if (seenAttrs.has(k)) return false;
+          seenAttrs.add(k);
+          return true;
+        });
+        const mergedHere = (group.issues || []).length - issues.length;
+        const cards = issues.map((item, idx) => {
         const attr = item.attribute;
         const plainName = plainAttr(attr);
         const matching = pool.filter((fr) => fr.attribute === attr);
@@ -897,7 +927,10 @@
           + `<div style="margin-top: 6px;"><button class="btn-how" data-f-gap-explain="${esc(item.steward_id)}" data-gap-decision="${esc(item.decision_id || "")}" type="button">How do we know?</button></div>`
           + `</div>`;
         }).join("");
-        return head + cards;
+        const mergeNote = mergedHere > 0
+          ? `<div class="muted" style="margin: 4px 0 8px;">${mergedHere} duplicate ask${mergedHere === 1 ? "" : "s"} for this record merged into one card — deciding once clears them all.</div>`
+          : "";
+        return head + cards + mergeNote;
       }).join("");
     }
 
@@ -1359,7 +1392,8 @@
     lastFriendly = {
       verdict: pending.length ? "escalated" : golden ? "published" : "denied",
       golden,
-      steward_queue: pending,
+      steward_queue: dedupStewards(pending).unique,
+      steward_merged: dedupStewards(pending).merged,
       conflicts: [],
       decision_id: (golden && golden.decision_id) || null,
       policy_version: (golden && golden.policy_version) || null,
@@ -1628,9 +1662,9 @@
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
-      MosaicDrawers.renderSteward(drawerCtx, payload.steward_queue || []);
+      MosaicDrawers.renderSteward(drawerCtx, dedupStewards(payload.steward_queue || []).unique);
       renderMosaic(payload);
-      renderEscalatedCount((payload.steward_queue || []).length);
+      renderEscalatedCount(dedupStewards(payload.steward_queue || []).unique.length);
       const verdictCap = payload.verdict.charAt(0).toUpperCase() + payload.verdict.slice(1);
       if (auto) {
         noteAutoRun(payload);
@@ -2078,8 +2112,8 @@
         renderEngine({ ...payload, golden: first, policy_version: payload.policy_version_user });
         renderMosaic({ ...payload, golden: first, proposal: { attributes: {} } });
       }
-      MosaicDrawers.renderSteward(drawerCtx, payload.steward_queue || []);
-      renderEscalatedCount((payload.steward_queue || []).length);
+      MosaicDrawers.renderSteward(drawerCtx, dedupStewards(payload.steward_queue || []).unique);
+      renderEscalatedCount(dedupStewards(payload.steward_queue || []).unique.length);
       renderMatchingEngine(payload.splink);
       if (payload.splink && payload.splink.status === "ok") {
         const nPairs = (payload.splink.pairs || []).length;
@@ -2171,9 +2205,9 @@
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
-      MosaicDrawers.renderSteward(drawerCtx, payload.steward_queue || []);
+      MosaicDrawers.renderSteward(drawerCtx, dedupStewards(payload.steward_queue || []).unique);
       renderMosaic(payload);
-      renderEscalatedCount((payload.steward_queue || []).length);
+      renderEscalatedCount(dedupStewards(payload.steward_queue || []).unique.length);
       const verdictCap = payload.verdict.charAt(0).toUpperCase() + payload.verdict.slice(1);
       if (auto) {
         noteAutoRun(payload);
@@ -2408,7 +2442,11 @@
   }
 
   function announceStewards(stewardQueue) {
+    const seen = new Set();
     (stewardQueue || []).forEach((item) => {
+      const k = `${item.entity_type || ""}/${item.entity_id || ""}/${item.attribute || ""}`;
+      if (seen.has(k)) return;
+      seen.add(k);
       const node = window.MosaicChat.add({
         role: "steward",
         title: "Human Steward (steward-001)",

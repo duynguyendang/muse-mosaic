@@ -359,15 +359,26 @@
   }
 
   function renderSteward(ctx, items) {
-    ctx.setPendingAll(items);
-    ctx.setLastStewardItems(items);
-    ctx.renderEscalatedCount(items.length);
-    if (!items.length) {
+    // One card per question: the ledger holds stale duplicate rows from
+    // earlier derivations of the same conflict. Collapse to the first ask
+    // per (record, field) — deciding it supersedes the siblings.
+    const seen = new Set();
+    const list = (items || []).filter((item) => {
+      const k = `${item.entity_type || ""}/${item.entity_id || ""}/${item.attribute || ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const merged = (items || []).length - list.length;
+    ctx.setPendingAll(list);
+    ctx.setLastStewardItems(list);
+    ctx.renderEscalatedCount(list.length);
+    if (!list.length) {
       ctx.stewardBody.innerHTML = `<div class="card"><span class="muted">Queue empty — nothing escalated.</span></div>`;
       $("steward-drawer-list").innerHTML = `<div class="card"><span class="muted">No pending steward items. All escalated attributes have been decided.</span></div>`;
       return;
     }
-    const first = items[0];
+    const first = list[0];
     const rule = first.rule_fired || first.reason_code || "escalated";
     const firstFrag = ctx.fragmentForAttribute ? ctx.fragmentForAttribute(first.attribute) : null;
     const firstSrc = firstFrag && firstFrag.source === "ticket"
@@ -376,14 +387,15 @@
     const what = `${firstSrc ? firstSrc + " " : ""}${plainAttr(first.attribute)}`;
     ctx.stewardBody.innerHTML = `
       <div class="exception-card" role="alert">
-        <div>⚠ ${items.length} escalation${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} a human — ${esc(what)} — ${esc(rule)} — Steward Queue (${items.length})</div>
+        <div>⚠ ${list.length} escalation${list.length > 1 ? "s" : ""} need${list.length > 1 ? "" : "s"} a human — ${esc(what)} — ${esc(rule)} — Steward Queue (${list.length})</div>
         <div class="steward-actions" style="margin-top:0">
           <button id="exception-review" type="button">Review in Steward Queue</button>
         </div>
       </div>`;
     $("exception-review").addEventListener("click", () => openDrawer());
     const drawerList = $("steward-drawer-list");
-    drawerList.innerHTML = items.map((item) => stewardCardHtml(ctx, item, false)).join("");
+    drawerList.innerHTML = list.map((item) => stewardCardHtml(ctx, item, false)).join("")
+      + (merged > 0 ? `<div class="card"><span class="muted">${merged} duplicate ask${merged === 1 ? "" : "s"} merged — deciding once clears them all.</span></div>` : "");
     bindStewardActions(ctx, drawerList);
   }
 
