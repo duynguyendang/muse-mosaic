@@ -31,7 +31,7 @@
   function valuesForAttribute(ctx, attribute) {
     const seen = new Map();
     ctx.activeFragments()
-      .filter((f) => f.attribute === attribute)
+      .filter((f) => window.MosaicConfig.canonAttr(f.attribute) === attribute)
       .forEach((f) => {
         if (!seen.has(f.value)) seen.set(f.value, f.source);
       });
@@ -50,17 +50,63 @@
     return `<div class="f-steward-q">${esc(what)}</div>` + ownerLinesHtml(item);
   }
 
-  function afterApprove(ctx, payload, id) {
+  // Same value, different spelling? Compare digits for numeric fields and
+  // trimmed text otherwise — used only to word a status line honestly.
+  function sameValue(a, b) {
+    const x = String(a == null ? "" : a).trim();
+    const y = String(b == null ? "" : b).trim();
+    if (!x || !y) return false;
+    const dx = x.replace(/\D+/g, "");
+    const dy = y.replace(/\D+/g, "");
+    if (dx && dy && dx.length > 3 && dy.length > 3) return dx === dy;
+    return x.toLowerCase() === y.toLowerCase();
+  }
+
+  async function afterApprove(ctx, payload, id, chosenValue) {
+    // Look the item up first: setFriendlyFromResolve below rebuilds the open
+    // queue, and the row just decided is no longer in it.
+    const item = stewardItemById(ctx, id) || {};
     ctx.lastResolve = payload;
     ctx.setFriendlyFromResolve(payload);
     ctx.renderFriendly();
     if (ctx.refreshDatasets) ctx.refreshDatasets();
     ctx.renderEngine(payload);
-    ctx.renderSteward(ctx, payload.steward_queue || []);
+    // Only what is still open: the approved row and its superseded siblings
+    // are still "pending" in this response's queue by construction.
+    const open = ctx.openQueueOf ? ctx.openQueueOf(payload) : (payload.steward_queue || []);
+    // renderSteward is a local of this module (ctx does not carry it —
+    // calling ctx.renderSteward threw and silently skipped every refresh
+    // below: count, status, ribbon, reasoning and downstream).
+    renderSteward(ctx, open);
     ctx.renderMosaic(payload);
-    ctx.renderEscalatedCount((payload.steward_queue || []).length);
-    ctx.setStatus(`Steward approved ${id}; re-derived as a new fact.`);
-    ctx.feed(`Steward approved ${id} as a new fact — re-derived, Decision: ${payload.decision_id}`);
+    ctx.renderEscalatedCount(open.length);
+    // Say what became of the value the steward picked. The decision is a new
+    // fact and the picture is re-derived from policy, so the two can differ;
+    // leaving that unstated made the click look ignored.
+    const chosen = String(chosenValue || "").trim();
+    const goldenField = ((payload.golden || {}).attributes || {})[item.attribute || ""];
+    const nowValue = goldenField && goldenField.value != null ? String(goldenField.value) : "";
+    let line = `Steward approved ${item.attribute ? plainAttr(item.attribute) : "the field"}`
+      + (chosen ? ` = ${chosen}` : "")
+      + ` — re-derived as a new fact, Decision ${payload.decision_id}, verdict ${payload.verdict || "re-derived"}.`;
+    if (chosen && nowValue && !sameValue(chosen, nowValue)) {
+      line += ` The picture now uses ${nowValue} (rule ${goldenField.rule_fired || "R1"});`
+        + " your value is kept as a rival fact, not deleted.";
+    }
+    ctx.feed(line);
+    // Refresh the ribbon, reasoning and downstream only for the record the
+    // screen is showing; approving another record must not repaint this one
+    // with a decision that does not belong to it.
+    try {
+      const cur = ctx.currentEntity();
+      const sameRecord = payload.entity_type === cur.entityType && payload.entity_id === cur.entityId;
+      if (sameRecord && ctx.renderRunSurfaces) await ctx.renderRunSurfaces(payload);
+    } catch (error) {
+      console.error("steward approve surface refresh failed:", error);
+    }
+    // Last: the downstream check writes its own status, and what happened to
+    // the steward's decision is the line that must stay on screen.
+    ctx.setStatus(line);
   }
 
   async function doApprove(ctx, id, value, errEl) {
@@ -70,10 +116,17 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value }),
       });
-      afterApprove(ctx, payload, id);
+      await afterApprove(ctx, payload, id, value);
     } catch (error) {
-      errEl.hidden = false;
-      errEl.textContent = `Approve failed (fail-closed): ${error.message}`;
+      // The confirm card may already be re-rendered away by the refresh, so
+      // the error must also reach the console and the status line — never
+      // vanish silently after a decision was actually taken.
+      console.error("steward approve post-processing failed:", error);
+      ctx.setStatus(`Approve response processed with an error (fail-closed): ${error.message}`);
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = `Approve failed (fail-closed): ${error.message}`;
+      }
     }
   }
 
@@ -283,7 +336,16 @@
         const set = new Set(keys);
         items = items.filter((s) => set.has(`${s.entity_type}/${s.entity_id}`));
       }
-      ctx.renderEscalatedCount(items.length);
+      // Count what the drawer shows: one item per record + field, however
+      // many runs filed the same question.
+      const seen = new Set();
+      const distinct = items.filter((s) => {
+        const k = `${s.entity_type}/${s.entity_id}/${s.attribute || ""}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      ctx.renderEscalatedCount(distinct.length);
     } catch (error) { /* count stays as-is when the ledger is unreachable */ }
   }
 

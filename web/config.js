@@ -38,9 +38,58 @@
     order_id: "Order",
   };
 
+  // One canonical field per question. The pinned taxonomy alias table
+  // (/taxonomy/{entity_type}) maps raw dataset headers ("dien_thoai",
+  // "reviewer", "full_name") to the field the engine derives. Without it the
+  // UI showed the same field under two names and produced empty decision
+  // cards that could never be answered.
+  const ATTR_CANON = {};
+  let aliasesLoaded = false;
+
+  function aliasesReady() {
+    return aliasesLoaded;
+  }
+
+  function setAttributeAliases(entityType, aliases) {
+    aliasesLoaded = true;
+    Object.entries(aliases || {}).forEach(([canonical, raws]) => {
+      ATTR_CANON[String(canonical).toLowerCase()] = canonical;
+      (raws || []).forEach((raw) => {
+        ATTR_CANON[String(raw).toLowerCase()] = canonical;
+      });
+    });
+  }
+
+  function canonAttr(attribute) {
+    return ATTR_CANON[String(attribute || "").toLowerCase()] || attribute;
+  }
+
+  // Raw header -> canonical field, once aliases are loaded. Returns the
+  // mapped fragments plus the attributes that have no canonical mapping, so
+  // a caller can block honestly rather than post something the policy will
+  // reject. Raw names are never dropped silently — they are reported.
+  function toCanonicalFragments(list) {
+    const allowed = new Set(Object.keys(ATTR_CANON));
+    const mapped = [];
+    const unmapped = new Set();
+    const renamed = [];
+    (list || []).forEach((f) => {
+      const raw = String(f.attribute || "");
+      const canonical = canonAttr(raw);
+      if (!allowed.has(String(canonical).toLowerCase())) {
+        unmapped.add(raw || "(blank)");
+        return;
+      }
+      if (raw !== canonical) renamed.push(`${raw} → ${canonical}`);
+      mapped.push(Object.assign({}, f, { attribute: canonical }));
+    });
+    return { mapped, unmapped: [...unmapped], renamed };
+  }
+
   function plainAttr(attribute) {
-    if (ATTR_PLAIN[attribute]) return ATTR_PLAIN[attribute];
-    const base = String(attribute || "?").replace(/[_-]+/g, " ").trim() || "?";
+    const canonical = canonAttr(attribute);
+    if (ATTR_PLAIN[canonical]) return ATTR_PLAIN[canonical];
+    const base = String(canonical || "?").replace(/[_-]+/g, " ").trim() || "?";
     return base.charAt(0).toUpperCase() + base.slice(1);
   }
 
@@ -103,6 +152,10 @@
     RULE_PLAIN,
     plainSource,
     plainAttr,
+    canonAttr,
+    setAttributeAliases,
+    aliasesReady,
+    toCanonicalFragments,
     rulePlain,
     esc,
   };

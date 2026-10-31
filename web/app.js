@@ -17,6 +17,7 @@
   const esc = window.MosaicConfig.esc;
   const plainSource = window.MosaicConfig.plainSource;
   const plainAttr = window.MosaicConfig.plainAttr;
+  const canonAttr = window.MosaicConfig.canonAttr;
   const SRC_COLOR = window.MosaicConfig.SRC_COLOR;
   const entitySel = $("entity");
   const ticketBox = $("with-ticket");
@@ -173,10 +174,25 @@
     return { unique, merged: (items || []).length - unique.length };
   }
 
+  // Field labels are pluralised properly in questions (a field ending in
+  // "s", "x", "ch" or "sh" takes "es"; consonant + "y" takes "ies").
+  function pluralize(word) {
+    const w = String(word || "");
+    if (/(s|x|z|ch|sh)$/i.test(w)) return w + "es";
+    if (/[^aeiou]y$/i.test(w)) return w.slice(0, -1) + "ies";
+    return w + "s";
+  }
+
   function setFriendlyFromResolve(payload) {
     const sim = $("f-simulation");
     if (sim) sim.hidden = true;
-    const deduped = dedupStewards(payload.steward_queue || []);
+    // A steward decision answers one (record, field): this response still
+    // lists the approved row and its siblings as pending — the ledger closes
+    // them right after the derive — and a replay can echo rows that are no
+    // longer open. openRowsOf keeps only what actually needs a person, so
+    // the drawer, the sidebar count and the Step 2 badge never show an
+    // answered question.
+    const deduped = dedupStewards(openRowsOf(payload));
     lastFriendly = {
       verdict: payload.verdict,
       golden: payload.golden || null,
@@ -191,6 +207,17 @@
     window.__lastGolden = payload.golden || null;
     window.__lastProposals = payload.proposal ? [payload.proposal] : [];
     window.__lastGoldens = payload.golden ? [payload.golden] : [];
+    // Drop the cached golden for every record this run could have changed:
+    // it is refetched on the next refresh, so a field the engine just
+    // escalated can never be judged "already decided" by an older answer.
+    if (fState.recordGoldens) {
+      const runKey = payload.golden
+        ? `${payload.golden.entity_type}/${payload.golden.entity_id}`
+        : null;
+      const curKey = `${payload.entity_type || currentEntity().entityType}/${payload.entity_id || currentEntity().entityId}`;
+      delete fState.recordGoldens[curKey];
+      if (runKey && runKey !== curKey) delete fState.recordGoldens[runKey];
+    }
     // Isolation: a resolve run covers exactly the current record.
     try {
       const { entityType, entityId } = currentEntity();
@@ -215,7 +242,7 @@
       loop.taxonomy = payload.taxonomy_version;
       renderTaxonomyBadge();
     }
-    const deduped = dedupStewards(payload.steward_queue || []);
+    const deduped = dedupStewards(openRowsOf(payload));
     lastFriendly = {
       verdict: payload.verdict,
       golden: first,
@@ -229,6 +256,14 @@
     fState.splinkPairs = (payload.splink && payload.splink.pairs) || [];
     fState.splinkClusters = (payload.splink && payload.splink.clusters) || [];
     fState.ran = true;
+    // Cached goldens for the records this build just derived are now stale
+    // (refetched next refresh) — a field the engine just escalated must not
+    // be judged decided by an older answer.
+    if (fState.recordGoldens) {
+      for (const g of payload.goldens || []) {
+        if (g && g.entity_type && g.entity_id) delete fState.recordGoldens[`${g.entity_type}/${g.entity_id}`];
+      }
+    }
     refreshDatasetData().catch(() => {});
     // Snapshot built fragments per golden entity so record switching can
     // restore pieces without re-running the pipeline (Invariant A).
@@ -341,13 +376,15 @@
     }
     const valuesByAttr = {};
     list.forEach((f) => {
-      (valuesByAttr[f.attribute] = valuesByAttr[f.attribute] || new Set()).add(f.value);
+      const attr = canonAttr(f.attribute);
+      (valuesByAttr[attr] = valuesByAttr[attr] || new Set()).add(String(f.value));
     });
     const bySource = {};
     list.forEach((f) => { (bySource[f.source] = bySource[f.source] || []).push(f); });
     box.innerHTML = Object.entries(bySource).map(([source, arr]) => {
       const lines = arr.map((f) => {
-        const conflict = (valuesByAttr[f.attribute] || new Set()).size > 1
+        const attr = canonAttr(f.attribute);
+        const conflict = (valuesByAttr[attr] || new Set()).size > 1
           ? ` <span class="f-conflict">Different values — this is what we must decide</span>` : "";
         // Live survivorship badges (Invariant D): after a run, every piece
         // shows its live verdict. Matched on exact attribute + value only —
@@ -363,7 +400,7 @@
               matchFactId(v.winner_fact_id) || (v.loser_fact_ids || []).some(matchFactId)
             )
           );
-          const field = byFactId || (golden && golden[f.attribute]);
+          const field = byFactId || (golden && (golden[attr] || golden[f.attribute]));
           if (field && typeof field === "object" && field.value != null) {
             const rule = field.rule_fired || "R1";
             const isWin = byFactId
@@ -374,7 +411,7 @@
               : ` <span class="tag">Tombstone → Survivor · ${esc(rule)}</span>`;
           } else {
             const item = ((lastFriendly && lastFriendly.steward_queue) || [])
-              .find((s) => s.attribute === f.attribute);
+              .find((s) => canonAttr(s.attribute) === attr);
             if (item) {
               survive = ` <span class="tag">⚠ Escalated · ${esc(item.rule_fired || item.reason_code || "R2")}</span>`;
             }
@@ -689,7 +726,7 @@
     const uniqueSources = [...new Set(list.map((f) => f.source).filter(Boolean))];
     const srcNames = uniqueSources.map((s) => plainSource(s));
     const totalPieces = list.length;
-    const distinctAttrs = new Set(list.map((f) => f.attribute).filter(Boolean));
+    const distinctAttrs = new Set(list.map((f) => canonAttr(f.attribute)).filter(Boolean));
     const verifiedCount = list.filter((f) => f.verified).length;
     const clusterCount = (fState.splinkClusters && fState.splinkClusters.length)
       || (fState.ran && fState.activeKeys && fState.activeKeys.length ? fState.activeKeys.length : 0);
@@ -719,6 +756,102 @@
       return frag ? String(frag.value) : "";
     };
     const { entityType: activeType, entityId: activeId } = currentEntity();
+
+    // A question is live only when this record's own pieces still carry
+    // something the engine has not answered — see liveQuestion below.
+    // Pending rows left over from an earlier dataset that used the same
+    // record id are real ledger rows, but they are not questions about these
+    // pieces — they are listed separately, never as empty cards.
+    const goldenFor = (entityType, entityId) => {
+      const key = `${entityType}/${entityId}`;
+      // Freshest first: the run that is on screen is the newest derivation
+      // for this record. A cached golden is only a fallback — preferring it
+      // made a field that the engine just escalated look "already decided",
+      // which hid the question the steward actually has to answer.
+      const g = f && f.golden;
+      if (g && `${g.entity_type}/${g.entity_id}` === key) return g;
+      if (fState.recordGoldens && fState.recordGoldens[key]) return fState.recordGoldens[key];
+      const cur = currentEntity();
+      if (entityType === cur.entityType && entityId === cur.entityId) return g || null;
+      return null;
+    };
+    const decidedAttrs = (entityType, entityId) => {
+      const attrs = (goldenFor(entityType, entityId) || {}).attributes || {};
+      const out = new Set();
+      Object.entries(attrs).forEach(([name, v]) => {
+        if (v && (typeof v !== "object" || v.value != null)) out.add(canonAttr(name));
+      });
+      return out;
+    };
+    // Pieces of one record: the ledger's own list when it has one (even an
+    // empty one — that is a real answer, "no pieces known for this record").
+    // Only the record on screen may borrow the fragment list currently
+    // loaded, and only while the ledger holds nothing for it; borrowing
+    // another dataset's pieces is what made cards ask about values this
+    // record never had.
+    const poolFor = (entityType, entityId) => {
+      const key = `${entityType}/${entityId}`;
+      const cached = (fState.recordFragments || {})[key];
+      const cur = currentEntity();
+      let pool;
+      if (Array.isArray(cached)) {
+        pool = cached.length ? cached
+          : (entityType === cur.entityType && entityId === cur.entityId ? activeFragments() : []);
+      } else {
+        pool = activeFragments();
+      }
+      return pool.filter((fr) => (fr.entity_type || entityType) === entityType);
+    };
+    const valuesFor = (entityType, entityId, attribute) => {
+      const attr = canonAttr(attribute);
+      const seen = new Map();
+      poolFor(entityType, entityId).forEach((fr) => {
+        if (canonAttr(fr.attribute) !== attr) return;
+        const value = fr.value == null ? "" : String(fr.value);
+        if (!value || seen.has(value)) return;
+        seen.set(value, fr);
+      });
+      return [...seen.values()];
+    };
+    // What the engine has already ruled on for a field: the published
+    // winner plus every rival kept as a tombstone. A piece carrying one of
+    // those values has been answered; a piece carrying anything else is a
+    // value the engine has never adjudicated.
+    const adjudicatedValues = (entityType, entityId, attribute) => {
+      const attr = canonAttr(attribute);
+      const pool = poolFor(entityType, entityId);
+      const golden = goldenFor(entityType, entityId);
+      const attrs = (golden && golden.attributes) || {};
+      const out = new Set();
+      let decided = false;
+      Object.entries(attrs).forEach(([name, v]) => {
+        if (canonAttr(name) !== attr) return;
+        if (v && typeof v === "object" && v.value != null) {
+          decided = true;
+          out.add(String(v.value));
+        }
+        const losers = (v && v.loser_fact_ids) || [];
+        losers.forEach((fid) => {
+          const lf = fragmentForFactId(fid, attr, pool);
+          if (lf) out.add(String(lf.value));
+        });
+      });
+      return { decided, values: out };
+    };
+    // A pending row is a live question only when this record's own pieces
+    // carry something the engine has not answered: either the field was
+    // never proven, or a piece holds a value outside the winner/tombstone
+    // set (a new claim that re-opens the question). Rows about fields whose
+    // every piece value was already ruled on are history — listed once,
+    // never as a decision card.
+    const liveQuestion = (entityType, entityId, item) => {
+      const attr = canonAttr(item.attribute);
+      const pieces = valuesFor(entityType, entityId, attr);
+      if (!pieces.length) return false;
+      if (!decidedAttrs(entityType, entityId).has(attr)) return true;
+      const { values } = adjudicatedValues(entityType, entityId, attr);
+      return pieces.some((fr) => !values.has(String(fr.value)));
+    };
 
     // 1. Initial pre-run state
     if (!fState.ran || !f) {
@@ -801,6 +934,19 @@
     const sumNeeds = scopedNeeds;
     const hasSummary = !!summary && sumRecords > 0;
     const hasScoped = !!summary && (scopedNeeds.length + scopedClean.length > 0);
+    // Only records with at least one still-unanswered question about their
+    // own pieces count as "needs you"; stale rows never inflate the badge.
+    const liveNeeds = scopedNeeds
+      .map((r) => ({
+        ...r,
+        issues: (r.issues || []).filter((i) => liveQuestion(r.entity_type, r.entity_id, i)),
+      }))
+      .filter((r) => r.issues.length > 0);
+    const staleCount = scopedNeeds.reduce(
+      (n, r) => n + (r.issues || []).filter((i) => !liveQuestion(r.entity_type, r.entity_id, i)).length,
+      0,
+    );
+    const queueLive = queue.filter((i) => liveQuestion(activeType, activeId, i));
 
     // Step 1: Render Dataset Status Block — live ledger counts when the
     // summary is available, else the current-entity fallback (never invented).
@@ -812,8 +958,8 @@
     const dClean = scopeSet ? (hasScoped ? scopedClean.length : 0) : (hasSummary ? sumClean : 0);
     const dPct = scopeSet ? (dTotal ? Math.round((dClean / dTotal) * 100) : 0) : (hasSummary ? sumPct : 0);
     const dNeed = scopeSet
-      ? (hasScoped ? scopedNeeds.length : (gapCount > 0 ? 1 : 0))
-      : (hasSummary ? sumNeeds.length : (gapCount > 0 ? 1 : 0));
+      ? (hasScoped ? liveNeeds.length : (queueLive.length ? 1 : 0))
+      : (hasSummary ? liveNeeds.length : (queueLive.length ? 1 : 0));
     if (dNeed === 0) {
       dsBadgeEl.textContent = hasSummary ? "All clean" : `${totalPieces} pieces loaded`;
       dsBadgeEl.className = hasSummary ? "tag tag-ok" : "tag";
@@ -829,35 +975,29 @@
 
     // 1. Errors from active steward queue — grouped by record, each card
     // names its record and offers one-click concrete choices.
-    const recordPool = (entityType, entityId) => {
-      const key = `${entityType}/${entityId}`;
-      const cached = (fState.recordFragments || {})[key];
-      const pool = cached && cached.length ? cached : activeFragments();
-      return pool.filter((fr) => (fr.entity_type || entityType) === entityType);
-    };
     const recordName = (entityType, entityId, pool) =>
       recordDisplayName(entityType, entityId, pool);
-    // Records that need a person: open steward items scoped to the loaded
-    // dataset (never the whole ledger), falling back to the current
-    // record's queue when no summary is cached yet.
+    // Records that need a person: live questions only, scoped to the loaded
+    // dataset (never the whole ledger), falling back to the current record's
+    // queue when no summary is cached yet.
     const reviewRecords = (hasScoped || (!scopeSet && hasSummary))
-      ? scopedNeeds.map((r) => ({
+      ? liveNeeds.map((r) => ({
           key: `${r.entity_type}/${r.entity_id}`,
           entityType: r.entity_type,
           entityId: r.entity_id,
           name: r.display_name || r.entity_id,
-          issues: r.issues || [],
+          issues: r.issues,
         }))
-      : (gapCount > 0 ? [{
+      : (queueLive.length > 0 ? [{
           key: `${activeType}/${activeId}`,
           entityType: activeType,
           entityId: activeId,
           name: recordName(activeType, activeId, list),
-          issues: queue,
+          issues: queueLive,
         }] : []);
     if (reviewRecords.length > 0) {
       gapsHtml += reviewRecords.map((group, gidx) => {
-        const pool = recordPool(group.entityType, group.entityId);
+        const pool = poolFor(group.entityType, group.entityId);
         const name = group.name || recordName(group.entityType, group.entityId, pool) || group.entityId;
         const head = `<div class="f-error-record-title">`
           + `<span class="f-error-badge">⚠ RECORD: ${esc(name)} (${esc(group.entityType)} ${esc(group.entityId)})</span>`
@@ -874,44 +1014,42 @@
         });
         const mergedHere = (group.issues || []).length - issues.length;
         const cards = issues.map((item, idx) => {
-        const attr = item.attribute;
+        // Compare canonical values only: one field, one question. Distinct
+        // values are real disagreement; a single value means the engine
+        // could not prove it, not that two systems disagree.
+        const attr = canonAttr(item.attribute);
         const plainName = plainAttr(attr);
-        const matching = pool.filter((fr) => fr.attribute === attr);
-        let title = `Two ${plainName}s disagree between systems. Which one is right?`;
+        const matching = valuesFor(group.entityType, group.entityId, attr);
+        const disagree = matching.length >= 2;
+        const plural = pluralize(plainName);
+        let title = disagree
+          ? `Two ${plural} disagree between systems. Which one is right?`
+          : `${plainName} is not proven yet — use it anyway?`;
         let compareHtml = "";
         let choicesHtml = "";
 
-        if (matching.length >= 2) {
+        if (matching.length > 0) {
           compareHtml = `<div class="f-gap-compare">` + matching.slice(0, 3).map((fr) => {
             const st = fr.verified ? "✓ checked" : "⚠ not proven yet";
             return `<div class="f-gap-cand"><span class="muted">${esc(plainSource(fr.source))} (${st})</span><b>${esc(fr.value)}</b></div>`;
           }).join("") + `</div>`;
         }
 
-        if (attr === "phone" && matching.length >= 2) {
-          const val1 = matching[0].value;
-          const src1 = plainSource(matching[0].source);
-          const val2 = matching[1].value;
-          const src2 = plainSource(matching[1].source);
-          choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
-            + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use ${esc(val2)} (from ${esc(src2)})</button>`
-            + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Keep ${esc(val1)} (from ${esc(src1)})</button>`
-            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
-            + `</div>`;
-        } else if (item.suggested_action) {
+        const who = group.entityType === "product" ? "products" : "people";
+        if (item.suggested_action) {
           // Single escape only: the outer esc(title) below does the HTML
           // escaping. Pre-escaping here would render as literal &quot;.
           title = `Unrecognised ${plainName}: "${item.suggested_action}". What should we do?`;
           choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
             + `<button class="btn-accept" data-accept="${esc(item.steward_id)}" data-action="${esc(item.suggested_action)}">Accept "${esc(item.suggested_action)}"</button>`
             + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
-            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different products</button>`
+            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different ${who}</button>`
             + `</div>`;
         } else {
           choicesHtml = `<div class="steward-actions" style="margin-top: 8px;">`
-            + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">Use this value</button>`
+            + `<button class="btn-approve" data-approve="${esc(item.steward_id)}">${disagree ? "Use a value" : "Use this value"}</button>`
             + `<button class="btn-reject" data-reject="${esc(item.steward_id)}">Do not use it</button>`
-            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different people</button>`
+            + `<button class="btn-split" data-split="${esc(item.steward_id)}">They're two different ${who}</button>`
             + `</div>`;
         }
 
@@ -963,11 +1101,15 @@
 
     // 3. Compact clean summary when 0 records need review (no banner).
     const cleanList = scopeSet ? scopedClean : (summary ? (summary.clean_list || []) : []);
+    const staleHtml = staleCount > 0
+      ? `<div class="f-gap-item"><span class="muted">${staleCount} question${staleCount === 1 ? "" : "s"} from an earlier dataset do${staleCount === 1 ? "es" : ""} not match this record's current pieces — left untouched in the Steward Queue.</span></div>`
+      : "";
     if (dNeed === 0) {
       if (gapsWrapEl) gapsWrapEl.classList.add("all-clean");
       gapsBadgeEl.textContent = hasSummary ? "0 gaps · all clean" : "Not checked yet";
       gapsHtml = `<div class="f-gap-item ok">✓ All ${dTotal} record${dTotal === 1 ? "" : "s"} verified — zero gaps.</div>`
-        + autoHtml;
+        + autoHtml
+        + staleHtml;
     } else {
       if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
       gapsBadgeEl.textContent = `${dNeed} record${dNeed === 1 ? "" : "s"} to review`;
@@ -1001,6 +1143,9 @@
       trapProofBtn.addEventListener("click", () => askAbout("neighbour F6"));
     }
 
+    // Step 2 badge, the sidebar queue and the Trust Gate come from one set.
+    try { syncQueueCounts(); } catch (error) { /* count stays as rendered */ }
+    try { syncEngineGate(); } catch (error) { /* gate stays as rendered */ }
   }
 
   function renderFriendly() {
@@ -1033,15 +1178,9 @@
       const g = (lastFriendly && lastFriendly.golden) || null;
       if (g && g.entity_type && g.entity_id) {
         const pool = activeFragments().filter((fr) => (fr.entity_type || g.entity_type) === g.entity_type);
-        let label = "";
-        const pick = (attrs) => {
-          for (const attr of attrs) {
-            const hit = pool.find((fr) => fr.attribute === attr && fr.value);
-            if (hit) return String(hit.value);
-          }
-          return "";
-        };
-        label = g.entity_type === "user" ? pick(["display_name", "full_name", "name"]) : pick(["category", "name", "display_name"]);
+        // Same source as every other record label (Step 1, Step 2 cards):
+        // the proven value first, then the record's pieces.
+        const label = recordDisplayName(g.entity_type, g.entity_id, pool);
         viewingEl.innerHTML = `Viewing: <b>${esc(label || g.entity_id)}</b> <span class="muted">(${esc(g.entity_type)} ${esc(g.entity_id)})</span>`;
       } else {
         viewingEl.textContent = "";
@@ -1307,15 +1446,26 @@
   }
 
   function recordDisplayName(entityType, entityId, pool) {
-    // Prefer the cached fragments for exactly this record (built entities),
+    // The proven value wins: when the record has a golden name, the label
+    // must match what the reasoning rows and the mosaic tiles show. Before
+    // that, the cached fragments for exactly this record (built entities),
     // else the active fragment list, else the bare id. Never invented.
-    const cached = (fState.recordFragments || {})[`${entityType}/${entityId}`];
+    const key = `${entityType}/${entityId}`;
+    const cached = (fState.recordFragments || {})[key];
+    const runGolden = (lastFriendly && lastFriendly.golden
+      && `${lastFriendly.golden.entity_type}/${lastFriendly.golden.entity_id}` === key)
+      ? lastFriendly.golden : null;
+    const goldenAttrs = ((runGolden || (fState.recordGoldens || {})[key] || {}).attributes) || {};
     const list = (pool || (cached && cached.length ? cached : activeFragments())).filter(
       (fr) => (fr.entity_type || entityType) === entityType
     );
-    const pick = (attrs) => {
-      for (const attr of attrs) {
-        const hit = list.find((fr) => fr.attribute === attr && fr.value);
+    const pick = (candidates) => {
+      for (const attr of candidates) {
+        const goldenField = goldenAttrs[attr];
+        if (goldenField && typeof goldenField === "object" && goldenField.value != null) {
+          return String(goldenField.value);
+        }
+        const hit = list.find((fr) => canonAttr(fr.attribute) === attr && fr.value);
         if (hit) return String(hit.value);
       }
       return "";
@@ -1501,6 +1651,29 @@
     setStatus(`Loaded ${shown} synthetic fragments${ticketNote}.`);
   }
 
+  // Canonical field names come from the pinned taxonomy alias table, so the
+  // UI asks each field once under one name (raw headers like "dien_thoai"
+  // map to "phone"). Same versioned vocabulary the engine derives with.
+  let aliasesPromise = null;
+  function loadAttributeAliases() {
+    if (aliasesPromise) return aliasesPromise;
+    aliasesPromise = (async () => {
+      for (const entityType of ["user", "product"]) {
+        try {
+          const data = await api(`/taxonomy/${entityType}`);
+          window.MosaicConfig.setAttributeAliases(entityType, (data && data.attribute_aliases) || {});
+        } catch (error) { /* taxonomy is best-effort for labels, never blocking */ }
+      }
+    })();
+    return aliasesPromise;
+  }
+
+  // Every run needs the canonical field names before it renders pieces or
+  // gap questions; aliases load once, then resolve instantly.
+  async function ensureAliases() {
+    try { await loadAttributeAliases(); } catch (error) { /* labels stay raw */ }
+  }
+
   function activeFragments() {
     const list = fragments.slice();
     if (ticketBox.checked) {
@@ -1606,12 +1779,18 @@
   function runGuard(label) {
     if (fState.working) {
       setStatus(`${label || "A run"} is already in progress — wait for it to finish before starting another.`);
-      try {
-        window.MosaicChat.add({ role: "downstream", title: "Already running", lines: ["A run is already in progress — wait for it to finish before starting another."] });
-      } catch (error) { /* ticker is best-effort, never blocking */ }
+      // One notice per in-flight run: re-clicking while it derives must not
+      // stack identical "already running" rows in the transcript.
+      if (fState.guardNotice !== label) {
+        fState.guardNotice = label;
+        try {
+          window.MosaicChat.add({ role: "downstream", title: "Already running", lines: ["A run is already in progress — wait for it to finish before starting another."] });
+        } catch (error) { /* ticker is best-effort, never blocking */ }
+      }
       return false;
     }
     fState.working = true;
+    fState.guardNotice = null;
     renderFStatus();
     return true;
   }
@@ -1640,6 +1819,7 @@
       if (key === fState.lastCompletedKey) {
         try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["This exact dataset already derived this record — nothing new to derive."] }); } catch (error) { /* best-effort */ }
         setStatus("Already showing this exact dataset — nothing re-derived.");
+        keepDerivationPanel();
         return;
       }
       const reqBody = {
@@ -1662,9 +1842,9 @@
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
-      MosaicDrawers.renderSteward(drawerCtx, dedupStewards(payload.steward_queue || []).unique);
+      MosaicDrawers.renderSteward(drawerCtx, openQueueOf(payload));
       renderMosaic(payload);
-      renderEscalatedCount(dedupStewards(payload.steward_queue || []).unique.length);
+      renderEscalatedCount(openQueueOf(payload).length);
       const verdictCap = payload.verdict.charAt(0).toUpperCase() + payload.verdict.slice(1);
       if (auto) {
         noteAutoRun(payload);
@@ -1818,7 +1998,9 @@
     }).join("");
 
     const conflictHtml = (payload.conflicts || []).map((c) => {
-      const owner = (payload.steward_queue || []).find((s) => s.attribute === c.attribute) || {};
+      // Owner/deadline only when the question is still open — a replayed
+      // decision can echo a row that has since been answered.
+      const owner = openQueueOf(payload).find((s) => s.attribute === c.attribute) || {};
       const odf = owner.steward_id
         ? `<div class="meta mono">owner ${esc(owner.owner || "steward-001")} · deadline ${esc(owner.deadline || "—")} · fallback ${esc(owner.fallback || "—")}</div>`
         : "";
@@ -2112,8 +2294,8 @@
         renderEngine({ ...payload, golden: first, policy_version: payload.policy_version_user });
         renderMosaic({ ...payload, golden: first, proposal: { attributes: {} } });
       }
-      MosaicDrawers.renderSteward(drawerCtx, dedupStewards(payload.steward_queue || []).unique);
-      renderEscalatedCount(dedupStewards(payload.steward_queue || []).unique.length);
+      MosaicDrawers.renderSteward(drawerCtx, openQueueOf(payload));
+      renderEscalatedCount(openQueueOf(payload).length);
       renderMatchingEngine(payload.splink);
       if (payload.splink && payload.splink.status === "ok") {
         const nPairs = (payload.splink.pairs || []).length;
@@ -2163,11 +2345,47 @@
   }
 
   async function resolveUpload(auto) {
-    const list = window.__uploadedFragments || [];
-    if (!list.length) {
+    await ensureAliases();
+    const uploaded = window.__uploadedFragments || [];
+    if (!uploaded.length) {
       setStatus("Upload a file first.");
       return;
     }
+    if (!window.MosaicConfig.aliasesReady()) {
+      const msg = "Taxonomy reference is unavailable, so the raw headers cannot be mapped to canonical fields — nothing was sent (fail-closed).";
+      setStatus(`Upload blocked (fail-closed): ${msg}`);
+      feed(msg);
+      return;
+    }
+    // Raw headers are mapped through the pinned taxonomy alias table before
+    // anything is posted: the engine fails closed on a field its policy does
+    // not know (that was a silent 422), and this is the same vocabulary the
+    // engine derives with. Raw names that cannot be mapped are reported,
+    // never dropped.
+    const { mapped, unmapped, renamed } = window.MosaicConfig.toCanonicalFragments(uploaded);
+    if (!mapped.length) {
+      const reason = unmapped.length
+        ? `no field in it has a canonical mapping under the pinned taxonomy: ${unmapped.join(", ")}`
+        : "it contains no usable fields";
+      const msg = `Upload blocked (fail-closed): ${reason} — nothing was sent.`;
+      setStatus(msg);
+      feed(msg);
+      try {
+        window.MosaicChat.add({ role: "downstream", title: "Upload blocked", lines: [msg] });
+      } catch (error) { /* ticker is best-effort */ }
+      return;
+    }
+    let leftOutMsg = "";
+    let renamedMsg = "";
+    if (unmapped.length) {
+      // Reported, never silently dropped: those columns are not fields this
+      // policy derives, so the engine would reject them (it fails closed).
+      leftOutMsg = `Not sent (no canonical mapping under the pinned taxonomy): ${unmapped.join(", ")} — ${mapped.length} other field${mapped.length === 1 ? "" : "s"} are.`;
+    }
+    if (renamed.length) {
+      renamedMsg = `Scout mapped raw headers under taxonomy: ${renamed.join(", ")} — claim, not a fact`;
+    }
+    const list = mapped;
     if (!runGuard("Upload resolve")) return;
     const upKey = fingerprintRun(window.__uploadedEntityType || "user", currentEntity().entityId, list);
     if (upKey === fState.lastCompletedKey) {
@@ -2177,6 +2395,17 @@
       renderFStatus();
       return;
     }
+    // Only a run that really happens may wipe the previous trace: resetting
+    // before the skip check left Step 2 blank while Step 1 still said the
+    // records were clean. Notices come after the reset so they survive it.
+    resetDerivationPanel();
+    if (leftOutMsg) {
+      feed(leftOutMsg);
+      try {
+        window.MosaicChat.add({ role: "downstream", title: "Fields left out", lines: [leftOutMsg] });
+      } catch (error) { /* ticker is best-effort */ }
+    }
+    if (renamedMsg) feed(renamedMsg);
     // The answer below is about the uploaded pieces, so the Friendly View
     // must describe those — not the fixture fragments for this entity.
     fragments = list.map((f) => Object.assign({}, f, { _uploaded: true }));
@@ -2205,9 +2434,9 @@
       }
       renderProposal(payload.proposal);
       renderEngine(payload);
-      MosaicDrawers.renderSteward(drawerCtx, dedupStewards(payload.steward_queue || []).unique);
+      MosaicDrawers.renderSteward(drawerCtx, openQueueOf(payload));
       renderMosaic(payload);
-      renderEscalatedCount(dedupStewards(payload.steward_queue || []).unique.length);
+      renderEscalatedCount(openQueueOf(payload).length);
       const verdictCap = payload.verdict.charAt(0).toUpperCase() + payload.verdict.slice(1);
       if (auto) {
         noteAutoRun(payload);
@@ -2235,7 +2464,78 @@
     }
   }
 
-  // ---- Protocol chat + 4-Act Scenario Bar (v2.3) --------------------------
+  // What is still open in a derive response: only rows the ledger still
+  // holds as `pending` (a replay can echo rows already approved or
+  // superseded), minus the decided row and its superseded siblings.
+  function openRowsOf(payload) {
+    const decided = new Set(
+      [payload && payload.steward_item, ...((payload && payload.superseded_stewards) || [])].filter(Boolean),
+    );
+    return ((payload && payload.steward_queue) || []).filter((item) =>
+      (item.status === undefined || item.status === "pending")
+      && !decided.has(item.steward_id));
+  }
+
+  // Same list, collapsed to one item per (record, field). Used for the
+  // drawer, the sidebar count, the ticker and the Step 2 badge so they can
+  // never disagree about what still needs a person.
+  function openQueueOf(payload) {
+    return dedupStewards(openRowsOf(payload)).unique;
+  }
+
+  // A steward decision re-derives: the ribbon, the reasoning rows and the
+  // downstream check must show that new decision. Without this the screen
+  // kept the pre-decision verdict ("PARTIAL · NEEDS YOU", "phone
+  // quarantined", "downstream stopped") next to a gap that had been cleared.
+  async function renderRunSurfaces(payload) {
+    if (!payload) return;
+    const golden = payload.golden || (lastFriendly && lastFriendly.golden) || null;
+    try { renderAgentsFromPayload(payload); } catch (error) { /* best-effort */ }
+    try { renderReasoning(payload, golden); } catch (error) { /* best-effort */ }
+    try { await syncPiecesWithGolden(payload); } catch (error) { /* pieces stay as they are */ }
+    try {
+      await askDownstream(payload.entity_type === "product" ? "search" : "otp", { auto: true });
+    } catch (error) { /* downstream result is best-effort, never blocking */ }
+  }
+
+  // A steward decision re-derives over every fact the ledger holds for the
+  // record — an upload only adds shards to a record that already carries
+  // facts from other datasets. When the golden therefore references pieces
+  // this view never showed, reload the record's pieces so lineage, the
+  // survivorship badges and the record name describe the same facts the
+  // decision actually used. An empty answer never blanks the view.
+  async function syncPiecesWithGolden(payload) {
+    const golden = payload && payload.golden;
+    if (!golden || !golden.attributes || !golden.entity_id) return;
+    const view = activeFragments();
+    const ids = new Set();
+    Object.values(golden.attributes).forEach((v) => {
+      if (!v || typeof v !== "object") return;
+      if (v.winner_fact_id) ids.add(v.winner_fact_id);
+      (v.loser_fact_ids || []).forEach((fid) => ids.add(fid));
+    });
+    const missing = [...ids].filter((fid) => fid && !fragmentForFactId(fid, null, view));
+    if (!missing.length) return;
+    const key = `${golden.entity_type}/${golden.entity_id}`;
+    const cached = (fState.recordFragments || {})[key] || [];
+    let list = cached;
+    if (!cached.length || missing.some((fid) => !fragmentForFactId(fid, null, cached))) {
+      try {
+        const data = await api(`/fragments/${golden.entity_type}/${encodeURIComponent(golden.entity_id)}`);
+        list = (data.fragments || []).map((f) => Object.assign({}, f, { entity_type: golden.entity_type }));
+      } catch (error) { list = []; }
+    }
+    if (!list.length || !missing.some((fid) => fragmentForFactId(fid, null, list))) return;
+    if (list.length <= view.length) return;
+    fState.recordFragments[key] = list;
+    fState.entityFragments[key] = list;
+    fragments = list;
+    renderFStakes();
+    renderFPieces();
+    feed(`This decision used ${list.length} pieces of ${golden.entity_id} — showing all of them (the view listed ${view.length}).`);
+  }
+
+
   // Every bubble is rendered from a real API response or ledger row passed
   // in by the caller. Nothing here invents proposers, derivations, or
   // steward items. Steward buttons reuse the drawer handlers verbatim.
@@ -2256,7 +2556,10 @@
     wireWorkspace.done = true;
     // Sidebar dataset pills + enrich triggers + upload entry points.
     document.querySelectorAll("#f-intake-samples [data-act]").forEach((btn) => {
-      btn.addEventListener("click", () => runScenario(btn.getAttribute("data-act")));
+      btn.addEventListener("click", async () => {
+        await ensureAliases();
+        runScenario(btn.getAttribute("data-act"));
+      });
     });
     document.querySelectorAll("#f-enrich [data-enrich]").forEach((btn) => {
       btn.addEventListener("click", () => enrichShard(btn.getAttribute("data-enrich")));
@@ -2410,14 +2713,25 @@
       const loserCount = (value.loser_fact_ids || []).length;
       rows.push({
         kind: "verified",
-        html: `✓ <b>${esc(name)}</b> fit (Rule ${esc(rule)}): <span class="mono">${esc(String(value.value))}</span>${loserCount ? ` — ${loserCount} rival shard${loserCount === 1 ? "" : "s"} retained as history` : ""}`,
+        html: `✓ <b>${esc(plainAttr(name))}</b> fit (Rule ${esc(rule)}): <span class="mono">${esc(String(value.value))}</span>${loserCount ? ` — ${loserCount} rival shard${loserCount === 1 ? "" : "s"} retained as history` : ""}`,
         proof: { decision: payload.decision_id, attr: name },
       });
     }
+    // A conflict row is only actionable while its question is still open.
+    // A replayed decision keeps the historical conflict in the payload even
+    // after a steward answered it — say that plainly instead of ordering
+    // the steward to act on something already decided.
+    const openRows = openQueueOf(payload);
     for (const conflict of payload.conflicts || []) {
+      const attr = canonAttr(conflict.attribute || "");
+      const stillOpen = openRows.some((s) =>
+        canonAttr(s.attribute) === attr
+        && (!conflict.entity_id || !s.entity_id || s.entity_id === conflict.entity_id));
       rows.push({
-        kind: "quarantined",
-        html: `🛡 <b>${esc(conflict.attribute || "golden")}</b> quarantined — ${esc(conflict.reason_code || conflict.rule_fired || "withheld")}`,
+        kind: stillOpen ? "quarantined" : "resolved",
+        html: stillOpen
+          ? `🛡 <b>${esc(plainAttr(attr))}</b> quarantined — ${esc(conflict.reason_code || conflict.rule_fired || "withheld")}`
+          : `🛡 <b>${esc(plainAttr(attr))}</b> was quarantined — ${esc(conflict.reason_code || conflict.rule_fired || "withheld")} — since answered by a steward, nothing open`,
         proof: { decision: payload.decision_id, attr: conflict.attribute },
       });
     }
@@ -2507,6 +2821,22 @@
     });
   }
 
+  // A run skipped as "already up to date" must leave the panel standing.
+  // Some entry points wipe the previous trace before the skip check, so the
+  // ribbon and the reasoning rows are repainted from the derivation that is
+  // still on screen — otherwise Step 2 shows QUEUED while Step 1 says the
+  // records are all clean.
+  function keepDerivationPanel() {
+    // fState.ran is cleared by resetDerivationPanel, so a skipped run has to
+    // put the completed derivation back: gate, reasoning, and the Step 1/2
+    // badges all describe the run that is still on screen.
+    if (!lastFriendly) return;
+    fState.ran = true;
+    try { renderFriendly(); } catch (error) { /* best-effort */ }
+    try { renderAgentsFromPayload(lastFriendly); } catch (error) { /* best-effort */ }
+    try { renderReasoning(lastFriendly, lastFriendly.golden); } catch (error) { /* best-effort */ }
+  }
+
   function renderAgentsReset() {
     renderAgents(AGENTS.map((a) => ({ ...a, status: "", badge: "QUEUED" })));
   }
@@ -2516,6 +2846,10 @@
   // stale results from the previous dataset never linger next to the
   // newly loading fragments. Pure UI reset — no ledger or engine state.
   function resetDerivationPanel() {
+    // A dataset switch or a new run starts from "no derivation yet": the
+    // Trust Gate and the step states must not be repainted from the previous
+    // dataset's result while the new one is loading.
+    fState.ran = false;
     try { renderAgentsReset(); } catch (error) { /* best-effort */ }
     try { window.MosaicChat.clear(); } catch (error) { /* best-effort */ }
     try {
@@ -2541,18 +2875,85 @@
   // Agent ribbon states always derive from the last real run:
   // trace steps mark their agents DONE, the trap doc arms the Critic shield,
   // and the Trust Gate shows VERIFIED only when a golden published.
+  // One rule for the Trust Gate badge, shared by the run-time ribbon and the
+  // dataset refresh: the gate may say VERIFIED only when the verdict
+  // published AND no steward question is open for the dataset on screen.
+  // "NEEDS YOU" wins over a published verdict, and a replayed decision whose
+  // conflict has since been answered stops claiming it needs anyone.
+  function engineGateState(verdict, published, openQuestions) {
+    if (verdict === "denied") return { status: "blocked", badge: "DENIED" };
+    if (openQuestions > 0) {
+      return published
+        ? { status: "partial", badge: "PARTIAL · NEEDS YOU" }
+        : { status: "blocked", badge: "ESCALATED" };
+    }
+    if (verdict === "published" && published) return { status: "verified", badge: "VERIFIED" };
+    if (verdict === "published") return { status: "done", badge: "DONE" };
+    return published
+      ? { status: "partial", badge: "PARTIAL" }
+      : { status: "blocked", badge: "ESCALATED" };
+  }
+
+  // Open questions for the dataset on screen — the same set the sidebar
+  // count, the queue drawer and the Step 2 cards are built from (one item
+  // per record + field), so those three can never disagree.
+  function scopedOpenCount() {
+    const summary = fState.datasetSummary;
+    if (!summary) return 0;
+    const scopeSet = (fState.activeKeys && fState.activeKeys.length)
+      ? new Set(fState.activeKeys) : null;
+    if (!scopeSet) return 0; // before any dataset loads there is no verdict
+    const distinct = new Set();
+    (summary.needs_review || []).forEach((r) => {
+      if (!scopeSet.has(`${r.entity_type}/${r.entity_id}`)) return;
+      (r.issues || []).forEach((issue) => {
+        distinct.add(`${r.entity_type}/${r.entity_id}/${issue.attribute || ""}`);
+      });
+    });
+    return distinct.size;
+  }
+
+  // One number for every surface: the sidebar queue count is re-derivable
+  // from the same summary the Step 2 badge and the Trust Gate use, so a run
+  // that opened no new question cannot leave the sidebar claiming zero (or
+  // seven) while the queue still holds rows.
+  function syncQueueCounts() {
+    if (!fState.datasetSummary) return;
+    if (!(fState.activeKeys && fState.activeKeys.length)) return; // no dataset scope yet
+    try { renderEscalatedCount(scopedOpenCount()); } catch (error) { /* count stays as-is */ }
+  }
+
+  // Re-evaluate the Trust Gate after the ledger view refreshes: the run-time
+  // ribbon only knows its own response, while questions from other runs on
+  // the same dataset arrive with the summary.
+  function syncEngineGate() {
+    if (!fState.ran || !lastFriendly) return;
+    const host = $("f-agents-grid");
+    const card = host && host.querySelector('[data-agent="engine"]');
+    if (!card) return;
+    const state = engineGateState(
+      lastFriendly.verdict || "",
+      !!lastFriendly.golden,
+      scopedOpenCount(),
+    );
+    card.className = `agent-card ${state.status}`;
+    const badgeEl = card.querySelector(".a-badge");
+    if (badgeEl) badgeEl.textContent = state.badge;
+  }
+
   function renderAgentsForRun(steps, opts) {
     const byAgent = {};
     (steps || []).forEach((s) => { byAgent[String(s.agent || "").toLowerCase()] = s; });
     const trap = (fState.trapDocs || []).length > 0;
+    const verdict = (opts && opts.verdict) || "";
     const published = !!(opts && opts.published);
+    const openQuestions = (opts && opts.openQuestions) || 0;
+    const engine = engineGateState(verdict, published, openQuestions);
     renderAgents(AGENTS.map((a) => {
       if (a.key === "critic" && trap && byAgent.critic) {
         return { ...a, status: "trap-shield", badge: "TRAP SHIELD" };
       }
-      if (a.key === "engine") {
-        return published ? { ...a, status: "verified", badge: "VERIFIED" } : { ...a, status: "done", badge: "DONE" };
-      }
+      if (a.key === "engine") return { ...a, ...engine };
       return { ...a, status: byAgent[a.key] ? "done" : "", badge: byAgent[a.key] ? "DONE" : "QUEUED" };
     }));
     // NOTE: the ticker itself is fed by announceProposer/announceEngine;
@@ -2560,11 +2961,14 @@
   }
 
   function renderAgentsFromPayload(payload) {
-    const published = !!(payload && (payload.verdict === "published"
+    const verdict = payload && payload.verdict;
+    const published = !!(payload && (verdict === "published"
       || (payload.golden && payload.golden.golden_id)
       || ((payload.goldens || []).some((g) => g && g.golden_id))));
     renderAgentsForRun(agentTraceSteps(), {
       published,
+      verdict: verdict || (published ? "published" : ""),
+      openQuestions: Math.max(openQueueOf(payload).length, scopedOpenCount()),
       decisionLine: payload && payload.decision_id
         ? `[Gate] decision ${String(payload.decision_id).slice(0, 8)}… verdict ${String(payload.verdict || "?").toUpperCase()}`
         : undefined,
@@ -2765,7 +3169,7 @@
     if (!payload || typeof payload.decision_id !== "string") return;
     announceProposer(proposal !== undefined ? proposal : payload.proposal, payload.splink, payload.decision_id);
     announceEngine(payload, (lastFriendly && lastFriendly.golden) || payload.golden || null);
-    announceStewards(payload.steward_queue || []);
+    announceStewards(openQueueOf(payload));
   }
 
   async function actScene0() {
@@ -2828,6 +3232,7 @@
     if (fState.lastCompletedKey === "act2-hidden-v1") {
       try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["Hidden connection already assembled — nothing re-derived."] }); } catch (error) { /* best-effort */ }
       setStatus("Hidden connection already assembled — nothing re-derived.");
+      keepDerivationPanel();
       fState.working = false;
       renderFStatus();
       return;
@@ -2882,7 +3287,7 @@
         actions: [{ label: "Open in Detail View", act: "detail" }],
       });
     }
-    announceStewards(payload.steward_queue || []);
+    announceStewards(openQueueOf(payload));
     await askDownstream("otp", { auto: true });
     setStatus(`Act 2 complete — Decision: ${payload.decision_id} — Verdict: ${payload.verdict}.`);
     fState.lastCompletedKey = key;
@@ -3642,6 +4047,7 @@
     if (fState.lastCompletedKey === scene0Key) {
       try { window.MosaicChat.add({ role: "downstream", title: "Already up to date", lines: ["Scene 0 already built from the approved config — nothing re-derived."] }); } catch (error) { /* best-effort */ }
       setStatus("Scene 0 already built — nothing re-derived.");
+      keepDerivationPanel();
       fState.working = false;
       renderFStatus();
       return;
@@ -3763,7 +4169,7 @@
       return;
     }
     const golden = payload.golden || { attributes: {} };
-    const queue = payload.steward_queue || [];
+    const queue = openQueueOf(payload);
     const trapDocs = fState.trapDocs || [];
     const hops = hopChainFromProposals(payload.proposals, trapDocs);
 
@@ -3983,6 +4389,8 @@
     refreshDatasets() { refreshDatasetData().catch(() => {}); },
     setFriendlyFromResolve,
     renderEngine,
+    openQueueOf,
+    renderRunSurfaces,
     renderMosaic,
     renderEscalatedCount,
     stewardBody,
@@ -4019,7 +4427,6 @@
       setStatus("Loop Paused: file staged — click Upload to run manually.");
       return;
     }
-    resetDerivationPanel();
     const uploaded = await uploadFile(true);
     if (uploaded && (window.__uploadedFragments || []).length) {
       await resolveUpload(true);
@@ -4059,7 +4466,7 @@
   // friendly view has no visible status line, so silence is not an option.
   async function runIntakeFile(input) {
     if (!input.files || !input.files.length) return;
-    resetDerivationPanel();
+    await ensureAliases();
     const fileName = input.files[0].name;
     const uploaded = await uploadFile(true, input);
     const parsed = uploaded ? uploaded.fragments_parsed || 0 : 0;
@@ -4286,6 +4693,9 @@
     // First paint stays idle: the user picks a scenario or drops a file.
     // Auto-run happens on upload / scenario click, never on page load.
     .finally(() => {
+      loadAttributeAliases()
+        .catch(() => {})
+        .finally(() => { renderFriendly(); });
       loadFragments().catch((error) => setStatus(`Cannot load fragments: ${error.message}`));
       refreshDatasetData().catch(() => {});
     });
