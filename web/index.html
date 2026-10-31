@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Muse Mosaic — Interactive Multi-Agent Protocol &amp; Live Trusted Picture</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <style>
       :root {
@@ -49,14 +47,14 @@
         background: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #F8FAFC 45%, #F1F5F9 100%);
         background-attachment: fixed;
         color: var(--text);
-        font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-size: 13.5px;
         line-height: 1.55;
         -webkit-font-smoothing: antialiased;
         selection-background-color: #E2E8F0;
       }
       .mono, code, pre {
-        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       .material-symbols-outlined {
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
@@ -110,7 +108,7 @@
         background: #F8FAFC; border: 1px solid var(--line-strong);
         border-radius: 8px; padding: 6px 10px;
       }
-      .ver-badge { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-size: 11.5px; }
+      .ver-badge { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
       main { padding: 20px 28px 48px; max-width: 1480px; margin: 0 auto; }
       #engine-banner {
         display: none;
@@ -236,75 +234,6 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px;
       }
       .mosaic-hop-edge { color: #15803D; font-size: 11px; font-weight: 700; }
-      .tile {
-        display: flex; flex-direction: column; justify-content: space-between;
-        min-height: 96px; padding: 10px 12px;
-        border-radius: 10px; border: 1.5px solid #CBD5E1;
-        background: #fff; color: #0F172A;
-        text-align: left; cursor: pointer;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-        transition: transform 0.12s ease, box-shadow 0.12s ease;
-      }
-      .tile:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12); }
-      .tile.gold {
-        border: 2px solid #15803D;
-        background: linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 65%);
-        color: #0F172A;
-      }
-      .tile.user {
-        border: 2px solid #0284C7;
-        background: linear-gradient(180deg, #F0F9FF 0%, #FFFFFF 65%);
-        color: #0F172A;
-      }
-      .tile.agent {
-        border: 1.5px dashed #7C3AED;
-        background: #F5F3FF; color: #0F172A;
-      }
-      .tile.rule, .tile.escalated {
-        border: 2px dashed #B45309;
-        background: #FFFBEB; color: #0F172A;
-      }
-      .tile.raw-tile {
-        border: 1.5px dashed #94A3B8;
-        background: #F8FAFC; color: #0F172A;
-      }
-      .tile.trap {
-        border: 2px dashed #64748B !important;
-        background: #F1F5F9 !important;
-        color: #475569 !important;
-      }
-      .tile.wide { grid-column: span 2; }
-      .tile > span { display: block; }
-      .tile .t-top {
-        display: flex; align-items: center; justify-content: space-between; gap: 6px;
-        font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.03em;
-      }
-      .tile .t-rule {
-        display: inline-block; padding: 1px 6px; border-radius: 999px;
-        font-size: 10.5px; font-weight: 700;
-        background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC;
-      }
-      .tile.escalated .t-rule, .tile.rule .t-rule {
-        background: #FEF3C7; color: #92400E; border-color: #FCD34D;
-      }
-      .tile.raw-tile .t-rule {
-        background: #E2E8F0; color: #334155; border-color: #CBD5E1;
-      }
-      .tile.trap .t-rule {
-        background: #E2E8F0; color: #64748B; border-color: #CBD5E1;
-      }
-      .tile .t-val {
-        margin: 6px 0 4px; font-size: 14px; font-weight: 800; color: #0F172A;
-        overflow-wrap: anywhere;
-      }
-      .tile .t-src {
-        display: flex; align-items: center; gap: 5px;
-        font-size: 11px; color: #334155; font-weight: 600;
-      }
-      .tile .t-losers {
-        margin-top: 6px; padding-top: 5px; border-top: 1px dashed #CBD5E1;
-        font-size: 11px; color: #64748B;
-      }
       .f-dataset-card, .f-gaps-card, .f-mosaic-card {
         margin-bottom: 6px; padding: 16px 20px;
         border: 1px solid #CBD5E1; border-radius: 14px; background: var(--panel);
@@ -453,27 +382,8 @@
       }
       #taxonomy-drawer .drawer-head h2, #similar-drawer .drawer-head h2 { margin: 0; font-size: 16px; }
       #taxonomy-drawer-body, #similar-drawer-body { padding: 14px 18px; overflow: auto; display: grid; gap: 12px; align-content: start; }
-      /* v2.3 protocol chat */
+      /* ticker stream (replaces v2.3 protocol chat bubbles) */
       #app-side.drag-over { background: #EFF6FF; outline: 2px dashed #1D4ED8; outline-offset: -2px; }
-      #f-chat-stream { display: grid; gap: 10px; }
-      .chat-bubble { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
-      .chat-bubble .chat-head { font-weight: 700; margin-bottom: 4px; }
-      .chat-bubble .chat-badge { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
-      .chat-bubble ul { margin: 6px 0 0 18px; padding: 0; }
-      .chat-bubble .chat-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
-      .chat-downstream { border: 1px solid #CBD5E1; background: #fff; }
-      .chat-downstream .chat-badge { background: #E2E8F0; color: #475569; }
-      .chat-proposer { border: 1px dashed #2563EB; background: #EFF6FF; }
-      .chat-proposer .chat-badge { background: #DBEAFE; color: #1D4ED8; }
-      .chat-engine { border: 1px solid #15803D; background: #F0FDF4; }
-      .chat-engine.escalated { border-color: #B45309; border-style: dashed; background: #FFFBEB; }
-      .chat-engine.failed { border-color: #B91C1C; background: #FEF2F2; }
-      .chat-engine .chat-badge { background: #DCFCE7; color: #15803D; }
-      .chat-steward { border: 1px dashed #B45309; background: #FFFBEB; }
-      .chat-steward .chat-badge { background: #FEF3C7; color: #92400E; }
-      .f-chat-input { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
-      .f-chat-input button { font-size: 12px; padding: 4px 10px; }
-      .f-chat-input input { flex: 1 1 220px; min-height: 34px; }
       .f-simulation { border: 2px solid #B91C1C; background: #FEF2F2; border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
       .f-simulation h3 { margin: 0 0 6px 0; color: #991B1B; font-size: 14px; }
       .cert-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
@@ -481,8 +391,6 @@
       .cert-col h4 { margin: 0 0 4px 0; font-size: 11px; color: #475569; }
       .cert-win { border-color: #15803D; background: #F0FDF4; }
       .cert-lose { border-color: #94A3B8; background: #F1F5F9; }
-      .tile.trap { border: 2px dashed #64748B !important; background: #F1F5F9 !important; }
-      .tile.trap::after { content: "Not linked"; display: block; font-size: 10px; color: #64748B; }
       #graph-canvas g[data-node].trap-node circle { fill: #94A3B8 !important; stroke-dasharray: 4 3; }
       #drawer-scrim {
         position: fixed; inset: 0; background: rgba(15,23,42,0.35);
@@ -536,7 +444,7 @@
       .btn-how { background: #fff !important; border: 2px solid #1D4ED8 !important; color: #1D4ED8 !important; font-weight: 600; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
       .btn-how:hover { background: #EFF6FF !important; }
       .btn-split { border: 2px solid #0F172A !important; color: #0F172A !important; background: #fff !important; }
-      #friendly button:not(.tile):not(.primary):not(.btn-how):not(.btn-approve):not(.btn-reject):not(.btn-accept):not(.btn-split):not(#f-loop-more-btn):not(#f-step3-otp-btn):not(#f-export-clean-btn) { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
+      #friendly button:not(.tessera-tile):not(.primary):not(.btn-how):not(.btn-approve):not(.btn-reject):not(.btn-accept):not(.btn-split):not(#f-loop-more-btn) { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
       header .f-only { background: #fff; border: 2px solid #1D4ED8; color: #1D4ED8; }
       .btn-reject { border-color: var(--bad) !important; color: var(--bad) !important; background: #fff !important; font-weight: 600; }
       .btn-accept { border-color: var(--good) !important; color: var(--good) !important; background: #F0FDF4 !important; font-weight: 600; }
@@ -657,10 +565,10 @@
       mark.f-hit { background: #FEF3C7; color: #0F172A; padding: 0 2px; }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid #1D4ED8; outline-offset: 2px; }
       #f-status-pill { font: inherit; cursor: pointer; }
-      #app-header button, #app-side button, #app-dock button, .btn-how, .tile,
+      #app-header button, #app-side button, .btn-how, .tessera-tile,
       #friendly .steward-actions button { min-height: 0; }
       #realtime-bar { display: none; }
-      body.detail #app-side, body.detail #app-dock { display: none; }
+      body.detail #app-side { display: none; }
       #friendly { display: flex; flex-direction: column; gap: 14px; }
       #app-main { margin: 0; max-width: none; padding: 16px; }
       .friendly #hdr-entity-wrap { display: none !important; }
@@ -682,10 +590,10 @@
       }
       #app-header .f-steps .step .n { width: 20px; height: 20px; font-size: 11px; }
       #app-header .hdr-actions { margin-left: 0; }
-      /* Main 3-column shell between 52px header and 24px footer */
-      .app-shell-body, #friendly-view {
+      /* Main 2-column shell between 52px header and 24px footer */
+      .app-shell-body {
         display: grid !important;
-        grid-template-columns: 236px minmax(0, 1fr) 360px !important;
+        grid-template-columns: 250px minmax(0, 1fr) !important;
         height: calc(100vh - 76px) !important;
         width: 100vw;
         overflow: hidden;
@@ -693,7 +601,7 @@
       }
       body.detail #app-shell { grid-template-columns: minmax(0, 1fr) !important; }
       #app-side {
-        width: 236px; overflow-y: auto;
+        width: 250px; overflow-y: auto;
         background: #F8FAFC; border-right: 1px solid #E2E8F0;
         padding: 12px; display: flex; flex-direction: column; gap: 14px;
         height: 100%; box-sizing: border-box;
@@ -741,38 +649,13 @@
         height: 100%; overflow-y: auto; padding: 14px 18px; box-sizing: border-box;
         display: flex; flex-direction: column; gap: 12px; min-width: 0;
       }
-      #app-dock {
-        width: 360px; height: 100%;
-        border-left: 1px solid #E2E8F0; background: #FFFFFF;
-        display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
-        min-height: 0; min-width: 0;
-      }
-      .dock-head { flex: 0 0 auto; padding: 10px 12px 8px; border-bottom: 1px solid #E2E8F0; display: flex; flex-direction: column; gap: 8px; }
-      .right-agent-dock .chat-header-area { flex-shrink: 0; padding: 12px 14px 8px; border-bottom: 1px solid #F1F5F9; }
-      .right-agent-dock .chat-stream-area { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-      .right-agent-dock .chat-input-area { flex-shrink: 0; padding: 10px 14px; border-top: 1px solid #E2E8F0; background: #F8FAFC; }
-      .dock-title-row { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: #0F172A; }
-      .dock-title-row .f-tab-group { margin-left: auto; }
-      .dock-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-      .dock-chips button {
-        font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
-        border: 1px solid #CBD5E1; background: #fff; color: #1D4ED8; cursor: pointer;
-      }
-      .dock-chips button:hover { border-color: #1D4ED8; }
-      #f-dock-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px; }
-      .dock-foot { flex: 0 0 auto; border-top: 1px solid #E2E8F0; padding: 8px 12px; background: #fff; }
-      .dock-foot #f-chat-input-bar { margin: 0; }
-      .dock-foot #f-chat-input { width: 100%; }
-      #f-chat-stream .chat-bubble [data-chat-act], #f-chat-stream .chat-bubble .btn-how {
-        height: 26px; font-size: 11.5px; padding: 0 8px; margin: 2px 4px 2px 0;
-        display: inline-flex; align-items: center;
-      }
+
       #trust-bar {
         height: 24px; flex: 0 0 24px; overflow: hidden; white-space: nowrap;
         display: flex; align-items: center; padding: 0 12px;
         font-size: 10.5px; letter-spacing: 0.02em; color: #64748B;
         background: #FFFFFF; border-top: 1px solid #E2E8F0;
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       /* Compact steps so 1-3 fit a 720p viewport */
       #friendly-steps .f-dataset-card, #friendly-steps .f-gaps-card, #friendly-steps .f-mosaic-card { margin-bottom: 10px; }
@@ -785,6 +668,77 @@
       #friendly-steps .legend { margin-top: 6px; }
       @media (max-width: 960px) { .f-cols { grid-template-columns: 1fr; } }
       @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    /* ---- UX 2.5: assembly studio components ---- */
+      .brand-tagline { display: block; font-size: 10.5px; color: var(--muted); border-left: 1px solid var(--line-strong); padding-left: 8px; margin-left: 2px; }
+      .prof-main { display: block; }
+      .prof-sub { display: block; font-size: 10.5px; font-weight: 400; color: #64748B; }
+      .side-upload.secondary { background: #fff; color: #0F172A; border: 1px solid #CBD5E1; height: 32px; }
+      /* Tessera tiles (Step 3 bento grid) */
+      .mosaic { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 10px; align-items: stretch; }
+      .tessera-tile {
+        position: relative; display: flex; flex-direction: column; justify-content: space-between;
+        min-height: 84px; padding: 10px 12px;
+        border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--text);
+        text-align: left; cursor: pointer; overflow: hidden;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06); transition: transform 0.12s ease, box-shadow 0.12s ease;
+        font: inherit;
+      }
+      .tessera-tile::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--src-color, var(--line-strong)); }
+      .tessera-tile:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12); }
+      .tessera-tile.gold { border-color: #A7F3D0; }
+      .tessera-tile.escalated { border: 2px dashed #B45309; background: #FFFBEB; }
+      .tessera-tile.trap { border: 2px dashed #64748B; background: #F1F5F9; }
+      .tessera-tile .t-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.03em; }
+      .tessera-tile .t-rule { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: #DCFCE7; color: #065F46; border: 1px solid #A7F3D0; }
+      .tessera-tile.escalated .t-rule { background: #FEF3C7; color: #92400E; border-color: #FCD34D; }
+      .tessera-tile .t-val { margin: 6px 0 4px; font-size: 14px; font-weight: 800; color: #0F172A; overflow-wrap: anywhere; }
+      .tessera-tile .t-src { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #334155; font-weight: 600; }
+      .tessera-tile .t-losers { margin-top: 6px; padding-top: 5px; border-top: 1px dashed #CBD5E1; font-size: 11px; color: #64748B; }
+      /* Agent ribbon (Step 2) */
+      .f-agents-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+      .agent-card {
+        border-radius: 8px; border: 1px solid #E2E8F0; background: #F8FAFC; padding: 8px 10px;
+        cursor: pointer; text-align: left; font: inherit; min-height: 0;
+      }
+      .agent-card .a-name { font-size: 11.5px; font-weight: 700; color: #0F172A; display: block; }
+      .agent-card .a-sub { font-size: 10.5px; color: #64748B; display: block; }
+      .agent-card .a-badge { display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; background: #E2E8F0; color: #475569; }
+      .agent-card.running { background: #EFF6FF; border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+      .agent-card.running .a-badge { background: #DBEAFE; color: #1D4ED8; }
+      .agent-card.done { background: #FFFFFF; border-color: #A7F3D0; }
+      .agent-card.done .a-badge { background: #D1FAE5; color: #065F46; }
+      .agent-card.trap-shield { background: #FFFBEB; border-color: #FDE68A; }
+      .agent-card.trap-shield .a-badge { background: #FEF3C7; color: #92400E; }
+      .agent-card.verified { background: #ECFDF5; border-color: #6EE7B7; }
+      .agent-card.verified .a-badge { background: #065F46; color: #fff; }
+      /* Telemetry ticker + reasoning rows (Step 2) */
+      .telemetry-ticker {
+        background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 5px;
+        padding: 5px 10px; font-size: 10.5px; color: #334155; margin-bottom: 10px;
+        max-height: 118px; overflow-y: auto;
+      }
+      .telemetry-ticker .tl-row { padding: 1px 0; border: none; background: none; width: 100%; text-align: left; font: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+      .telemetry-ticker .tl-row:hover { text-decoration: underline; }
+      .f-reasoning { display: grid; gap: 6px; margin-bottom: 10px; }
+      .f-reasoning:empty { display: none; }
+      .reasoning-row { border-radius: 5px; padding: 6px 10px; font-size: 12px; border: 1px solid #DCFCE7; background: #F0FDF4; color: #166534; }
+      .reasoning-row.isolated, .reasoning-row.quarantined { background: #FFFBEB; border-color: #FEF3C7; color: #92400E; }
+      .reasoning-row .rz-proof { margin-left: 8px; font-size: 11px; }
+      /* Export dropdown (Step 3) */
+      .export-dropdown { position: relative; display: inline-block; }
+      .export-menu {
+        position: absolute; right: 0; top: calc(100% + 4px); z-index: 40;
+        display: flex; flex-direction: column; gap: 2px; min-width: 250px;
+        background: #fff; border: 1px solid var(--line-strong); border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(15,23,42,0.12); padding: 4px;
+      }
+      .export-menu button { text-align: left; background: none; border: none; border-radius: 6px; padding: 8px 10px; font-size: 12.5px; cursor: pointer; color: var(--text); font-family: inherit; }
+      .export-menu button:hover { background: #F1F5F9; }
+      /* Bulk view (Step 3, >6 records) */
+      #f-bulk-view .bulk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      #f-bulk-view .bulk-table th, #f-bulk-view .bulk-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+      /* Step 3 answer card is superseded by tiles in 2.5 */
+      #f-answer { display: none; }
     </style>
   </head>
   <body class="friendly">
@@ -798,18 +752,22 @@
             <span style="width:6px;height:6px;border-radius:1px;background:#FBBF24;"></span>
             <span style="width:6px;height:6px;border-radius:1px;background:#FB7185;"></span>
           </div>
-          <h1>Muse Mosaic</h1>
+          <div>
+            <h1>Muse Mosaic</h1>
+            <span class="brand-tagline">Autonomous Data Assembly Studio</span>
+          </div>
         </div>
-        <span>Clean, trustworthy records from scattered data.</span>
       </div>
       <nav class="f-steps f-only" id="f-steps" aria-label="How this page works">
-        <span class="step active" id="f-step-1" title="Jump to Step 1: Dataset Status"><span class="n">1</span> <span class="lbl">Dataset Status</span></span>
+        <span class="step active" id="f-step-1" title="Scattered shards discovery"><span class="n">1</span> <span class="lbl">Scattered Shards</span></span>
         <span class="arrow">→</span>
-        <span class="step" id="f-step-2" title="Jump to Step 2: Review Gaps"><span class="n">2</span> <span class="lbl">Review Gaps</span></span>
+        <span class="step" id="f-step-2" title="Datalog derivation and proving"><span class="n">2</span> <span class="lbl">Datalog Derivation</span></span>
         <span class="arrow">→</span>
-        <span class="step" id="f-step-3" title="Jump to Step 3: Clean Mosaic Picture"><span class="n">3</span> <span class="lbl">Clean Mosaic</span></span>
+        <span class="step" id="f-step-3" title="Assembled mosaic canvas"><span class="n">3</span> <span class="lbl">Assembled Mosaic</span></span>
       </nav>
       <div class="hdr-actions" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <button class="primary f-only" id="btn-replay" type="button" title="Re-run the last dataset through the 5-agent assembly">▶ Replay 5-Agent Assembly</button>
+        <button class="f-only" id="btn-schema" type="button" title="View the expected structure schema">⚙ Expected Schema</button>
         <span class="pill ver-badge detail-only" id="policy-badge" title="Policy version in force">Policy: checking…</span>
         <span class="pill ver-badge detail-only" id="taxonomy-badge" title="Taxonomy version in force">Taxonomy: checking…</span>
         <span class="pill detail-only"><span id="engine-dot" class="dot"></span><span id="engine-status">trust-engine: checking…</span></span>
@@ -837,18 +795,20 @@
       <div id="app-shell" class="app-shell-body">
         <aside id="app-side" class="left-sidebar" aria-label="Datasets and audit tools">
           <div class="side-sec">
-            <button type="button" id="f-intake-upload" class="side-upload" title="Upload a JSON file via POST /upload">↑ Upload JSON File</button>
+            <button type="button" id="f-intake-upload" class="side-upload" title="Upload a JSON file via POST /upload">↑ Upload Data File</button>
             <input type="file" id="f-intake-file" accept=".json,application/json" hidden />
+            <button type="button" id="f-add-shard" class="side-upload secondary" title="Add JSON shards into the active profile and re-derive">+ Add Shard to Profile</button>
+            <input type="file" id="f-add-shard-file" accept=".json,application/json" hidden />
             <span class="muted side-loaded" id="f-intake-name" title="Currently loaded dataset">No dataset loaded</span>
           </div>
           <div class="side-sec">
-            <div class="side-h">Sample Datasets</div>
+            <div class="side-h">Active Profiles</div>
             <nav id="f-intake-samples" aria-label="Sample dataset presets">
-              <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span>Messy JSON (No schema)</button>
-              <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span>Customer: 2 Phones (P-001)</button>
-              <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span>5 Hidden Pieces + Trap</button>
-              <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span>Unverified Ticket Conflict</button>
-              <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span>Product: New Category</button>
+              <button type="button" data-act="scene0" class="scenario-chip"><span class="chip-dot" style="background:#94A3B8"></span><span class="prof-main">Messy JSON (No schema)</span><span class="prof-sub">5 shards · 2 systems</span></button>
+              <button type="button" data-act="act1" class="scenario-chip"><span class="chip-dot" style="background:#34D399"></span><span class="prof-main">An Nguyen (P-001)</span><span class="prof-sub">11 fragments · 3 systems</span></button>
+              <button type="button" data-act="act2" class="scenario-chip"><span class="chip-dot" style="background:#FBBF24"></span><span class="prof-main">Hidden Chain + Trap</span><span class="prof-sub">6 shards · 4 systems</span></button>
+              <button type="button" data-act="act3" class="scenario-chip"><span class="chip-dot" style="background:#F59E0B"></span><span class="prof-main">Ticket Conflict (Phone)</span><span class="prof-sub">12 + ticket · 4 systems</span></button>
+              <button type="button" data-act="act4" class="scenario-chip"><span class="chip-dot" style="background:#38BDF8"></span><span class="prof-main">Product: Smartphone</span><span class="prof-sub">3 specs · 3 systems</span></button>
             </nav>
           </div>
           <div class="side-sec">
@@ -866,6 +826,14 @@
               <div><span class="dot ok"></span>Meta API: REAL</div>
               <div><span class="dot ok"></span>manglekit: REAL</div>
               <div><span class="dot"></span>Sources: SYNTHETIC</div>
+            </div>
+          </div>
+          <div class="side-sec" id="f-enrich" aria-label="Enrich active mosaic">
+            <div class="side-h">Enrich Active Mosaic</div>
+            <div class="side-tools">
+              <button type="button" class="side-item" data-enrich="ticket" title="Ingest an unverified support-ticket phone shard">+ Support Ticket (Phone)</button>
+              <button type="button" class="side-item" data-enrich="order" title="Ingest a new order shard">+ Order ORD-999 (Product)</button>
+              <button type="button" class="side-item" data-enrich="email" title="Ingest a competing email lead">+ Salesforce Email Lead</button>
             </div>
           </div>
           <details class="f-plan side-sec" id="f-plan" hidden>
@@ -907,43 +875,55 @@
             <div class="f-config-summary" id="f-config-summary" hidden></div>
             <div class="f-dataset-card" id="f-dataset-status" role="region" aria-label="Step 1: Dataset status summary">
               <div class="f-ds-head">
-                <strong><span class="f-step-badge">Step 1</span>Dataset status — What we found in your data</strong>
-                <span><span class="tag" id="f-ds-badge">Loading dataset…</span>
-                <button type="button" id="f-export-batch" class="btn-how" title="Download verified records with proof">⬇ Export</button></span>
+                <strong><span class="f-step-badge">Step 1</span>Scattered Shards Discovery</strong>
+                <span><span class="tag" id="f-ds-badge">Loading dataset…</span></span>
               </div>
               <div class="f-ds-body" id="f-ds-body">Checking pieces and systems…</div>
+              <details class="f-pieces-acc" id="f-pieces-acc" open>
+                <summary>Source Pieces (<span id="f-pieces-count">0</span>)</summary>
+                <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
+              </details>
             </div>
 
             <div class="f-gaps-card" id="f-gaps-wrap" role="region" aria-label="Step 2: Gap by gap review">
               <div class="f-ds-head">
-                <strong><span class="f-step-badge">Step 2</span>Gaps to review — Disagreements &amp; choices</strong>
+                <strong><span class="f-step-badge">Step 2</span>Datalog Derivation &amp; Proving <span class="muted" style="font-weight:400">(5 Agents + Manglekit)</span></strong>
                 <span class="tag" id="f-gaps-badge">0 gaps</span>
               </div>
+              <div class="f-agents-grid" id="f-agents-grid" aria-label="Derivation agents"></div>
+              <div class="telemetry-ticker" id="f-telemetry" aria-live="polite"><span class="muted">Telemetry idle — run a dataset to watch the agents.</span></div>
+              <div class="f-reasoning" id="f-reasoning"></div>
               <div id="f-gaps"></div>
             </div>
 
             <div class="f-mosaic-card" id="f-mosaic-card" role="region" aria-label="Step 3: Clean mosaic picture and verified answer">
               <div class="f-mosaic-head">
-                <strong id="f-mosaic-title"><span class="f-step-badge">Step 3</span>Clean mosaic picture — Ready to safely use</strong>
+                <strong id="f-mosaic-title"><span class="f-step-badge">Step 3</span>Assembled Mosaic Canvas</strong>
                 <div class="f-viewing" id="f-viewing"></div>
                 <span><span class="tag" id="f-mosaic-tag">Assembled data tiles</span>
-                <button type="button" id="f-step3-otp-btn" class="primary" hidden title="Use the verified value downstream">✓ Send OTP</button>
-                <button type="button" id="f-export-record" class="btn-how" title="Download this record with proof">⬇ Export</button></span>
+                <span class="export-dropdown" id="f-export-dropdown">
+                  <button type="button" id="f-export-btn" class="btn-how" title="Download verified or quarantined shards">Export Options ▾</button>
+                  <span class="export-menu" id="f-export-menu" hidden>
+                    <button type="button" data-expdl="verified">✓ Export Assembled Mosaic (.json)</button>
+                    <button type="button" data-expdl="quarantine">⚠ Export Repelled / Quarantined Shards</button>
+                  </span>
+                </span></span>
               </div>
 
-              <div class="f-answer" id="f-answer" role="status">
+              <div class="f-answer" id="f-answer" role="status" hidden>
                 <h2 id="f-answer-head">Ask about a person</h2>
                 <div class="f-body" id="f-answer-body">Ask about a person. We'll answer only if we're sure, or we'll say we don't know.</div>
               </div>
 
               <div class="mosaic" id="f-mosaic" aria-label="Friendly mosaic picture"></div>
-              <div class="legend" style="margin-top: 10px;">
-                <span><i class="swatch" style="background: var(--src-sap)"></i>■ Source colour = system</span>
-                <span>Solid green = verified winner</span>
-                <span>Sub-strip = kept in history</span>
-                <span>Amber dashed = needs a person</span>
-                <span>Grey dashed = separated neighbour</span>
+              <div class="legend" id="mosaic-legend" style="margin-top: 10px;">
+                <span>Tessera Shards:</span>
+                <span><i class="swatch" style="background: var(--src-sap)"></i>SAP-ERP</span>
+                <span><i class="swatch" style="background: var(--src-salesforce)"></i>Salesforce</span>
+                <span><i class="swatch" style="background: var(--src-ciam)"></i>CIAM</span>
+                <span><i class="swatch" style="background: var(--src-market)"></i>Marketplace</span>
               </div>
+              <div id="f-bulk-view" hidden></div>
               <div class="meta mono" id="f-mosaic-detail" style="margin-top: 6px;">Click any tile for proof &amp; lineage.</div>
             </div>
           </div>
@@ -1130,39 +1110,9 @@
 
       </div><!-- /#detail-view -->
         </main>
-        <aside id="app-dock" class="right-agent-dock" aria-label="Multi-agent protocol">
-          <div class="dock-head chat-header-area">
-            <div class="dock-title-row">
-              <span class="material-symbols-outlined" style="font-size:18px;color:#0F172A">forum</span>
-              <span id="tab-card-title">⚡ Multi-Agent Protocol</span>
-              <div class="f-tab-group" style="display:inline-flex;background:#E2E8F0;padding:2px;border-radius:8px;font-size:11.5px;font-weight:600">
-                <button type="button" id="tab-btn-chat" class="f-tab-btn active" style="padding:4px 10px;border-radius:6px;border:none;background:#fff;color:#0F172A;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer">Protocol Chat</button>
-                <button type="button" id="tab-btn-pieces" class="f-tab-btn" style="padding:4px 10px;border-radius:6px;border:none;background:transparent;color:#475569;cursor:pointer">Pieces</button>
-              </div>
-            </div>
-            <div class="dock-chips" id="f-dock-chips" aria-label="Quick inquiries">
-              <button type="button" data-q="phone">Why phone?</button>
-              <button type="button" data-q="F6">Why not F6?</button>
-              <button type="button" data-q="datalog">How?</button>
-              <button type="button" data-q="muse-only">No checker?</button>
-            </div>
-          </div>
-          <div id="f-dock-scroll" class="chat-stream-area">
-            <div id="f-chat-panel" style="display:flex;flex-direction:column;">
-              <div id="f-chat-stream" aria-live="polite"></div>
-            </div>
-            <div id="f-pieces-panel" style="display:none;flex-direction:column;">
-              <div id="f-pieces"><div class="f-piece">Loading pieces…</div></div>
-            </div>
-          </div>
-          <div class="dock-foot chat-input-area">
-            <div class="f-chat-input" id="f-chat-input-bar">
-              <input id="f-chat-input" placeholder="Ask: phone, email, address, category, F6, how" />
-            </div>
-          </div>
-        </aside>
+
       </div><!-- /#app-shell -->
-      <footer id="trust-bar">REAL: Meta API call, mosaic-api, trust-engine, ledger, graph, UI &nbsp;|&nbsp; SYNTHETIC: sources, ticket, steward, OTP downstream</footer>
+      <footer id="trust-bar"><span id="footer-real">REAL: Meta Model API (5 Muse Sub-Agents), matching-engine, manglekit (Datalog), SQLite</span> &nbsp;|&nbsp; <span id="footer-synth">SYNTHETIC: Mock CRM/ERP sources, simulated ticket shards, sample datasets</span></footer>
 
 
     <div id="realtime-bar">
@@ -1224,28 +1174,21 @@
       <p class="meta">This approves how we clean, not the final answer. Every final value still has to pass every check.</p>
     </dialog>
 
-    <dialog id="export-modal">
-      <h3 style="margin-top:0">⬇ Export clean dataset</h3>
-      <div class="meta" id="export-scope-note">Only verified records leave the system with proof attached.</div>
-      <div style="margin:10px 0">
-        <strong>Format</strong><br />
-        <label class="check"><input type="radio" name="exp-format" value="json" checked /> 📄 JSON <span class="muted">(keeps full proof &amp; nested structure)</span></label><br />
-        <label class="check"><input type="radio" name="exp-format" value="csv" /> 📊 CSV <span class="muted">(for Excel / BI — adds lineage columns)</span></label><br />
-        <label class="check"><input type="radio" name="exp-format" value="parquet" /> 📋 Parquet <span class="muted">(for data pipelines — columnar)</span></label>
-      </div>
-      <div style="margin:10px 0">
-        <strong>Records</strong><br />
-        <label class="check"><input type="radio" name="exp-scope" value="published" checked /> Published only <span class="muted">(verified records)</span></label><br />
-        <label class="check"><input type="radio" name="exp-scope" value="published+escalated" /> Published + escalated <span class="muted">(includes items needing a person)</span></label><br />
-        <label class="check"><input type="radio" name="exp-scope" value="published+tombstones" /> Published + history <span class="muted">(includes kept losers)</span></label>
-      </div>
-      <div class="card warn" id="export-warning" hidden>⚠ WARNING: escalated records are included. Unverified values are <b>not trusted</b> — downstream systems must not use them. They are marked <span class="mono">STATUS=ESCALATED</span> in the file.</div>
-      <p class="meta">⚠ File contains PII — handle according to your data policy. Every download is logged with scope and format.</p>
-      <div class="steward-actions">
-        <button id="export-cancel" type="button">Cancel</button>
-        <button id="export-download" class="primary" type="button">⬇ Download</button>
-      </div>
-      <div class="meta" data-exp-err hidden></div>
+
+
+    <dialog id="f-agent-modal">
+      <h3 style="margin-top:0">Agent Inspector — <span class="mono" id="f-agent-modal-name"></span></h3>
+      <div class="meta" id="f-agent-modal-meta"></div>
+      <pre class="mono" id="f-agent-modal-body" style="white-space:pre-wrap;max-height:46vh;overflow:auto;"></pre>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+
+    <dialog id="config-modal">
+      <h3 style="margin-top:0">Expected Structure Schema <span class="tag">read-only</span></h3>
+      <div class="meta">The active policy matrix (authorities, golden attributes, critical flags). New versions arrive through steward accept, never hand edits.</div>
+      <div class="meta mono" id="config-modal-policy" style="margin:6px 0;"></div>
+      <div id="config-modal-body" style="white-space:pre-wrap;font-size:12px;"></div>
+      <form method="dialog"><button>Close</button></form>
     </dialog>
 
     <dialog id="prompt-dialog">

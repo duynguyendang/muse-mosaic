@@ -208,6 +208,7 @@
       taxonomy_version: payload.taxonomy_version || payload.taxonomy || (first && first.taxonomy_version) || loop.taxonomy,
     };
     fState.splinkPairs = (payload.splink && payload.splink.pairs) || [];
+    fState.splinkClusters = (payload.splink && payload.splink.clusters) || [];
     fState.ran = true;
     refreshDatasetData().catch(() => {});
     // Snapshot built fragments per golden entity so record switching can
@@ -287,9 +288,9 @@
   function renderFSteps() {
     const s1 = $("f-step-1"), s2 = $("f-step-2"), s3 = $("f-step-3");
     if (!s1 || !s2 || !s3) return;
-    s1.querySelector(".lbl").textContent = "Dataset Status";
-    s2.querySelector(".lbl").textContent = "Review Gaps";
-    s3.querySelector(".lbl").textContent = "Clean Mosaic";
+    s1.querySelector(".lbl").textContent = "Scattered Shards";
+    s2.querySelector(".lbl").textContent = "Datalog Derivation";
+    s3.querySelector(".lbl").textContent = "Assembled Mosaic";
     if (!s1.dataset.wired) {
       s1.dataset.wired = "1";
       s1.addEventListener("click", () => { const el = $("f-dataset-status"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); });
@@ -311,10 +312,9 @@
   function renderFPieces() {
     const box = $("f-pieces");
     const list = activeFragments();
-    // Live piece count on the dock tab.
     try {
-      const piecesTab = $("tab-btn-pieces");
-      if (piecesTab) piecesTab.textContent = `Pieces (${list.length})`;
+      const count = $("f-pieces-count");
+      if (count) count.textContent = String(list.length);
     } catch (error) { /* label is best-effort, never blocking */ }
     if (!list.length) {
       box.innerHTML = `<div class="f-piece">No pieces loaded yet.</div>`;
@@ -483,8 +483,6 @@
     const body = $("f-answer-body");
     box.className = "f-answer";
     box.hidden = false;
-    const otpBtn = $("f-step3-otp-btn");
-    if (otpBtn) otpBtn.hidden = true;
     if (!fState.ran || !lastFriendly) {
       box.classList.add("idle");
       setFHead("○ Ask about a person", "");
@@ -577,18 +575,9 @@
     const golden = f.golden;
     if (golden && Object.keys(golden.attributes || {}).length > 0) {
       box.classList.add("ok");
-      // Clean record: the answer card collapses — the tiles below ARE the
-      // answer. The primary action lives in the Step 3 header.
+      // Clean record: the tiles below ARE the answer (the Q&A card stays
+      // hidden per UX 2.5; tile clicks carry the proof).
       box.hidden = true;
-      if (otpBtn) {
-        const goldenType = golden.entity_type || currentEntity().entityType;
-        const agent = fState.downstream && fState.downstream.agent
-          ? fState.downstream.agent
-          : (goldenType === "product" ? "search" : "otp");
-        otpBtn.textContent = goldenType === "product" ? "✓ Use for search" : "✓ Send OTP";
-        otpBtn.hidden = false;
-        otpBtn.onclick = () => askDownstream(agent, { auto: true });
-      }
       const personName = (golden.attributes.display_name && golden.attributes.display_name.value)
         || (golden.attributes.name && golden.attributes.name.value)
         || (golden.entity_id || entityId || "This person");
@@ -681,6 +670,17 @@
     const uniqueSources = [...new Set(list.map((f) => f.source).filter(Boolean))];
     const srcNames = uniqueSources.map((s) => plainSource(s));
     const totalPieces = list.length;
+    const distinctAttrs = new Set(list.map((f) => f.attribute).filter(Boolean));
+    const verifiedCount = list.filter((f) => f.verified).length;
+    const clusterCount = (fState.splinkClusters && fState.splinkClusters.length)
+      || (fState.ran && fState.activeKeys && fState.activeKeys.length ? fState.activeKeys.length : 0);
+    const kpiStrip =
+      `<div class="f-ds-metrics">`
+      + `<div class="f-ds-metric"><b>${totalPieces} Input Shards</b>Across ${uniqueSources.length} systems</div>`
+      + `<div class="f-ds-metric"><b>${distinctAttrs.size} Fields Mapped</b>Auto-normalised</div>`
+      + `<div class="f-ds-metric"><b>${clusterCount} Unified Cluster${clusterCount === 1 ? "" : "s"}</b>Exact-id linkage</div>`
+      + `<div class="f-ds-metric"><b>${verifiedCount}/${totalPieces} Verified</b>Fail-closed active</div>`
+      + `</div>`;
     const f = lastFriendly;
 
     const knownEntities = (fState.allEntities && fState.allEntities.length > 0)
@@ -706,13 +706,7 @@
       if (gapsWrapEl) gapsWrapEl.classList.remove("all-clean");
       dsBadgeEl.textContent = `${totalPieces} pieces loaded`;
       dsBadgeEl.className = "tag";
-      dsBodyEl.innerHTML =
-        `<div class="f-ds-metrics">`
-        + `<div class="f-ds-metric"><b>${knownEntities.length} Records (${totalPieces} pieces)</b>From ${uniqueSources.length} systems (${esc(srcNames.join(", ") || "—")})</div>`
-        + `<div class="f-ds-metric"><b>○ Ready to match</b>Clustering & entity resolution queued</div>`
-        + `<div class="f-ds-metric"><b>○ Ready to check</b>Zero rules applied yet</div>`
-        + `<div class="f-ds-metric"><b>● Checker ready</b>Engine online & waiting</div>`
-        + `</div>`;
+      dsBodyEl.innerHTML = kpiStrip;
       gapsBadgeEl.textContent = "Not checked yet";
       gapsEl.innerHTML = `<div class="f-gap-item"><span class="muted">Run verification to inspect gaps and see if systems agree.</span></div>`;
       return;
@@ -804,23 +798,11 @@
     if (dNeed === 0) {
       dsBadgeEl.textContent = hasSummary ? "All clean" : `${totalPieces} pieces loaded`;
       dsBadgeEl.className = hasSummary ? "tag tag-ok" : "tag";
-      dsBodyEl.innerHTML =
-        `<div class="f-ds-metrics">`
-        + `<div class="f-ds-metric"><b>${dTotal} Records (${dPieces} pieces)</b>Across ${dSystems.length} systems (${esc(dSystems.join(", ") || "—")})</div>`
-        + `<div class="f-ds-metric"><b>✓ ${dClean} of ${dTotal} Clean (${dPct}%)</b>All records verified and agreed</div>`
-        + `<div class="f-ds-metric"><b>✓ 0 Disagreements</b>Zero conflicts remain</div>`
-        + `<div class="f-ds-metric"><b>● Checker active</b>Verified before use</div>`
-        + `</div>`;
+      dsBodyEl.innerHTML = kpiStrip;
     } else {
       dsBadgeEl.textContent = `${dNeed} record${dNeed === 1 ? "" : "s"} need you`;
       dsBadgeEl.className = "tag tag-need";
-      dsBodyEl.innerHTML =
-        `<div class="f-ds-metrics">`
-        + `<div class="f-ds-metric"><b>${dTotal} Records (${dPieces} pieces)</b>Across ${dSystems.length} systems (${esc(dSystems.join(", ") || "—")})</div>`
-        + `<div class="f-ds-metric"><b>✓ ${dClean} of ${dTotal} Clean (${dPct}%)</b>Verified records ready to use</div>`
-        + `<div class="f-ds-metric"><b>⚠ ${dNeed} Record${dNeed === 1 ? "" : "s"} need review</b>${isHiddenScene ? "1 lookalike neighbour separated" : "Disagreements after matching"}</div>`
-        + `<div class="f-ds-metric"><b>● Checker active</b>Rules isolating conflicts</div>`
-        + `</div>`;
+      dsBodyEl.innerHTML = kpiStrip;
     }
 
     // Step 2: Render Exception-Only Error Triage Queue
@@ -2192,39 +2174,38 @@
     return window.MosaicChat.add(Object.assign({ role: "engine" }, lines, opts));
   }
 
-  function wireChatBar() {
-    const bar = $("f-chat-input-bar");
-    if (!bar || bar.dataset.wired) return;
-    bar.dataset.wired = "1";
-    // Quick-inquiry chips live in the dock header; the input stays pinned
-    // at the dock bottom. Both are wired here, once.
-    document.querySelectorAll("#app-dock [data-q]").forEach((btn) => {
-      btn.addEventListener("click", () => askAbout(btn.getAttribute("data-q")));
-    });
-    const input = $("f-chat-input");
-    if (input) {
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && input.value.trim()) {
-          askAbout(input.value.trim());
-          input.value = "";
-        }
-      });
-    }
-    // Auto-scroll the dock transcript to the newest message on every run.
-    const stream = $("f-chat-stream");
-    if (stream && !stream.dataset.autoscroll) {
-      stream.dataset.autoscroll = "1";
-      new MutationObserver(() => {
-        const scroller = $("f-dock-scroll");
-        if (scroller) scroller.scrollTop = scroller.scrollHeight;
-        else stream.scrollTop = stream.scrollHeight;
-      }).observe(stream, { childList: true, subtree: true });
-    }
+  function wireWorkspace() {
+    if (wireWorkspace.done) return;
+    wireWorkspace.done = true;
+    // Sidebar dataset pills + enrich triggers + upload entry points.
     document.querySelectorAll("#f-intake-samples [data-act]").forEach((btn) => {
       btn.addEventListener("click", () => runScenario(btn.getAttribute("data-act")));
     });
-    document.getElementById("f-chat-stream").addEventListener("click", async (event) => {
-      const btn = event.target.closest("[data-chat-act]");
+    document.querySelectorAll("#f-enrich [data-enrich]").forEach((btn) => {
+      btn.addEventListener("click", () => enrichShard(btn.getAttribute("data-enrich")));
+    });
+    const replayBtn = $("btn-replay");
+    if (replayBtn && !replayBtn.dataset.wired) {
+      replayBtn.dataset.wired = "1";
+      replayBtn.addEventListener("click", () => runReplay());
+    }
+    const schemaBtn = $("btn-schema");
+    if (schemaBtn && !schemaBtn.dataset.wired) {
+      schemaBtn.dataset.wired = "1";
+      schemaBtn.addEventListener("click", () => openConfigModal());
+    }
+    const addShardBtn = $("f-add-shard");
+    const addShardFile = $("f-add-shard-file");
+    if (addShardBtn && addShardFile && !addShardBtn.dataset.wired) {
+      addShardBtn.dataset.wired = "1";
+      addShardBtn.addEventListener("click", () => addShardFile.click());
+      addShardFile.addEventListener("change", () => runAddShard(addShardFile));
+    }
+    // Telemetry action buttons (explain / detail / datalog / similar) ride
+    // on the ticker rows; delegation lives on document now that the rows
+    // render inside Step 2 instead of a chat panel.
+    document.addEventListener("click", async (event) => {
+      const btn = event.target instanceof Element ? event.target.closest("[data-chat-act]") : null;
       if (!btn) return;
       const act = btn.getAttribute("data-chat-act");
       if (act === "explain") {
@@ -2311,6 +2292,10 @@
       lines: chatProposerLines(proposal, splink),
       policyLine: decisionId ? `Decision: ${decisionId} — claims only, nothing published yet.` : undefined,
     });
+    try {
+      const steps = (proposal && (proposal.subagent_trace || proposal.trace)) || [];
+      renderAgentsForRun(steps, { published: false });
+    } catch (error) { /* best-effort */ }
   }
 
   function announceEngine(payload, golden, opts) {
@@ -2330,6 +2315,52 @@
       lines: chatEngineLines(payload, golden),
       policyLine: payload.policy_version ? `Policy: ${payload.policy_version}` : undefined,
       actions,
+    });
+    try { renderAgentsFromPayload(payload); } catch (error) { /* best-effort */ }
+    try { renderReasoning(payload, golden); } catch (error) { /* best-effort */ }
+  }
+
+  // Step 2 reasoning rows: verified wins with tombstones, isolated traps,
+  // and quarantined conflicts — each with an Inspect proof button.
+  function renderReasoning(payload, golden) {
+    const host = $("f-reasoning");
+    if (!host) return;
+    const rows = [];
+    const attrs = (golden && golden.attributes) || {};
+    for (const [name, value] of Object.entries(attrs)) {
+      if (name === "purchased_products") continue;
+      const rule = value.rule_fired || "R1";
+      const loserCount = (value.loser_fact_ids || []).length;
+      rows.push({
+        kind: "verified",
+        html: `✓ <b>${esc(name)}</b> fit (Rule ${esc(rule)}): <span class="mono">${esc(String(value.value))}</span>${loserCount ? ` — ${loserCount} rival shard${loserCount === 1 ? "" : "s"} retained as history` : ""}`,
+        proof: { decision: payload.decision_id, attr: name },
+      });
+    }
+    for (const conflict of payload.conflicts || []) {
+      rows.push({
+        kind: "quarantined",
+        html: `🛡 <b>${esc(conflict.attribute || "golden")}</b> quarantined — ${esc(conflict.reason_code || conflict.rule_fired || "withheld")}`,
+        proof: { decision: payload.decision_id, attr: conflict.attribute },
+      });
+    }
+    const traps = fState.trapDocs || [];
+    if (traps.length && !rows.some((r) => r.kind === "quarantined")) {
+      rows.push({
+        kind: "isolated",
+        html: `🛡 Isolated neighbour (${esc(traps.join(", "))}) — same building, different identity (Rule L1)`,
+        proof: { decision: payload.decision_id },
+      });
+    }
+    host.innerHTML = rows.map((r, i) =>
+      `<div class="reasoning-row ${r.kind}"><span>${r.html}</span><button type="button" class="btn-how rz-proof" data-r-proof="${i}">Inspect</button></div>`
+    ).join("");
+    host.querySelectorAll("[data-r-proof]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const r = rows[Number(btn.getAttribute("data-r-proof")) || 0];
+        if (!r) return;
+        explain(r.proof.decision, r.proof.attr).catch((error) => setStatus(`Explain failed: ${error.message}`));
+      });
     });
   }
 
@@ -2365,6 +2396,240 @@
         title: "Downstream Agent",
         lines: [`Downstream agent called GET /golden/${entityType}/${entityId} — No trusted value — downstream stopped.`],
       });
+    }
+  }
+
+  // ---- UX 2.5: 5-agent assembly ribbon, telemetry, reasoning ----
+  // All states derive from real runs: the ribbon shows QUEUED before a run,
+  // RUNNING while deriving, and DONE / TRAP SHIELD / VERIFIED from the
+  // actual proposer trace + engine verdict afterwards.
+  const AGENTS = [
+    { key: "scout", icon: "🔍", name: "Scout", sub: "1. Normalizer" },
+    { key: "linker", icon: "🔗", name: "Linker", sub: "2. Link Proposer" },
+    { key: "cluster", icon: "🧩", name: "Cluster", sub: "3. Chain Builder" },
+    { key: "taxonomist", icon: "🏷️", name: "Taxonomist", sub: "4. Vocabulary" },
+    { key: "critic", icon: "🛡️", name: "Critic", sub: "5. Adversary" },
+    { key: "engine", icon: "⚖️", name: "Trust Gate", sub: "6. Manglekit" },
+  ];
+
+  function renderAgents(cards) {
+    const host = $("f-agents-grid");
+    if (!host) return;
+    host.innerHTML = cards.map((c) =>
+      `<button type="button" class="agent-card ${esc(c.status)}" data-agent="${esc(c.key)}" title="Inspect ${esc(c.name)}">`
+      + `<span class="a-name">${esc(c.icon)} ${esc(c.name)}</span>`
+      + `<span class="a-sub">${esc(c.sub)}</span>`
+      + `<span class="a-badge">${esc(c.badge)}</span></button>`
+    ).join("");
+    host.querySelectorAll("[data-agent]").forEach((btn) => {
+      btn.addEventListener("click", () => openAgentInspector(btn.getAttribute("data-agent")));
+    });
+  }
+
+  function renderAgentsReset() {
+    renderAgents(AGENTS.map((a) => ({ ...a, status: "", badge: "QUEUED" })));
+  }
+
+  function renderAgentsRunning() {
+    renderAgents(AGENTS.map((a) => ({ ...a, status: "running", badge: "RUNNING" })));
+  }
+
+  function agentTraceSteps() {
+    const proposals = window.__lastProposals || [];
+    for (const p of proposals) {
+      if (p && p.subagent_trace && p.subagent_trace.length) return p.subagent_trace;
+    }
+    const single = window.__lastProposal;
+    if (single && single.subagent_trace) return single.subagent_trace;
+    return [];
+  }
+
+  // Agent ribbon states always derive from the last real run:
+  // trace steps mark their agents DONE, the trap doc arms the Critic shield,
+  // and the Trust Gate shows VERIFIED only when a golden published.
+  function renderAgentsForRun(steps, opts) {
+    const byAgent = {};
+    (steps || []).forEach((s) => { byAgent[String(s.agent || "").toLowerCase()] = s; });
+    const trap = (fState.trapDocs || []).length > 0;
+    const published = !!(opts && opts.published);
+    renderAgents(AGENTS.map((a) => {
+      if (a.key === "critic" && trap && byAgent.critic) {
+        return { ...a, status: "trap-shield", badge: "TRAP SHIELD" };
+      }
+      if (a.key === "engine") {
+        return published ? { ...a, status: "verified", badge: "VERIFIED" } : { ...a, status: "done", badge: "DONE" };
+      }
+      return { ...a, status: byAgent[a.key] ? "done" : "", badge: byAgent[a.key] ? "DONE" : "QUEUED" };
+    }));
+    // NOTE: the ticker itself is fed by announceProposer/announceEngine;
+    // this function must not wipe it (rows carry the Inspector + proof buttons).
+  }
+
+  function renderAgentsFromPayload(payload) {
+    const published = !!(payload && (payload.verdict === "published"
+      || (payload.golden && payload.golden.golden_id)
+      || ((payload.goldens || []).some((g) => g && g.golden_id))));
+    renderAgentsForRun(agentTraceSteps(), {
+      published,
+      decisionLine: payload && payload.decision_id
+        ? `[Gate] decision ${String(payload.decision_id).slice(0, 8)}… verdict ${String(payload.verdict || "?").toUpperCase()}`
+        : undefined,
+    });
+  }
+
+  // UX 2.5 enrich: ingest one more shard into the ACTIVE profile and re-derive.
+  // Every shard below is real demo data with explicit provenance; the engine
+  // still decides what publishes. Nothing is invented or merged by hand.
+  async function enrichShard(kind) {
+    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
+    if (kind === "ticket") {
+      switchEntity("user/P-001");
+      ticketBox.checked = true;
+      await loadFragments();
+      feed("Enrich: support-ticket phone shard ingested (unverified, Rank 4) — re-deriving.");
+      await resolve(true);
+      return;
+    }
+    if (kind === "order") {
+      switchEntity("user/P-001");
+      ticketBox.checked = false;
+      await loadFragments();
+      fragments.push({
+        attribute: "order_id", value: "ORD-999", source: "order-like", source_id: "ord-999-1",
+        authority_rank: 1, event_time: new Date().toISOString(), verified: true, ttl_seconds: 3600,
+      });
+      feed("Enrich: order shard ORD-999 ingested — re-deriving for transitive linkage.");
+      renderFragments();
+      renderFriendly();
+      await resolve(true);
+      return;
+    }
+    if (kind === "email") {
+      switchEntity("user/P-001");
+      ticketBox.checked = false;
+      await loadFragments();
+      fragments.push({
+        attribute: "email", value: "an.nguyen.lead@example.com", source: "salesforce-like", source_id: "sf-lead-1",
+        authority_rank: 2, event_time: new Date().toISOString(), verified: false, ttl_seconds: 3600,
+      });
+      feed("Enrich: competing Salesforce email lead ingested (unverified) — survivorship re-evaluated.");
+      renderFragments();
+      renderFriendly();
+      await resolve(true);
+      return;
+    }
+    setStatus(`Unknown enrichment: ${kind}`);
+  }
+
+  // UX 2.5 add-shard: merge an uploaded file into the ACTIVE profile.
+  async function runAddShard(input) {
+    if (!input.files || !input.files.length) return;
+    const fileName = input.files[0].name;
+    const uploaded = await uploadFile(true, input);
+    const incoming = (uploaded && uploaded.fragments) || [];
+    if (!incoming.length) {
+      setStatus(`Add Shard: ${fileName} parsed to 0 usable fragments — nothing merged.`);
+      feed(`Add Shard: ${fileName} had no usable fragments; profile unchanged.`);
+      input.value = "";
+      return;
+    }
+    const seen = new Set(fragments.map((f) => `${f.source_id}::${f.attribute}`));
+    let added = 0;
+    for (const frag of incoming) {
+      const key = `${frag.source_id}::${frag.attribute}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      fragments.push(frag);
+      added += 1;
+    }
+    tickets = [];
+    renderFragments();
+    renderFriendly();
+    markIntakeUpload(`${fileName} (+${added} shards)`);
+    await resolveUpload(true);
+    input.value = "";
+  }
+
+  // UX 2.5 schema viewer: read-only authority matrix of the active policy.
+  async function openConfigModal() {
+    const modal = $("config-modal");
+    const body = $("config-modal-body");
+    const head = $("config-modal-policy");
+    if (!modal || !body) return;
+    const entityType = (currentEntity() || {}).entityType || "user";
+    try {
+      const data = await api(`/policies/${entityType}/${encodeURIComponent(fState.policyUser && entityType === "user" ? fState.policyUser : fState.policyProduct || "")}`);
+      const policy = (data && data.policy) || data || {};
+      if (head) head.textContent = `Policy ${policy.policy_version || "?"} · Taxonomy ${loop.taxonomy || "?"}`;
+      const rows = Object.entries(policy.authority_matrix || {}).map(([attr, owners]) =>
+        `<div>• <b>${esc(attr)}</b>${(policy.critical_attributes || []).includes(attr) ? ' <span class="tag">critical</span>' : ""} — ${esc(Object.entries(owners || {}).map(([src, rank]) => `${src} r${rank}`).join(", "))}</div>`
+      ).join("");
+      const golden = (policy.golden_attributes || []).join(", ");
+      body.innerHTML = (rows || "<div>No authority matrix published for this policy.</div>")
+        + (golden ? `<div style="margin-top:6px">Golden record: <span class="mono">${esc(golden)}</span></div>` : "")
+        + `<div class="meta" style="margin-top:6px">Read-only. Versions advance through steward accept, never hand edits.</div>`;
+    } catch (error) {
+      body.textContent = `Schema unavailable: ${error.message}`;
+    }
+    if (modal.showModal) modal.showModal();
+  }
+
+  // UX 2.5 agent inspector: real proposer trace step for one agent card.
+  function openAgentInspector(key) {
+    const modal = $("f-agent-modal");
+    const nameEl = $("f-agent-modal-name");
+    const metaEl = $("f-agent-modal-meta");
+    const bodyEl = $("f-agent-modal-body");
+    if (!modal || !bodyEl) return;
+    const meta = AGENTS.find((a) => a.key === key) || { name: key, sub: "" };
+    const steps = agentTraceSteps();
+    const step = steps.find((s) => String(s.agent || "").toLowerCase() === key);
+    if (nameEl) nameEl.textContent = `${meta.icon || ""} ${meta.name}`.trim();
+    if (!step) {
+      const payload = (window.__lastProposals && window.__lastProposals[0]) || window.__lastPayload || {};
+      const fallback = key === "engine"
+        ? { decision_id: payload.decision_id || (lastFriendly && lastFriendly.decision_id), verdict: payload.verdict || (lastFriendly && lastFriendly.verdict), policy_version: payload.policy_version || payload.policy_version_user }
+        : { note: "No trace step recorded for this agent in the last run yet." };
+      if (metaEl) metaEl.textContent = meta.sub || "";
+      bodyEl.textContent = JSON.stringify(fallback, null, 2);
+    } else {
+      if (metaEl) metaEl.textContent = `${meta.sub} · model ${step.model || "mock"} · real_call ${!!step.real_call}`;
+      bodyEl.textContent = JSON.stringify(step, null, 2);
+    }
+    if (modal.showModal) modal.showModal();
+  }
+
+  async function runReplay() {
+    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
+    const last = fState.lastRun;
+    if (!last) {
+      setStatus("Nothing to replay yet — run a dataset first.");
+      feed("Replay requested with no prior run; nothing re-derived.");
+      return;
+    }
+    renderAgentsRunning();
+    feed("Replay: re-running the last assembly through all 5 agents + gate.");
+    try {
+      const payload = await api(last.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(last.body),
+      });
+      renderAgentsFromPayload(payload);
+      if (last.url === "/build") {
+        await afterBuild(payload, true);
+      } else {
+        setFriendlyFromResolve(payload);
+        announceRunBubbles(payload);
+        markRan();
+        renderFriendly();
+        const agent = (payload.entity_type === "product" || (window.__uploadedEntityType || "user") === "product") ? "search" : "otp";
+        await askDownstream(agent, { auto: true });
+      }
+    } catch (error) {
+      renderAgentsReset();
+      setStatus(`Replay failed (fail-closed): ${error.message}`);
+      feed(`Replay failed (fail-closed): ${error.message}`);
     }
   }
 
@@ -2631,6 +2896,7 @@
   }
 
   function runScenario(id) {
+    try { renderAgentsReset(); } catch (error) { /* best-effort */ }
     if (id === "scene0") return actScene0();
     if (id === "act1") return act1();
     if (id === "act2") return act2();
@@ -2813,7 +3079,7 @@
   }
 
   async function toggleChatDatalog(btn) {
-    const host = btn.closest(".chat-bubble");
+    const host = btn.closest(".tl-row");
     if (!host) return;
     let box = host.querySelector("[data-datalog]");
     if (box) {
@@ -2841,12 +3107,6 @@
   }
 
   async function askAbout(query) {
-    // Inquiries always land on the Protocol Chat tab.
-    try {
-      const chatTab = $("tab-btn-chat");
-      const chatPanel = $("f-chat-panel");
-      if (chatTab && chatPanel && chatPanel.style.display === "none") chatTab.click();
-    } catch (error) { /* tab switch is best-effort, never blocking */ }
     const q = String(query || "").toLowerCase();
     const f = (lastFriendly && lastFriendly.golden) || window.__lastGolden || null;
     if (/datalog|rule|how|proof/.test(q)) {
@@ -3435,10 +3695,9 @@
       if (loserIds.length > 0) {
         const loserFrags = loserIds.map((id) => fragmentForFactId(id, name)).filter(Boolean);
         if (loserFrags.length > 0) {
-          const loserDesc = loserFrags.map((lf) => `${plainSource(lf.source)} (${lf.value})`).join(", ");
-          losersText = `History: superseded ${loserDesc}`;
+          losersText = loserFrags.map((lf) => `\u21b3 Overrode ${plainSource(lf.source)} shard: ${lf.value}`).join("; ");
         } else {
-          losersText = `History: superseded ${loserIds.length} candidate${loserIds.length === 1 ? "" : "s"}`;
+          losersText = `\u21b3 Overrode ${loserIds.length} superseded shard${loserIds.length === 1 ? "" : "s"}`;
         }
       }
 
@@ -3478,11 +3737,11 @@
     if (showTrap) {
       tiles.push({
         kind: "trap",
-        attrLabel: "🛡 KEPT SEPARATE (NOT MERGED)",
+        attrLabel: "✕ FOREIGN SHARD",
         val: trapIds.join(", "),
-        ruleLabel: "SEPARATED",
-        srcLabel: "Address match only",
-        losersText: "This neighbour looks similar, so we did not merge him.",
+        ruleLabel: "Rule L1 Repelled",
+        srcLabel: "Same building, different identity",
+        losersText: "Address match alone is never proof — similar is not the same.",
         detail: { trap: `${trapIds.join(", ")} excluded — similar is not same` },
         rawAttr: "trap",
       });
@@ -3492,7 +3751,7 @@
     tiles.forEach((t) => {
       const tileEl = document.createElement("button");
       tileEl.type = "button";
-      tileEl.className = `tile ${t.kind}`;
+      tileEl.className = `tessera-tile ${t.kind}`;
       tileEl.title = `${t.attrLabel}: ${t.val}`;
       tileEl.setAttribute("aria-label", `${t.attrLabel}: ${t.val}`);
 
@@ -3542,9 +3801,48 @@
   }
 
   function renderMosaic(payload) {
+    const goldens = (payload && payload.goldens) || [];
+    const bulkHost = $("f-bulk-view");
+    const gridHost = $("f-mosaic");
+    if (goldens.length > 6 && bulkHost) {
+      downloadBulkJson = () => {
+        downloadBlob(`bulk_${goldens.length}_mosaics.json`, JSON.stringify(goldens, null, 1));
+        feed(`Exported bulk_${goldens.length}_mosaics.json (${goldens.length} portraits).`);
+      };
+      if (gridHost) gridHost.hidden = true;
+      const legend = document.querySelector("#f-mosaic-card .legend");
+      if (legend) legend.hidden = true;
+      const detail = $("f-mosaic-detail");
+      if (detail) detail.hidden = true;
+      bulkHost.hidden = false;
+      const rows = goldens.slice(0, 5).map((g) => {
+        const attrs = (g && g.attributes) || {};
+        const pick = (...names) => {
+          for (const n of names) { const v = attrs[n]; if (v && v.value != null) return String(v.value); }
+          return "—";
+        };
+        return `<tr><td class="mono">${esc(String(g.entity_id || "").slice(0, 12))}</td>`
+          + `<td>${esc(pick("display_name", "name", "full_name", "category"))}</td>`
+          + `<td class="mono">${esc(pick("phone", "email", "order_id"))}</td>`
+          + `<td class="mono">${esc(g.policy_version || "")}</td></tr>`;
+      }).join("");
+      bulkHost.innerHTML = `<div class="f-gap-item ok">✓ ${goldens.length} Complete Mosaic Portraits Assembled</div>`
+        + `<div class="steward-actions" style="margin:8px 0"><button type="button" class="btn-how" id="f-bulk-download">⬇ Download All ${goldens.length} Mosaics (.json)</button></div>`
+        + `<table class="bulk-table"><thead><tr><th>Portrait ID</th><th>Display Name</th><th>Verified Contact</th><th>Assembly Proof</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const dl = $("f-bulk-download");
+      if (dl) dl.addEventListener("click", () => { if (downloadBulkJson) downloadBulkJson(); });
+      return;
+    }
+    if (bulkHost) bulkHost.hidden = true;
+    if (gridHost) gridHost.hidden = false;
+    const legend = document.querySelector("#f-mosaic-card .legend");
+    if (legend) legend.hidden = false;
+    const detail = $("f-mosaic-detail");
+    if (detail) detail.hidden = false;
     paintMosaicBox(mosaic, tileDetail, payload, false);
     paintMosaicBox($("f-mosaic"), $("f-mosaic-detail"), payload, true);
   }
+  let downloadBulkJson = null;
 
   // Context shared with drawers.js. Drawers never touch app state directly:
   // reads go through getters, writes through setters, rendering and API
@@ -3718,86 +4016,68 @@
     const dlg = $("how-dialog");
     if (dlg && dlg.showModal) dlg.showModal();
   });
-  let exportMode = "batch";
-
-  function openExport(mode) {
-    exportMode = mode;
-    const err = document.querySelector("[data-exp-err]");
-    if (err) {
-      err.hidden = true;
-      err.textContent = "";
-    }
-    const warn = $("export-warning");
-    const scope = document.querySelector('input[name="exp-scope"]:checked');
-    if (warn) warn.hidden = !(scope && scope.value.includes("escalated"));
-    const modal = $("export-modal");
-    if (modal && modal.showModal) modal.showModal();
-    else setStatus("Export dialog unavailable in this browser.");
-  }
-
-  async function downloadExport() {
-    const formatEl = document.querySelector('input[name="exp-format"]:checked');
-    const scopeEl = document.querySelector('input[name="exp-scope"]:checked');
-    const format = (formatEl && formatEl.value) || "json";
-    const scope = (scopeEl && scopeEl.value) || "published";
-    const { entityType, entityId } = currentEntity();
-    const path = exportMode === "single" && entityId
-      ? `/export/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`
-      : `/export/${encodeURIComponent(entityType)}`;
-    const response = await fetch(
-      `${API_BASE}${path}?format=${encodeURIComponent(format)}&scope=${encodeURIComponent(scope)}`
-    );
-    if (!response.ok) {
-      let detail = `HTTP ${response.status}`;
-      try {
-        const data = await response.json();
-        if (data && data.detail) detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
-      } catch (error) { /* keep status text */ }
-      throw new Error(detail);
-    }
-    const blob = await response.blob();
-    const disposition = response.headers.get("content-disposition") || "";
-    const nameMatch = /filename="([^"]+)"/.exec(disposition);
+  // Step 3 export dropdown: verified JSON straight from the ledger export
+  // endpoint; quarantined shards assembled client-side from the last run.
+  function downloadBlob(name, text) {
+    const blob = new Blob([text], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = nameMatch ? nameMatch[1] : `mosaic-export.${format}`;
+    anchor.download = name;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    const modal = $("export-modal");
-    if (modal && modal.open) modal.close();
-    const exportId = response.headers.get("x-export-id") || "unknown";
-    const count = response.headers.get("x-record-count") || "?";
-    const warned = response.headers.get("x-export-warning");
-    feed(`Exported ${count} record(s) as ${format} (scope: ${scope}) — download logged as ${exportId}.${warned ? " ESCALATED records included and marked." : ""}`);
-    setStatus(`Exported ${count} record(s) — logged as ${exportId}.`);
   }
-
-  $("f-export-batch").addEventListener("click", () => openExport("batch"));
-  $("f-export-record").addEventListener("click", () => openExport("single"));
-  document.querySelectorAll('input[name="exp-scope"]').forEach((radio) => {
-    radio.addEventListener("change", () => {
-      const warn = $("export-warning");
-      const scope = document.querySelector('input[name="exp-scope"]:checked');
-      if (warn) warn.hidden = !(scope && scope.value.includes("escalated"));
-    });
-  });
-  $("export-cancel").addEventListener("click", () => {
-    const modal = $("export-modal");
-    if (modal && modal.open) modal.close();
-  });
-  $("export-download").addEventListener("click", () => {
-    downloadExport().catch((error) => {
-      const err = document.querySelector("[data-exp-err]");
-      if (err) {
-        err.hidden = false;
-        err.textContent = `Export failed (fail-closed): ${error.message}`;
-      } else {
+  async function downloadVerifiedJson() {
+    const { entityType } = currentEntity();
+    const response = await fetch(`${API_BASE}/export/${encodeURIComponent(entityType)}?format=json&scope=published`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "verified_goldens.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    feed("Exported verified_goldens.json (published records only, with proof).");
+  }
+  function downloadQuarantineJson() {
+    const f = lastFriendly || {};
+    const payload = {
+      decision_id: f.decision_id || null,
+      policy_version: f.policy_version || null,
+      taxonomy_version: f.taxonomy_version || null,
+      conflicts: f.conflicts || [],
+      steward_queue: f.steward_queue || [],
+      trap_docs: fState.trapDocs || [],
+    };
+    downloadBlob("unverified_quarantine.json", JSON.stringify(payload, null, 1));
+    feed("Exported unverified_quarantine.json (conflicts, steward queue, isolated traps).");
+  }
+  document.querySelectorAll("#f-export-menu [data-expdl]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const menu = $("f-export-menu");
+      if (menu) menu.hidden = true;
+      try {
+        if (btn.getAttribute("data-expdl") === "quarantine") downloadQuarantineJson();
+        else await downloadVerifiedJson();
+      } catch (error) {
         setStatus(`Export failed (fail-closed): ${error.message}`);
+        feed(`Export failed (fail-closed): ${error.message}`);
       }
     });
+  });
+  $("f-export-btn").addEventListener("click", () => {
+    const menu = $("f-export-menu");
+    if (menu) menu.hidden = !menu.hidden;
+  });
+  document.addEventListener("click", (event) => {
+    const menu = $("f-export-menu");
+    const dd = $("f-export-dropdown");
+    if (menu && !menu.hidden && dd && !dd.contains(event.target)) menu.hidden = true;
   });
   $("f-loop-more-btn").addEventListener("click", () => {
     const more = $("f-loop-more");
@@ -3860,37 +4140,11 @@
     if (event.key === "Escape") MosaicDrawers.closeDrawer();
   });
 
-  const tabChat = $("tab-btn-chat");
-  const tabPieces = $("tab-btn-pieces");
-  const chatPanel = $("f-chat-panel");
-  const piecesPanel = $("f-pieces-panel");
-  if (tabChat && tabPieces && chatPanel && piecesPanel) {
-    tabChat.addEventListener("click", () => {
-      chatPanel.style.display = "flex";
-      piecesPanel.style.display = "none";
-      tabChat.style.background = "#fff";
-      tabChat.style.color = "#0F172A";
-      tabChat.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
-      tabPieces.style.background = "transparent";
-      tabPieces.style.color = "#475569";
-      tabPieces.style.boxShadow = "none";
-    });
-    tabPieces.addEventListener("click", () => {
-      chatPanel.style.display = "none";
-      piecesPanel.style.display = "flex";
-      tabPieces.style.background = "#fff";
-      tabPieces.style.color = "#0F172A";
-      tabPieces.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
-      tabChat.style.background = "transparent";
-      tabChat.style.color = "#475569";
-      tabChat.style.boxShadow = "none";
-    });
-  }
-
   renderLoop();
   applyPreRunState();
+  try { renderAgentsReset(); } catch (error) { /* best-effort first paint */ }
   renderFriendly();
-  wireChatBar();
+  wireWorkspace();
   MosaicChat.add({
     role: "downstream",
     title: "Downstream Agent",

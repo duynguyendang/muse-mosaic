@@ -124,7 +124,6 @@ def test_demo_controls_and_badges_exist():
         "entity-active",
         "f-side-detail",
         "f-side-steward-count",
-        "f-step3-otp-btn",
         "graph-candidates",
         "realtime-bar",
         "upload-collapse",
@@ -148,7 +147,7 @@ def test_demo_controls_and_badges_exist():
 
 
 def test_user_first_surface_ids_exist():
-    """User-First v1.0 surfaces: how-it-works, Scene 0 modal, export modal."""
+    """User-First v1.0 surfaces: how-it-works, Scene 0 modal, export dropdown."""
     html_ids = _html_ids()
     for ref in (
         "f-how-it-works",
@@ -159,29 +158,29 @@ def test_user_first_surface_ids_exist():
         "scene0-modal-yes",
         "scene0-modal-change",
         "scene0-modal-no",
-        "export-modal",
-        "f-export-batch",
-        "f-export-record",
-        "export-warning",
-        "export-cancel",
-        "export-download",
+        "f-export-dropdown",
+        "f-export-btn",
+        "f-export-menu",
         "f-mosaic-tag",
         "f-viewing",
+        "f-bulk-view",
+        "f-agent-modal",
+        "config-modal",
     ):
         assert ref in html_ids, ref
     src = (WEB / "app.js").read_text(encoding="utf-8")
     for handler in (
-        "openExport",
-        "downloadExport",
+        "downloadVerifiedJson",
+        "downloadQuarantineJson",
         "restoreEngineAndRetry",
         "hopChainFromProposals",
         "plainFieldSentence",
     ):
         assert handler in src, handler
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    assert "Clean, trustworthy records from scattered data." in html
+    assert "Autonomous Data Assembly Studio" in html
     assert "No, do not use this plan" in html
-    assert "⬇ Export" in html
+    assert "Export Options" in html
     assert "How we'll clean this file" in html
     assert "This approves how we clean, not the final answer" in html
 
@@ -200,7 +199,7 @@ def test_plain_language_regressions_absent():
             assert banned not in src, f"{name} still contains: {banned[:60]}"
 
 
-def test_drawer_and_chat_surface_ids_exist():
+def test_drawer_and_ticker_surface_ids_exist():
     html_ids = _html_ids()
     for ref in (
         "taxonomy-drawer",
@@ -239,43 +238,46 @@ def test_bidirectional_highlight_hooks_exist():
 def test_protocol_chat_surface_exists():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     for ref in (
-        # App shell: frozen header + left sidebar + center + right dock.
+        # App shell: frozen header + two-column workspace (no right dock).
         "app-shell",
         "app-side",
         "app-main",
-        "app-dock",
         "trust-bar",
         "f-intake-upload",
         "f-intake-file",
+        "f-add-shard",
+        "f-add-shard-file",
         "f-intake-samples",
+        "f-enrich",
         "f-side-steward",
         "f-side-steward-count",
         "f-side-boundary",
         "f-side-detail",
         "f-status-pill",
-        "f-dock-chips",
-        "f-dock-scroll",
-        "f-chat-stream",
-        "f-chat-input-bar",
-        "f-chat-input",
-        "f-plan",
         "f-steps",
         "f-step-1",
         "f-step-2",
         "f-step-3",
+        "f-agents-grid",
+        "f-telemetry",
+        "f-reasoning",
+        "f-mosaic",
+        "f-pieces",
+        "config-modal",
     ):
         assert f'id="{ref}"' in html, ref
     assert 'id="f-simulate"' not in html, "header Simulate box must be gone"
-    assert 'id="f-sim-ticket"' not in html, "ticket trigger lives in the intake bar now"
+    assert 'id="f-sim-ticket"' not in html, "ticket trigger lives in the sidebar now"
     assert 'id="f-sim-engine"' not in html, "engine toggle lives on the status pill now"
     assert 'id="f-scenario-bar"' not in html, "standalone Scenarios strip must be gone"
     assert 'id="f-upload"' not in html, "duplicate sidebar upload box must be gone"
     assert 'id="f-answer-cta"' not in html, "duplicate Step 3 CTA buttons must be gone"
     assert 'id="f-intake-bar"' not in html, "old intake bar replaced by the sidebar"
+    assert 'id="app-dock"' not in html, "2.5 has no right dock; the ticker lives in Step 2"
     assert "f-flow-arrow" not in html, "spacer banners must be gone"
     assert "btn-view-mosaic" not in html, "full-width View Mosaic buttons must be gone"
     assert "f-step-sub" not in html, "redundant step paragraphs must be gone"
-    for cls in ("left-sidebar", "center-workspace", "right-agent-dock", "app-shell-body"):
+    for cls in ("left-sidebar", "center-workspace", "app-shell-body"):
         assert f'class="{cls}"' in html or f' {cls}"' in html or f"{cls} " in html, cls
     # Entity badge is always visible (no hidden attr); realtime bar stays
     # in DOM for the contract but never renders.
@@ -285,10 +287,10 @@ def test_protocol_chat_surface_exists():
     # All five sample dataset presets live in the sidebar.
     for act in ("scene0", "act1", "act2", "act3", "act4"):
         assert f'data-act="{act}"' in html, act
+    for enrich in ("ticket", "order", "email"):
+        assert f'data-enrich="{enrich}"' in html, enrich
     src = (WEB / "app.js").read_text(encoding="utf-8")
     assert '$("f-status-pill").addEventListener("click"' in src
     # Dataset isolation: runs pin their entity keys; steps filter by them.
     assert "activeKeys" in src
     assert "scopedNeeds" in src
-    for question in ("phone", "F6", "datalog", "muse-only"):
-        assert f'data-q="{question}"' in html, question
