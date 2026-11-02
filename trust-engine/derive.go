@@ -44,6 +44,9 @@ type deriveFact struct {
 	EventMin      int64  `json:"event_min"`
 	ExpiresMin    int64  `json:"expires_min"`
 	Verified      bool   `json:"verified"`
+	// Mechanical features for semantic proofs (see semantic.go).
+	PhoneKey  string   `json:"phone_key,omitempty"`
+	EmailDels []string `json:"email_dels,omitempty"`
 }
 
 // deriveLink is one Linker-proposed link. The engine verifies sole proofs
@@ -61,6 +64,9 @@ var linkProofs = map[string]bool{
 	"exact_address": true, "fuzzy_name_address": true, "vector_only": true,
 	"same_email_different_phone": true, "same_phone_different_email": true,
 	"same_order_two_users": true, "same_fragment": true,
+	// Semantic proofs: the claim is Muse's, the evidence is verified by the
+	// policy against the mechanical features in semantic.go.
+	"semantic_phone": true, "semantic_email": true,
 }
 
 // deriveTaxonomy carries the canonical terms of the requested taxonomy
@@ -281,7 +287,7 @@ func canonicalize(request DeriveRequest, taxonomy Taxonomy) (deriveInput, map[st
 			nowMin = eventMin
 			first = false
 		}
-		input.Facts = append(input.Facts, deriveFact{
+		df := deriveFact{
 			FactID:        fact.FactID,
 			Attribute:     fact.Attribute,
 			Value:         fact.Value,
@@ -290,7 +296,14 @@ func canonicalize(request DeriveRequest, taxonomy Taxonomy) (deriveInput, map[st
 			EventMin:      eventMin,
 			ExpiresMin:    expiresMin,
 			Verified:      fact.Verified != nil && *fact.Verified,
-		})
+		}
+		switch fact.Attribute {
+		case "phone":
+			df.PhoneKey = phoneKey(fact.Value)
+		case "email":
+			df.EmailDels = emailDeletionKeys(fact.Value)
+		}
+		input.Facts = append(input.Facts, df)
 		attrSet[fact.Attribute] = struct{}{}
 	}
 	for a := range attrSet {

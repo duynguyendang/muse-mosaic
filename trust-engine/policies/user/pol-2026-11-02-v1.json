@@ -1,0 +1,80 @@
+{
+  "policy_version": "pol-2026-11-02-v1",
+  "entity_type": "user",
+  "allowed_attributes": [
+    "phone",
+    "email",
+    "address",
+    "display_name",
+    "order_id"
+  ],
+  "golden_attributes": [
+    "phone",
+    "email",
+    "address",
+    "display_name"
+  ],
+  "authority_matrix": {
+    "phone": {
+      "sap-like": 1,
+      "salesforce-like": 2,
+      "ciam-like": 3,
+      "ticket": 3
+    },
+    "email": {
+      "ciam-like": 1,
+      "salesforce-like": 2,
+      "sap-like": 3,
+      "ticket": 3
+    },
+    "address": {
+      "ticket-verified": 1,
+      "salesforce-like": 2,
+      "sap-like": 3,
+      "ciam-like": 3
+    },
+    "order_id": {
+      "order-like": 1,
+      "marketplace-like": 2,
+      "ticket": 3
+    },
+    "display_name": {
+      "sap-like": 1,
+      "salesforce-like": 2,
+      "ciam-like": 3,
+      "ticket": 3
+    }
+  },
+  "critical_attributes": [
+    "phone"
+  ],
+  "rules": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "L1",
+    "C1",
+    "C2",
+    "T1",
+    "I1",
+    "S1",
+    "S2",
+    "S3"
+  ],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording"
+  },
+  "ttls_seconds": {
+    "detector-like": 600,
+    "inventory-like": 3600
+  },
+  "splink": {
+    "threshold": 0.9,
+    "blocking": [
+      "email",
+      "phone",
+      "order_id"
+    ]
+  }
+}

@@ -229,3 +229,78 @@ func TestTallyClusterBucketsAreDisjointAndSumToTotal(t *testing.T) {
 		t.Errorf("tickets = %d, want 3 (attribute-level)", resp.StewardsTicketsCount)
 	}
 }
+
+func TestPhoneKey(t *testing.T) {
+	cases := map[string]string{
+		"4499771729":       "499771729",
+		"+1 449-977-1729":  "499771729", // country code variant keys the same
+		"(449) 977-1729":   "499771729",
+		"449.977.1729x282": "499771729", // extension dropped
+		"+84 90 123 4567":  "901234567",
+		"0901234567":       "901234567", // VN national vs international
+		"12345":            "",          // too short to be evidence
+		"":                 "",
+	}
+	for in, want := range cases {
+		if got := phoneKey(in); got != want {
+			t.Errorf("phoneKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func share(a, b []string) bool {
+	set := map[string]bool{}
+	for _, k := range a {
+		set[k] = true
+	}
+	for _, k := range b {
+		if set[k] {
+			return true
+		}
+	}
+	return false
+}
+
+func TestEmailDeletionKeysDetectEditDistanceOne(t *testing.T) {
+	base := emailDeletionKeys("maria.day@example.com")
+	near := map[string]string{
+		"substitution": "maria.dqy@example.com",
+		"insertion":    "maria.daay@example.com",
+		"deletion":     "maria.dy@example.com",
+		"case":         "MARIA.DAY@EXAMPLE.COM",
+	}
+	for name, e := range near {
+		if !share(base, emailDeletionKeys(e)) {
+			t.Errorf("%s: %q should be within edit distance 1 of the base", name, e)
+		}
+	}
+	far := map[string]string{
+		"two edits":        "maria.dqq@example.com",
+		"different domain": "maria.day@example.org",
+		"different person": "linh.tranx@example.com",
+	}
+	for name, e := range far {
+		if share(base, emailDeletionKeys(e)) {
+			t.Errorf("%s: %q must NOT match the base", name, e)
+		}
+	}
+}
+
+func TestEmailKeysRefuseShortOrMalformedLocals(t *testing.T) {
+	for _, e := range []string{"a@b.com", "short@x.com", "noatsign", "@x.com", "name@", ""} {
+		if keys := emailDeletionKeys(e); keys != nil {
+			t.Errorf("emailDeletionKeys(%q) = %v, want nil (too weak to be evidence)", e, keys)
+		}
+	}
+}
+
+func TestSemanticProofsAreInTheClosedVocabulary(t *testing.T) {
+	for _, p := range []string{"semantic_phone", "semantic_email", "exact_phone", "fuzzy_name_address"} {
+		if !linkProofs[p] {
+			t.Errorf("%q missing from linkProofs", p)
+		}
+	}
+	if linkProofs["semantic_name"] {
+		t.Error("an unknown proof must stay outside the closed vocabulary")
+	}
+}

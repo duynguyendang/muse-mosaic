@@ -43,7 +43,10 @@
     "C1",
     "C2",
     "T1",
-    "I1"
+    "I1",
+    "S1",
+    "S2",
+    "S3"
   ],
   "thresholds": {
     "low_confidence": "demo parameter, reviewed once before recording"
