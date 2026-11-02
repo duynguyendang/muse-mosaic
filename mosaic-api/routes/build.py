@@ -15,10 +15,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import ledger
+import muse_candidates
 from config import Settings
 from fastapi import APIRouter, HTTPException, Request
 from ingest import (
     document_to_fragments,
+    normalize_value,
     to_candidate_facts,
 )
 from publisher import (
@@ -167,7 +169,8 @@ async def _cluster_inputs(
         taxonomy,
         allowed,
         fact_documents or None,
-        extra_links=_splink_link_claims(ctx.splink_out, member_docs, facts, fact_documents),
+        extra_links=_splink_link_claims(ctx.splink_out, member_docs, facts, fact_documents)
+        + muse_candidates.link_claims(cluster, facts, fact_documents),
     )
     proposal = Proposal.model_validate(proposal_dict)
     links = [ProposedLink.model_validate(item) for item in link_dicts]
@@ -481,6 +484,7 @@ def _build_summary(
             "splink_version": ctx.splink_out.get("splink_version"),
             "duckdb_version": ctx.splink_out.get("duckdb_version"),
         },
+        "muse_candidates": ctx.splink_out.get("muse_candidates"),
     }
 
 
@@ -523,7 +527,10 @@ def _exact_identifier_groups(
             field = fields.get(attribute)
             value = field.get("value") if isinstance(field, dict) else field
             if value:
-                by_value.setdefault((attribute, str(value)), []).append(document["document_id"])
+                # Same normalisation the facts get at ingest, so blocking and the
+                # engine's exact-proof check agree ("(449) 977-1729" == "4499771729").
+                normalised = normalize_value(attribute, str(value))
+                by_value.setdefault((attribute, normalised), []).append(document["document_id"])
     return by_value
 
 
@@ -595,7 +602,15 @@ async def _build_clusters(
         policy = policies.get(entity_type)
         if policy is None:
             continue
-        clusters.extend(_cluster_entity_docs(entity_type, docs, policy, splink_out))
+        entity_clusters = _cluster_entity_docs(entity_type, docs, policy, splink_out)
+        # Opt-in: Muse proposes near-matches the exact identifiers missed. Only
+        # user records carry the name/address it judges on.
+        if settings.muse_candidate_matching and entity_type == "user":
+            entity_clusters, info = await muse_candidates.propose_and_merge(
+                settings, entity_clusters
+            )
+            splink_out["muse_candidates"] = info
+        clusters.extend(entity_clusters)
     return clusters
 
 

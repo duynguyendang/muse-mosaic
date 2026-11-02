@@ -16,11 +16,11 @@ mosaic-api ledger — every number is read live, never derived in the browser.
 | Stage 03 rule rows | rules R1/L1 static copy; R2 count from `needs_review` |
 | Diagnostics bar | `GET /health`, latest job |
 | Dispatch deck | `/datasets/summary`, `GET /downstream/{agent}`, `GET /export/{type}` |
-| Trigger Pipeline Run | `GET /datasets/kaggle` → `POST /jobs` → poll `GET /jobs/{id}` |
+| Policy Copilot (header CTA) | `POST /api/v1/pipeline/copilot/draft` (draft only; nothing is applied) |
 | Dataset pill (header) | Opens the dataset modal: `GET /datasets/catalog`, `GET /datasets/{id}`, `POST /upload` (JSON/CSV fragments) or native `{documents:[...]}` JSON; selection is session-only |
 | Expected output | Draft 2020-12 JSON Schema, saved to `localStorage`, sent as `expected_structure` on `POST /jobs` |
-| Export Goldens / Audit Manifest | `GET /export/{user,product}` + composed health/summary/jobs manifest |
-| BCBS dossier / production push | `GET /export/user?format=csv\|json&scope=published` |
+| Deck: BCBS 239 card → Audit Manifest | composed health/summary/steward/jobs manifest |
+| Deck: Feature Store card → Export Goldens | `GET /export/{user,product}?format=json&scope=published` |
 
 ## Selecting or uploading another source
 
@@ -31,7 +31,7 @@ already loaded in this session, or **upload** a new one.
 - **Available datasets** lists every bundled dataset from
   `GET /datasets/catalog` plus every dataset uploaded in this browser session.
   Clicking a row makes it active: the header pill, Stage 01 source breakdown,
-  shard count and `Trigger Pipeline Run` all follow it.
+  shard count follow it.
 
   Bundled benchmarks ship in `data/` and are registered in
   `mosaic-api/routes/reference.py` (`_BUNDLED_DATASETS`):

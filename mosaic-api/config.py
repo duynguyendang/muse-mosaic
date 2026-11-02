@@ -112,6 +112,9 @@ class Settings:
     mock_data_dir: Path = DEFAULT_MOCK_DATA_DIR
     static_dir: Path = STATIC_DIR
     autonomy_mode: str = "manual"
+    # Opt-in: let Muse propose near-match cluster merges that exact identifiers
+    # miss (see muse_candidates.py). Off by default: it changes cluster counts.
+    muse_candidate_matching: bool = False
     # When set, every state-changing request (POST/PUT/PATCH/DELETE) must carry
     # "Authorization: Bearer <token>". Empty = open (local dev only).
     api_token: str = ""
@@ -157,6 +160,9 @@ class Settings:
             manglekit_bin=get("MANGLEKIT_BIN"),
             database_path=get("DATABASE_PATH") or "./data/mosaic.db",
             api_token=get("MOSAIC_API_TOKEN").strip(),
+            muse_candidate_matching=_parse_bool(
+                get("MUSE_CANDIDATE_MATCHING") or "false", "MUSE_CANDIDATE_MATCHING"
+            ),
             autonomy_mode=(get("AUTONOMY_MODE") or "manual").strip().lower(),
             job_max_attempts=_parse_optional_int(
                 get("JOB_MAX_ATTEMPTS"), "JOB_MAX_ATTEMPTS", minimum=1

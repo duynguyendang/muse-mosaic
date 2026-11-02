@@ -5,8 +5,8 @@
  * or unreachable the screen falls back to the design's demo snapshot and says
  * so in the diagnostics bar ("DEMO SNAPSHOT" / "API UNREACHABLE").
  *
- * Read-only + two real actions: Trigger Pipeline Run enqueues /jobs, exports
- * download from /export. The UI derives nothing and never fabricates a proof.
+ * Read-only plus downloads from the dispatch deck (/export) and the policy
+ * hot-swap. Switching profile is reactive; there is no manual run button. The UI derives nothing and never fabricates a proof.
  */
 (function () {
   "use strict";
@@ -52,8 +52,6 @@
     orders: { label: "Orders", color: "bg-source-erp" },
     catalog: { label: "Catalogue", color: "bg-source-pim" },
   };
-
-  const TERMINAL = ["published", "escalated", "denied", "failed", "cancelled"];
 
   // Packaged defaults mirrored from mosaic-api/data/mock/templates.
   // The API still owns the real gate; these only prefill the editor.
@@ -159,10 +157,6 @@
     if (SOURCE_META[key]) return SOURCE_META[key];
     const raw = String(name || "unknown").trim() || "unknown";
     return { label: raw, color: "bg-source-erp" };
-  }
-
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // Optional bearer token for servers started with MOSAIC_API_TOKEN. Kept in
@@ -1105,17 +1099,6 @@
   // ---------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------
-  function setRunButton(label, disabled) {
-    const button = $("btn-run");
-    const text = $("btn-run-label");
-    const icon = $("btn-run-icon");
-    if (!button || !text) return;
-    text.textContent = label;
-    button.disabled = Boolean(disabled);
-    if (icon) icon.textContent = disabled ? "autorenew" : "play_arrow";
-    if (icon) icon.classList.toggle("animate-spin", Boolean(disabled) && label !== "Trigger Pipeline Run");
-  }
-
   async function fetchJsonDownload(path) {
     const response = await fetch(API_BASE + path);
     if (!response.ok) {
@@ -1189,27 +1172,6 @@
       .map((golden) => pickBySchema(golden, schema));
   }
 
-  function toCsv(rows) {
-    const columns = [];
-    rows.forEach((row) => {
-      Object.keys(row || {}).forEach((key) => {
-        if (columns.indexOf(key) === -1) columns.push(key);
-      });
-    });
-    const escape = (value) => {
-      if (value == null) return "";
-      const text = Array.isArray(value) || (typeof value === "object" ? true : false)
-        ? JSON.stringify(value)
-        : String(value);
-      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-    };
-    const lines = [columns.join(",")];
-    rows.forEach((row) => {
-      lines.push(columns.map((col) => escape(row[col])).join(","));
-    });
-    return { columns, text: lines.join("\n") };
-  }
-
   async function exportGoldens() {
     try {
       const bundle = {
@@ -1230,73 +1192,6 @@
       toast("Goldens exported — golden values only, shaped by the expected output.", "ok");
     } catch (error) {
       toast(`Export failed: ${error.message}`, "err");
-    }
-  }
-
-  async function triggerRun() {
-    if (state.busy) return;
-    state.busy = true;
-    setRunButton("Loading dataset…", true);
-    try {
-      let documents = null;
-      if (state.activeDataset) {
-        documents = state.activeDataset.documents;
-        setRunButton(`Loading ${state.activeDataset.name}…`, true);
-      } else {
-        documents = state.kaggle && state.kaggle.documents;
-        if (!state.kaggleTried || !documents || !documents.length) {
-          const dataset = await api("/datasets/kaggle");
-          state.kaggle = dataset;
-          state.kaggleTried = true;
-          documents = dataset.documents;
-        }
-      }
-      if (!documents || !documents.length) throw new Error("No dataset documents to run");
-
-      const key = `ui-cockpit-${Date.now()}`;
-      const body = {
-        work_id: key,
-        idempotency_key: key,
-        dataset: { documents },
-      };
-      const expected = expectedOrDefault();
-      if (expected) body.expected_structure = expected.schema;
-
-      const job = await api("/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      toast(
-        `Job ${String(job.job_id).slice(0, 8)} queued — ${num(documents.length)} documents${expected ? ` · custom ${expected.type} expected output` : ""}.`,
-        "ok"
-      );
-      setRunButton("Pipeline Running…", true);
-
-      for (let attempt = 0; attempt < 90; attempt += 1) {
-        await sleep(2000);
-        let current;
-        try {
-          current = await api(`/jobs/${encodeURIComponent(job.job_id)}`);
-        } catch (error) {
-          continue;
-        }
-        setRunButton(current.status === "running" ? "Pipeline Running…" : `Pipeline · ${current.status}`, true);
-        if (TERMINAL.indexOf(current.status) !== -1) {
-          const tone = current.status === "published" ? "ok" : "warn";
-          toast(
-            `Job finished: ${current.status}${current.error ? ` — ${current.error}` : ""}`,
-            tone
-          );
-          break;
-        }
-      }
-      await loadAll();
-    } catch (error) {
-      toast(`Pipeline run failed: ${error.message}`, "err");
-    } finally {
-      state.busy = false;
-      setRunButton("Trigger Pipeline Run", false);
     }
   }
 
@@ -1341,38 +1236,6 @@
       toast("Downstream OTP answer fetched from the ledger.", "ok");
     } catch (error) {
       toast(`Downstream query failed: ${error.message}`, "err");
-    }
-  }
-
-  async function exportBcbs() {
-    try {
-      const response = await fetchJsonDownload("/export/user?format=json&scope=published");
-      const payload = await response.json();
-      const rows = cleanRecordsForExport(payload, "user");
-      const csv = toCsv(rows);
-      download(`bcbs-239-dossier-${stamp()}.csv`, csv.text, "text/csv");
-      toast(`BCBS 239 dossier exported — ${num(rows.length)} goldens, golden values only.`, "ok");
-    } catch (error) {
-      toast(`BCBS export failed: ${error.message}`, "err");
-    }
-  }
-
-  async function pushProduction() {
-    try {
-      const bundle = { pushed_at: new Date().toISOString(), scope: "published", entity_types: {} };
-      for (const type of ["user", "product"]) {
-        try {
-          const response = await fetchJsonDownload(`/export/${type}?format=json&scope=published`);
-          const payload = await response.json();
-          bundle.entity_types[type] = cleanRecordsForExport(payload, type);
-        } catch (error) {
-          bundle.entity_types[type] = { error: error.message };
-        }
-      }
-      download(`graph-feature-store-push-${stamp()}.json`, JSON.stringify(bundle, null, 2));
-      toast("Production bundle prepared — golden values only, shaped by the expected output.", "ok");
-    } catch (error) {
-      toast(`Production push failed: ${error.message}`, "err");
     }
   }
 
@@ -2028,18 +1891,13 @@
   // Boot
   // ---------------------------------------------------------------------
   function bind() {
-    const manifest = $("btn-manifest");
-    if (manifest) manifest.addEventListener("click", downloadManifest);
-    const exportBtn = $("btn-export");
-    if (exportBtn) exportBtn.addEventListener("click", exportGoldens);
-    const run = $("btn-run");
-    if (run) run.addEventListener("click", triggerRun);
     const otp = $("btn-otp-specs");
     if (otp) otp.addEventListener("click", toggleOtpSpecs);
+    // Downstream deck owns the downloads (the header no longer duplicates them).
     const bcbs = $("btn-bcbs-export");
-    if (bcbs) bcbs.addEventListener("click", exportBcbs);
+    if (bcbs) bcbs.addEventListener("click", downloadManifest);
     const graph = $("btn-graph-push");
-    if (graph) graph.addEventListener("click", pushProduction);
+    if (graph) graph.addEventListener("click", exportGoldens);
 
     const pill = $("dataset-pill");
     if (pill) pill.addEventListener("click", openSourceModal);

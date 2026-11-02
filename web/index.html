@@ -86,7 +86,7 @@
 <option value="retail_balanced">Enterprise Commercial (Retail Balanced)</option>
 <option value="analytical_mesh">Analytical Mesh (Multi-Valued)</option>
 </select>
-<button id="copilot-open" type="button" aria-haspopup="dialog" aria-controls="copilot-dialog" title="Describe a policy change in English; the engine validates the draft" class="px-2.5 py-1 rounded-full bg-surface-muted border border-border-strong hover:border-primary/60 text-text-body font-code-sm text-code-sm whitespace-nowrap cursor-pointer transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">✨ Policy Copilot</button>
+<button id="copilot-open" type="button" aria-haspopup="dialog" aria-controls="copilot-dialog" title="Describe a policy change in English; the engine validates the draft" class="px-3.5 py-1 rounded-full bg-primary hover:bg-primary-container text-on-primary font-code-sm text-code-sm font-semibold whitespace-nowrap cursor-pointer shadow-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">✨ Policy Copilot</button>
 <div id="autonomy-pill" class="flex items-center space-x-1.5 max-w-[calc(100vw-3.5rem)] min-w-0 px-2.5 py-1 rounded-full bg-status-verified-surface border border-status-verified-border text-status-verified-deep font-code-sm text-code-sm font-semibold whitespace-nowrap">
 <span id="autonomy-dot" class="w-2 h-2 shrink-0 rounded-full bg-status-verified animate-pulse"></span>
 <span id="autonomy-text" class="min-w-0 truncate">100% Autonomous Fixpoint · 0 Stewards Required</span>
@@ -109,21 +109,6 @@
         3. Verified Goldens (<span id="nav-goldens">163</span>)
       </a>
 </nav>
-<!-- Global Executive Actions -->
-<div class="flex items-center space-x-space-sm shrink-0 ml-auto">
-<button id="btn-manifest" class="px-3 py-1.5 rounded-lg bg-surface-panel border border-border-strong hover:bg-surface-muted text-text-primary font-label-lg text-label-lg flex items-center space-x-1.5 transition-colors duration-150 shadow-sm active:scale-[0.99] whitespace-nowrap">
-<span class="material-symbols-outlined text-[16px] text-text-muted">download</span>
-<span class="hidden lg:inline">Audit Manifest</span>
-</button>
-<button id="btn-export" class="px-3 py-1.5 rounded-lg bg-surface-panel border border-border-strong hover:bg-surface-muted text-text-primary font-label-lg text-label-lg flex items-center space-x-1.5 transition-colors duration-150 shadow-sm active:scale-[0.99] whitespace-nowrap">
-<span class="material-symbols-outlined text-[16px] text-text-muted">share</span>
-<span class="hidden lg:inline">Export Goldens (.jsonld)</span>
-</button>
-<button id="btn-run" class="px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary-container text-on-primary font-label-lg text-label-lg font-semibold flex items-center space-x-1.5 transition-all duration-150 shadow-sm active:scale-[0.99] whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed">
-<span id="btn-run-icon" class="material-symbols-outlined text-[16px]">play_arrow</span>
-<span id="btn-run-label">Trigger Pipeline Run</span>
-</button>
-</div>
 </div>
 </header>
 <!-- ========================================================================= -->
@@ -629,8 +614,8 @@
 <span id="dispatch-bcbs-audit" class="text-text-primary font-bold">7 Auto-Documented</span>
 </div>
 </div>
-<button id="btn-bcbs-export" class="w-full py-1.5 rounded-md bg-surface-panel border border-border-strong hover:bg-surface-muted text-text-primary font-label-md text-label-md font-semibold transition-colors duration-150">
-            Export BCBS Dossier
+<button id="btn-bcbs-export" title="Downloads the audit manifest: health, dataset summary, steward queue, recent jobs" class="w-full py-1.5 rounded-md bg-surface-panel border border-border-strong hover:bg-surface-muted text-text-primary font-label-md text-label-md font-semibold transition-colors duration-150">
+            Export BCBS Dossier (Audit Manifest)
           </button>
 </div>
 <!-- Target 3: Downstream Machine Learning / Graph DB -->
@@ -658,7 +643,7 @@
 </div>
 </div>
 <button id="btn-graph-push" class="w-full py-1.5 rounded-md bg-surface-panel border border-border-strong hover:bg-surface-muted text-text-primary font-label-md text-label-md font-semibold transition-colors duration-150">
-            Push to Production API
+            Export Goldens (.jsonld)
           </button>
 </div>
 </div>

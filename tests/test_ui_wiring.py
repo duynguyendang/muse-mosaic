@@ -351,3 +351,13 @@ def test_studio_kpis_use_disjoint_cluster_buckets():
     src = (WEB_ROOT / "studio.js").read_text(encoding="utf-8")
     assert "partial_goldens_count" in src
     assert "partial" in src and "readable" in src
+
+
+def test_header_has_no_duplicate_action_buttons_and_deck_owns_downloads():
+    html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+    for gone in ("btn-run", "btn-manifest", "btn-export"):
+        assert f'id="{gone}"' not in html, gone
+    assert 'id="copilot-open"' in html
+    js = (WEB_ROOT / "studio.js").read_text(encoding="utf-8")
+    assert 'addEventListener("click", downloadManifest)' in js
+    assert 'addEventListener("click", exportGoldens)' in js
