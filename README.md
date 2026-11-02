@@ -137,13 +137,11 @@ Identifiers are also **normalised before blocking** with the same function the
 facts get at ingest, so `(449) 977-1729` and `449.977.1729` cluster together
 without any model.
 
-A merge is a *proposal to cluster*, not a verified identity. The link carries
-proof `fuzzy_name_address`, which the trust-engine does not accept as a hop, so
-a merged cluster whose values disagree is **held** (C1/C2), never certified.
-That is a deliberate trade-off: Mosaic stops certifying two goldens for one
-person, but it also cannot certify the merged person automatically, because
-resemblance is not proof. If Muse is down the step is skipped and labelled in
-the build summary (`muse_candidates.skipped_reason`).
+A merge is a *proposal to cluster*, not a verified identity. What the engine
+does with it depends on the evidence; see
+[Semantic matching rules](#semantic-matching-rules-engine). If Muse is down the
+step is skipped and labelled in the build summary
+(`muse_candidates.skipped_reason`).
 
 **Measured** with `scripts/eval_muse_candidates.py`: 100 real Kaggle Customer
 360 customers, each given 2 to 4 labelled variants (282 in all), plus 25
@@ -173,6 +171,59 @@ What this does and does not show:
 - End to end through `/build` on a 428-record Kaggle subset (25 customers, 72
   variants), turning the feature on merged 31 cluster pairs (96 to 65 clusters)
   and raised conflicts from 50 to 133: merged people are held, not certified.
+
+### Semantic matching rules (engine)
+
+The trust-engine verifies a semantic claim instead of trusting it. Datalog
+cannot compute string distance, so the engine computes **mechanical features**
+per fact (like it turns `event_time` into minutes) and the policy decides:
+
+| Feature (`trust-engine/semantic.go`) | Meaning |
+| --- | --- |
+| `phone_key` | last 9 digits of the phone, extension dropped |
+| `email_dels` | the email plus its local part with each single character deleted. Two emails on the same domain share a key exactly when they are within edit distance 1. Locals under 8 characters emit none. |
+
+| Rule | What it does |
+| --- | --- |
+| **S1** `semantic_phone` | a link between two phone facts is a verified hop when their `phone_key`s are equal (`+1 449…` vs `(449) …`) |
+| **S2** `semantic_email` | a link between two email facts is a verified hop when they share a deletion key (one typo) |
+| **S3** guard | a cluster carrying a names-only `fuzzy_name_address` claim escalates any winner that is still cut off from the anchor (`SEMANTIC_MERGE_UNVERIFIED`) |
+
+So the three tiers are:
+
+1. **Verified semantic hop (S1/S2).** Grounds the chain like an exact hop. The
+   merged person publishes normally: freshness and authority decide between
+   differing values, exactly as for any exact-identifier cluster.
+2. **Names only (`semantic_only`).** No hop, so the new values cannot win. They
+   are held; the base values are never silently replaced.
+3. **No claim.** Nothing changes.
+
+Muse's judgement that the *names* are compatible is still the proposer's. What
+the engine verifies is the identifier evidence, never a model's say-so. A claim
+with no matching evidence, on the wrong attribute, with two edits, or with a
+short local part verifies nothing (all covered in `tests/test_semantic_rules.py`
+against the live engine).
+
+Policy files: `pol-2026-11-02-v1` is a new user policy, additive over
+`pol-2026-10-28-v1` (matrix unchanged); the older versions stay immutable and
+ignore semantic claims. The three profile policies carry the same blocks, copied
+verbatim from `trust-engine/policies/semantic/*.mg` by
+`scripts/apply_semantic_block.py`; a test fails if a copy drifts.
+`analytical_mesh` takes S1/S2 but not S3, because it has no escalation rules by
+design.
+
+**End to end through `/build` on Kaggle** (25 real customers, 70 to 78 labelled
+later-dated variants each, mock Muse for the sub-agents, `pol-kaggle`; identity
+attributes are name, phone, email and address, because `order_id` conflicts are
+a baseline of that policy and are identical with the feature on or off):
+
+| Variant kind | Clusters merged | Tier | Identity attributes held in merged clusters | Variant values certified inside merged clusters |
+| --- | --- | --- | --- | --- |
+| `country_code` (+1 prefix, email typo) | 20 | `semantic_verified` | 0 | 40 |
+| `moved` (new phone and email) | 29 | `semantic_only` | 29 (all) | 0 |
+
+Verified evidence promotes the newer value; names-only evidence promotes
+nothing.
 
 ### Policy Copilot
 
@@ -371,9 +422,19 @@ failing case is reported as a failure, never edited into a pass.
 
 - **Muse candidate matching is opt-in and judges name and address only.** It
   cannot link records whose names and addresses both differ, and the shortlist
-  can miss pairs (2 of 40 in our test). Merged clusters are held, not certified,
-  because the engine does not accept resemblance as proof. It runs in `/build`
-  and jobs; the cockpit has no button for it.
+  can miss pairs (2 of 40 in our test). It runs in `/build` and jobs; the
+  cockpit has no button for it.
+- **Semantic evidence is narrow on purpose.** S1 treats equal last-9 digits as
+  the same phone, so a shared household or office line can verify a merge that
+  Muse's name check must then reject; S2 covers one typo on a local part of 8+
+  characters. Transpositions, two typos, domain typos and abbreviations of a
+  name are not evidence, so they stay `semantic_only`.
+- **Co-location chaining in ordinary `/build` clusters.** For a cluster of
+  several documents that Muse did not merge, `publisher._batch_links` chains
+  every fact with `same_fragment`, which grounds all facts and means the
+  weakest-link rule (C2) cannot fire there. Muse-merged clusters chain only
+  inside their original parts, which is what makes S3 effective. The behaviour
+  for ordinary clusters is unchanged and worth revisiting.
 - Splink is proven on synthetic and sample data with deterministic exact-identifier
   linkage plus best-effort EM weights. No accuracy or massive-scale benchmark is claimed.
 - Wonder and Prompt Guard are conditional: labelled stubs until a model id or

@@ -48,9 +48,15 @@ PROV = {
 }
 
 
-def fld(value):
-    """A field with full provenance, so injected records pass /build validation."""
-    return {"value": value, **PROV}
+def fld(value, minute=5):
+    """A field with full provenance, so injected records pass /build validation.
+
+    Variants are LATER updates of the customer, each a few minutes after the
+    last (inside the 1 h TTL, so older facts do not expire): freshness then
+    decides between differing values, as for a customer who really changed
+    phone or email. At the same time and rank the engine must hold them.
+    """
+    return {"value": value, **PROV, "event_time": f"2026-10-27T09:{minute:02d}:00+07:00"}
 
 
 ABBREV = [("street", "st"), ("road", "rd"), ("avenue", "ave"), ("apartment", "apt")]
@@ -114,7 +120,7 @@ def perturb_addr(addr, rng):
     return out.replace(",", "") if rng.random() < 0.5 else out
 
 
-def make_variant(src, kind, i, rng):
+def make_variant(src, kind, i, rng, minute=5):
     name = perturb_name(fv(src, "display_name"), rng)
     phone = re.sub(r"\D", "", (fv(src, "phone") or "").split("x")[0])
     email = fv(src, "email") or f"u{i}@example.com"
@@ -138,11 +144,11 @@ def make_variant(src, kind, i, rng):
         "entity_type": "user",
         "source": "crm",
         "synthetic": True,
-        "fields": {k: fld(v) for k, v in f.items() if v},
+        "fields": {k: fld(v, minute) for k, v in f.items() if v},
     }
 
 
-def build_dataset(n, seed):
+def build_dataset(n, seed, kinds=None):
     """Real Kaggle customers + labelled variants. Returns the pieces to score."""
     rng = random.Random(seed)
 
@@ -173,8 +179,8 @@ def build_dataset(n, seed):
             if fv(d, "display_name") and fv(d, "address") and fv(d, "phone") and fv(d, "email")
         )
         for j in range(rng.randint(2, 4)):
-            kind = rng.choice(["format", "country_code", "moved"])
-            v = make_variant(src, kind, f"{i}_{j}", rng)
+            kind = rng.choice(kinds or ["format", "country_code", "moved"])
+            v = make_variant(src, kind, f"{i}_{j}", rng, minute=1 + j)
             all_docs.append(v)
             identity[v["document_id"]] = c["cluster_id"]
             variants.append((v["document_id"], c["cluster_id"], kind))
