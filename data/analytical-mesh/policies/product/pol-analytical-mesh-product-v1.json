@@ -1,0 +1,35 @@
+{
+  "policy_version": "pol-analytical-mesh-product-v1",
+  "entity_type": "product",
+  "allowed_attributes": [
+    "category"
+  ],
+  "golden_attributes": [
+    "category"
+  ],
+  "authority_matrix": {
+    "category": {
+      "catalog": 1
+    }
+  },
+  "critical_attributes": [],
+  "rules": [
+    "R1",
+    "L1",
+    "M1"
+  ],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording"
+  },
+  "ttls_seconds": {
+    "detector-like": 600,
+    "inventory-like": 3600
+  },
+  "splink": {
+    "threshold": 0.9,
+    "blocking": [
+      "category"
+    ]
+  },
+  "description": "Analytical Mesh product: every distinct observed value publishes; zero quarantine by construction."
+}

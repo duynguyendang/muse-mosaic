@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -44,7 +45,7 @@ from schemas import (
     Document as DocumentModel,
 )
 from splink_adapter import flatten_documents, run_splink
-from taxonomies import canonical_term, default_version
+from taxonomies import TaxonomyError, canonical_term, default_version
 from trust import TrustEngineError
 from trust import derive as trust_derive
 
@@ -130,7 +131,9 @@ async def _cluster_inputs(
         try:
             ctx.taxonomy_version = default_version(ctx.taxonomies, entity_type)
             taxonomy = ctx.taxonomies[ctx.taxonomy_version]
-        except Exception as exc:
+        except TaxonomyError as exc:
+            # Fail-closed downstream: the trust-engine rejects an empty
+            # taxonomy_version, so nothing derives from this cluster.
             logger.warning(
                 "build: taxonomy lookup failed for %s, continuing without: %s", entity_type, exc
             )
@@ -392,15 +395,18 @@ async def _build_one_cluster(
         # sub-agent trace: re-attach it so inspectors and the agent ribbon
         # show the real derivation instead of an empty run.
         try:
-            for record in ledger.fetch_agent_traces(ctx.settings.database_path, stored["decision_id"]):
+            for record in ledger.fetch_agent_traces(
+                ctx.settings.database_path, stored["decision_id"]
+            ):
                 payload = (record or {}).get("payload") or {}
                 steps = payload.get("trace") or []
                 if record.get("kind") == "subagents" and isinstance(steps, list) and steps:
                     proposal_info["trace"] = steps
                     proposal_info["subagent_trace"] = steps
                     break
-        except Exception:
-            pass
+        except (sqlite3.Error, ValueError, TypeError, AttributeError) as exc:
+            # The trace is display-only; the replayed verdict is already final.
+            logger.warning("build: could not re-attach sub-agent trace for %s: %s", key, exc)
         return goldens, conflicts, stewards, verdict, proposal_info
     proposal_info.update(
         {

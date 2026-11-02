@@ -112,6 +112,9 @@ class Settings:
     mock_data_dir: Path = DEFAULT_MOCK_DATA_DIR
     static_dir: Path = STATIC_DIR
     autonomy_mode: str = "manual"
+    # When set, every state-changing request (POST/PUT/PATCH/DELETE) must carry
+    # "Authorization: Bearer <token>". Empty = open (local dev only).
+    api_token: str = ""
     job_max_attempts: int = 3
     muse_job_token_budget: int = 0
     muse_daily_token_budget: int = 0
@@ -153,6 +156,7 @@ class Settings:
             trust_engine_url=trust_engine_url,
             manglekit_bin=get("MANGLEKIT_BIN"),
             database_path=get("DATABASE_PATH") or "./data/mosaic.db",
+            api_token=get("MOSAIC_API_TOKEN").strip(),
             autonomy_mode=(get("AUTONOMY_MODE") or "manual").strip().lower(),
             job_max_attempts=_parse_optional_int(
                 get("JOB_MAX_ATTEMPTS"), "JOB_MAX_ATTEMPTS", minimum=1

@@ -208,9 +208,9 @@ def test_olist_trap_neighbour_never_merged(olist_stack):
     for golden in main_goldens:
         for _name, field in golden["attributes"].items():
             if isinstance(field, dict):
-                assert not any(doc in (field.get("winner_fact_id") or "") for doc in trap_docs), (
-                    "trap fact must never win in the main cluster"
-                )
+                assert not any(
+                    doc in (field.get("winner_fact_id") or "") for doc in trap_docs
+                ), "trap fact must never win in the main cluster"
     # The trap cluster stays separate: trap-doc winners may only appear
     # in a golden whose unique_id is the trap customer itself (its own
     # cluster), never merged into a main-cluster golden.
@@ -229,9 +229,9 @@ def test_olist_trap_neighbour_never_merged(olist_stack):
             unique_value = (
                 unique_winner.get("value") if isinstance(unique_winner, dict) else unique_winner
             )
-            assert unique_value == meta["trap_unique_id"], (
-                f"trap facts verified outside the trap cluster: {winner_trap_docs}"
-            )
+            assert (
+                unique_value == meta["trap_unique_id"]
+            ), f"trap facts verified outside the trap cluster: {winner_trap_docs}"
 
 
 def test_olist_proposals_carry_real_links(olist_stack):
@@ -251,6 +251,8 @@ def test_olist_proposals_carry_real_links(olist_stack):
         for proposal in payload["proposals"]
         for link in (proposal.get("links") or [])
     }
-    assert proofs & {"exact_order", "exact_email", "exact_phone"}, (
-        f"expected a sole-proof link in proposals, got: {sorted(p for p in proofs if p)}"
-    )
+    assert proofs & {
+        "exact_order",
+        "exact_email",
+        "exact_phone",
+    }, f"expected a sole-proof link in proposals, got: {sorted(p for p in proofs if p)}"

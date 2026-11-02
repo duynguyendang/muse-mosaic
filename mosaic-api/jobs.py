@@ -315,6 +315,46 @@ async def execute_full_build(
     """Full pipeline shared by POST /build and jobs: match, cluster, derive."""
     from routes.build import _build_clusters, _BuildContext, _match_documents
 
+    documents = [doc.model_dump() for doc in request.dataset.documents]
+    if any(doc.get("source") in ("crm", "orders", "catalog") for doc in documents):
+        from pathlib import Path
+
+        from schemas import Policy
+
+        root = Path(__file__).resolve().parents[1]
+        kag_u = root / "data" / "kaggle" / "policies" / "user" / "pol-kaggle-2026-10-28-v1.json"
+        kag_p = (
+            root
+            / "data"
+            / "kaggle"
+            / "policies"
+            / "product"
+            / "pol-product-kaggle-2026-10-28-v1.json"
+        )
+        policies = dict(policies)
+        if kag_u.is_file():
+            policies["user"] = Policy.model_validate_json(kag_u.read_text(encoding="utf-8"))
+        if kag_p.is_file():
+            policies["product"] = Policy.model_validate_json(kag_p.read_text(encoding="utf-8"))
+    elif any(str(doc.get("source") or "").startswith("olist-") for doc in documents):
+        # Olist runs use the Olist trust policy + the matching expected
+        # structure (customer_* attributes, not the Kaggle email shape).
+        # A caller-supplied expected_structure always wins over this default.
+        from pathlib import Path
+
+        from schemas import Policy
+
+        root = Path(__file__).resolve().parents[1]
+        policies = dict(policies)
+        pol_u = root / "data" / "olist" / "policies" / "user" / "pol-user-olist-2026-10-29-v1.json"
+        if pol_u.is_file():
+            policies["user"] = Policy.model_validate_json(pol_u.read_text(encoding="utf-8"))
+        if request.expected_structure is None:
+            exp_u = root / "data" / "olist" / "templates" / "expected_user_golden.json"
+            if exp_u.is_file():
+                expected_structures = dict(expected_structures)
+                expected_structures["user"] = json.loads(exp_u.read_text(encoding="utf-8"))
+
     ctx = _BuildContext(
         settings=settings,
         policies=policies,
@@ -323,7 +363,6 @@ async def execute_full_build(
         request=request,
         engine_killed=engine_killed,
     )
-    documents = [doc.model_dump() for doc in request.dataset.documents]
     for document in documents:
         document["content_hash"] = document.get("content_hash") or document["document_id"]
     splink_out, splink_status = await _match_documents(

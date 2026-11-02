@@ -31,4 +31,6 @@ async def health(request: Request) -> HealthResponse:
         duckdb_version=splink_versions.get("duckdb_version"),
         policy_version_user=user_version,
         policy_version_product=product_version,
+        proposer_mode="mock" if current.use_mock_muse else "live",
+        proposer_model=None if current.use_mock_muse else (current.muse_model_id or None),
     )

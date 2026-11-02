@@ -125,6 +125,132 @@ def hidden_dataset(request: Request) -> dict[str, Any]:
     }
 
 
+# Bundled benchmark datasets shipped in data/ (Kaggle mirrors). A new
+# dataset is data, not code: drop the file next to the others, register it
+# here and it shows up on /datasets/catalog and /datasets/{id}.
+_BUNDLED_DATASETS: dict[str, dict[str, Any]] = {
+    "kaggle": {
+        "path": "kaggle/customer360_sample_200.json",
+        "name": "Kaggle Customer 360",
+        "notice": "Kaggle Customer 360 dataset (2,554 shards across 200 CRM accounts).",
+        # No dataset-specific expected structure: the packaged per-entity
+        # defaults in data/mock/templates apply.
+        "templates": None,
+    },
+    "olist": {
+        "path": "olist/sample_olist.json",
+        "name": "Kaggle Olist E-Commerce",
+        "notice": "Kaggle Olist Brazilian E-Commerce mirror (customer/order/item/product tables).",
+        "templates": "olist/templates",
+    },
+}
+
+
+def _bundled_dataset(dataset_id: str) -> dict[str, Any]:
+    """Read one bundled dataset file. Raises the same 404/500 contract for all."""
+    import json
+    from pathlib import Path
+
+    entry = _BUNDLED_DATASETS.get(dataset_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"unknown dataset {dataset_id!r}")
+    path = Path(__file__).resolve().parents[2] / "data" / entry["path"]
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"{entry['name']} sample dataset not found")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"{entry['name']} dataset unreadable: {exc}"
+        ) from exc
+    documents = data.get("documents", [])
+    if not isinstance(documents, list):
+        raise HTTPException(
+            status_code=500, detail=f"{entry['name']} dataset has no documents array"
+        )
+    return {
+        "dataset_id": dataset_id,
+        "name": entry["name"],
+        "synthetic": bool(data.get("synthetic", False)),
+        "notice": entry["notice"],
+        "documents": documents,
+        "meta": data.get("meta", {}),
+    }
+
+
+def _dataset_expected_structures(entry: dict[str, Any]) -> dict[str, Any]:
+    """Dataset-specific default expected structures, when the dataset ships them.
+
+    Empty when the dataset relies on the packaged per-entity defaults, so the
+    UI can tell "no override" from "override supplied" without guessing.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    templates = entry.get("templates")
+    if not templates:
+        return {}
+    base = _Path(__file__).resolve().parents[2] / "data" / templates
+    structures: dict[str, Any] = {}
+    if base.is_dir():
+        for path in sorted(base.glob("expected_*_golden.json")):
+            try:
+                structures[path.name[len("expected_") : -len("_golden.json")]] = _json.loads(
+                    path.read_text(encoding="utf-8")
+                )
+            except ValueError:
+                continue
+    return structures
+
+
+def _dataset_catalog_entry(dataset_id: str) -> dict[str, Any]:
+    """Lightweight dataset descriptor (no document payloads)."""
+    entry = _BUNDLED_DATASETS[dataset_id]
+    payload = _bundled_dataset(dataset_id)
+    sources: list[str] = []
+    entity_types: list[str] = []
+    for document in payload["documents"]:
+        source = str(document.get("source") or "")
+        entity_type = str(document.get("entity_type") or "")
+        if source and source not in sources:
+            sources.append(source)
+        if entity_type and entity_type not in entity_types:
+            entity_types.append(entity_type)
+    return {
+        "dataset_id": payload["dataset_id"],
+        "name": payload["name"],
+        "synthetic": payload["synthetic"],
+        "notice": payload["notice"],
+        "document_count": len(payload["documents"]),
+        "sources": sources,
+        "entity_types": entity_types,
+        "expected_structures": _dataset_expected_structures(entry),
+        "meta": payload["meta"],
+    }
+
+
+@router.get("/datasets/catalog")
+def dataset_catalog(request: Request) -> dict[str, Any]:
+    """Bundled benchmark datasets the UI can switch to (read-only reference)."""
+    return {"datasets": [_dataset_catalog_entry(dataset_id) for dataset_id in _BUNDLED_DATASETS]}
+
+
+@router.get("/datasets/kaggle")
+def kaggle_dataset(request: Request) -> dict[str, Any]:
+    """Kaggle Customer 360 sample dataset (200 CRM accounts, 2,554 shards).
+
+    Kept as its own path for existing callers; same payload as
+    /datasets/kaggle via /datasets/{dataset_id}.
+    """
+    return _bundled_dataset("kaggle")
+
+
+@router.get("/datasets/{dataset_id}")
+def bundled_dataset(dataset_id: str, request: Request) -> dict[str, Any]:
+    """One bundled dataset's documents, in the exact POST /jobs shape."""
+    return _bundled_dataset(dataset_id)
+
+
 @router.get("/taxonomy/{entity_type}")
 def taxonomy_view(request: Request, entity_type: str) -> dict[str, Any]:
     """Read-only taxonomy for an entity type (terms + aliases, never edited)."""

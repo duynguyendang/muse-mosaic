@@ -265,6 +265,30 @@ def _download(content: bytes, filename: str, media_type: str, headers: dict[str,
     return Response(content=content, media_type=media_type, headers=headers)
 
 
+def _policy_provenance(request: Request) -> dict[str, Any]:
+    """policy_id + policy_hash for the active profile (acceptance: audit trail).
+
+    The hash is SHA-256 over the Horn clause text, so a manifest exported
+    under one profile cannot be passed off as the output of another: the
+    provenance names both which rules ran and their exact bytes.
+    """
+    from policy_controller import controller
+    from policy_profiles import default_profile_id, get_profile
+
+    active = getattr(request.app.state, "active_policy", None) or default_profile_id()
+    profile = get_profile(active)
+    if profile is None:
+        return {"policy_id": active}
+    result = controller.get(active)
+    return {
+        "policy_id": active,
+        "policy_label": profile.label,
+        "policy_hash": result.policy_hash if result else profile.policy_hash,
+        "policy_rules": profile.rules,
+        "merkle_root": result.merkle_root if result else None,
+    }
+
+
 def _serve_records(
     request: Request,
     entity_type: str,
@@ -290,7 +314,13 @@ def _serve_records(
     if fmt == "json":
         payload = {
             "export_metadata": _export_metadata(
-                database_path, scope, records, {"verification_base_url": f"{verify_base}/verify"}
+                database_path,
+                scope,
+                records,
+                {
+                    "verification_base_url": f"{verify_base}/verify",
+                    **_policy_provenance(request),
+                },
             ),
             "records": records,
         }

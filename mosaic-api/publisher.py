@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
@@ -50,6 +51,8 @@ from subagents import validate_links
 from taxonomies import default_version
 from trust import TrustEngineError
 from trust import derive as trust_derive
+
+logger = logging.getLogger(__name__)
 
 NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 
@@ -1581,6 +1584,7 @@ def persist_decision(
             _write_traces(ctx)
             golden_record = _write_graph(ctx)
     except sqlite3.IntegrityError as exc:
+        logger.exception("SQLITE INTEGRITY ERROR: %s", exc)
         raise IdempotencyConflictError(
             "decision write conflict (duplicate key or version race); no partial write was kept"
         ) from exc

@@ -1,0 +1,56 @@
+{
+  "policy_version": "pol-analytical-mesh-v1",
+  "entity_type": "user",
+  "allowed_attributes": [
+    "phone",
+    "email",
+    "address",
+    "display_name",
+    "order_id"
+  ],
+  "golden_attributes": [
+    "phone",
+    "email",
+    "address",
+    "display_name"
+  ],
+  "authority_matrix": {
+    "phone": {
+      "crm": 1
+    },
+    "email": {
+      "crm": 1
+    },
+    "address": {
+      "crm": 1
+    },
+    "display_name": {
+      "crm": 1
+    },
+    "order_id": {
+      "orders": 1
+    }
+  },
+  "critical_attributes": [],
+  "rules": [
+    "R1",
+    "L1",
+    "M1"
+  ],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording"
+  },
+  "ttls_seconds": {
+    "detector-like": 600,
+    "inventory-like": 3600
+  },
+  "splink": {
+    "threshold": 0.9,
+    "blocking": [
+      "email",
+      "phone",
+      "order_id"
+    ]
+  },
+  "description": "Analytical Mesh: multi-value lineage, every distinct observed value publishes, zero quarantine by construction (no esc/den rules). Consumers must treat output as observed claims, not attested truth."
+}

@@ -1,0 +1,66 @@
+{
+  "policy_version": "pol-retail-balanced-v1",
+  "entity_type": "user",
+  "allowed_attributes": [
+    "phone",
+    "email",
+    "address",
+    "display_name",
+    "order_id"
+  ],
+  "golden_attributes": [
+    "phone",
+    "email",
+    "address",
+    "display_name"
+  ],
+  "authority_matrix": {
+    "phone": {
+      "crm": 1
+    },
+    "email": {
+      "crm": 1
+    },
+    "address": {
+      "crm": 1
+    },
+    "display_name": {
+      "crm": 1
+    },
+    "order_id": {
+      "orders": 1
+    }
+  },
+  "critical_attributes": [],
+  "rules": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "L1",
+    "C1",
+    "C2",
+    "T1",
+    "I1",
+    "HIER"
+  ],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording"
+  },
+  "ttls_seconds": {
+    "detector-like": 600,
+    "inventory-like": 3600
+  },
+  "splink": {
+    "threshold": 0.9,
+    "blocking": [
+      "email",
+      "phone",
+      "order_id"
+    ]
+  },
+  "description": "Enterprise Commercial (Retail Balanced): source hierarchy ERP3 > order/OTP 2 > CRM 1; quarantines only same-tier conflicts; order_id is multivalued so never uniqueness-constrained.",
+  "multivalued_attributes": [
+    "order_id"
+  ]
+}

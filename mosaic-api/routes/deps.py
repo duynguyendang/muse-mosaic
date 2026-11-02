@@ -17,7 +17,7 @@ import httpx
 from config import Settings
 from fastapi import HTTPException, Request
 from schemas import Taxonomy
-from taxonomies import default_version, load_taxonomies, taxonomies_dir
+from taxonomies import TaxonomyError, default_version, load_taxonomies, taxonomies_dir
 
 logger = logging.getLogger("mosaic-api")
 
@@ -216,7 +216,7 @@ def active_taxonomy(request: Request, entity_type: str) -> tuple[str, Any]:
     taxonomies = request.app.state.taxonomies
     try:
         version = default_version(taxonomies, entity_type)
-    except Exception as exc:
+    except TaxonomyError as exc:
         logger.warning("taxonomy lookup failed for %s, continuing without: %s", entity_type, exc)
         return "", None
     return version, taxonomies[version]

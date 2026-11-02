@@ -46,9 +46,7 @@ def test_upload_csv_end_to_end(api_client):
         "source,source_id,attribute,value,authority_rank,event_time,verified,ttl_seconds\n"
         "crm-like,crm-e1,email,a.user@example.com,1,2026-10-27T09:00:00+07:00,true,3600\n"
     )
-    response = api_client.post(
-        "/upload", files={"file": ("upload.csv", raw, "text/csv")}
-    )
+    response = api_client.post("/upload", files={"file": ("upload.csv", raw, "text/csv")})
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["fragments_parsed"] == 1

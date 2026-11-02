@@ -249,6 +249,10 @@ class HealthResponse(StrictModel):
     duckdb_version: str | None = None
     policy_version_user: str | None = None
     policy_version_product: str | None = None
+    # Which model drives the proposer agents. "mock" means deterministic local
+    # agents; "live" means the model id below, via the Meta Model API.
+    proposer_mode: Literal["mock", "live"] | None = None
+    proposer_model: str | None = None
 
 
 class ProposalAttribute(StrictModel):

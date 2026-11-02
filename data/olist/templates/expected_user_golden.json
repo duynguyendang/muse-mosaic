@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Expected Olist user golden",
+  "description": "Default expected structure for a golden built from the Olist Brazilian E-Commerce mirror. customer_unique_id is the person key and is required; location fields come from the customers table only. Order, item and product ids stay linkage proof, not golden fields. A golden missing customer_unique_id does not validate.",
+  "type": "object",
+  "required": ["customer_unique_id"],
+  "properties": {
+    "customer_unique_id": {"type": "string", "minLength": 1},
+    "customer_zip": {"type": "string", "minLength": 1},
+    "customer_city": {"type": "string", "minLength": 1},
+    "customer_state": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

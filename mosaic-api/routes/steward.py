@@ -285,7 +285,11 @@ async def _steward_derive(
         ) from exc
     ledger.update_steward_status(current.database_path, item["steward_id"], new_status)
     superseded = ledger.supersede_sibling_stewards(
-        current.database_path, item["entity_type"], item["entity_id"], item["attribute"], item["steward_id"]
+        current.database_path,
+        item["entity_type"],
+        item["entity_id"],
+        item["attribute"],
+        item["steward_id"],
     )
     payload = response.model_dump(mode="json")
     payload["proposal"] = proposal.model_dump(mode="json")

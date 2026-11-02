@@ -560,6 +560,7 @@ def test_api_reads_empty_ledger_and_reports_engine_down(tmp_path):
         assert health.status_code == 200
         assert health.json()["mosaic_api"] == "ok"
         assert health.json()["trust_engine"] == "down"
+        assert health.json()["proposer_mode"] in ("mock", "live")
         assert health.json()["splink"] in ("ok", "unavailable")
         # Engine unreachable escalates fail-closed: 503, steward recorded,
         # no golden, no decision row that could be mistaken for a derivation.
