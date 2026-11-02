@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -37,14 +39,18 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", engine.handleHealth)
 	mux.HandleFunc("POST /derive", engine.handleDerive)
+	// /metrics re-runs Stage 03+04 over cached Stage 02 clusters. It shells
+	// out to manglekit once per cluster, so it needs a much longer write
+	// budget than /derive (which handles a single cluster).
+	mux.HandleFunc("POST /metrics", engine.handleMetrics)
 	handler := recoverPanics(logger, logRequests(logger, mux))
 
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      metricsWriteTimeout(),
 		IdleTimeout:       60 * time.Second,
 	}
 
@@ -243,4 +249,55 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// metricsWriteTimeout bounds a whole profile evaluation. Precomputing three
+// profiles over ~247 clusters takes tens of seconds; the budget scales with
+// the configured worker count so a wide fan-out is not cut off mid-run.
+func metricsWriteTimeout() time.Duration {
+	base := 120 * time.Second
+	if v := os.Getenv("METRICS_TIMEOUT_SECONDS"); v != "" {
+		var secs int
+		if _, err := fmt.Sscanf(v, "%d", &secs); err == nil && secs > 0 {
+			return time.Duration(secs) * time.Second
+		}
+	}
+	return base
+}
+
+// handleMetrics evaluates cached Stage 02 clusters under one policy profile
+// and returns aggregate Stage 03/04 metrics. It never writes to the ledger:
+// a policy preview must not become a publish.
+func (e *Engine) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<20)) // 64 MiB of cached clusters
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, failClosedResponse{Verdict: "escalated", ReasonCode: "INVALID_JSON", Message: "cannot read body; fail closed", FailClosed: true})
+		return
+	}
+	var req MetricsRequest
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, failClosedResponse{Verdict: "escalated", ReasonCode: "INVALID_JSON", Message: "request is not valid metrics JSON: " + err.Error() + "; fail closed", FailClosed: true})
+		return
+	}
+	resp, err := e.EvaluateMetrics(req)
+	if err != nil {
+		var reqErr *RequestError
+		if errors.As(err, &reqErr) {
+			status := http.StatusInternalServerError
+			if strings.HasPrefix(reqErr.Code, "INVALID_") || reqErr.Code == "UNKNOWN_POLICY_VERSION" || reqErr.Code == "UNKNOWN_TAXONOMY_VERSION" {
+				status = http.StatusBadRequest
+			}
+			writeJSON(w, status, failClosedResponse{Verdict: "escalated", ReasonCode: reqErr.Code, Message: reqErr.Message + "; fail closed", FailClosed: true})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, failClosedResponse{Verdict: "escalated", ReasonCode: "INTERNAL_ERROR", Message: err.Error() + "; fail closed", FailClosed: true})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

@@ -351,14 +351,48 @@ func floorMinutes(diffSeconds int64) int64 {
 }
 
 // evaluate runs the three derive queries against the entity policy.
-func (e *Engine) evaluate(request DeriveRequest, input deriveInput) ([]outcomeRow, []loserRow, []verifiedLinkRow, error) {
-	mkitBin := os.Getenv("MANGLEKIT_BIN")
-	if mkitBin == "" {
-		mkitBin = "mkit"
+// resolvePolicyFile locates the .mg for an entity type + policy version.
+// POLICY_DIR/<entity>/<version>.mg wins; staged auxiliary policies under
+// data/<dataset>/policies/<entity>/ are the fallback, mirroring the JSON
+// discovery in loadPolicies. Patterns are globbed because neither the
+// dataset directory nor the profile directory is fixed.
+func (e *Engine) resolvePolicyFile(entityType, policyVersion string) (string, error) {
+	policyFile := filepath.Join(e.policyDir, entityType, policyVersion+".mg")
+	if _, err := os.Stat(policyFile); err == nil {
+		return policyFile, nil
 	}
-	policyFile := filepath.Join(e.policyDir, request.EntityType, request.PolicyVersion+".mg")
-	if _, err := os.Stat(policyFile); err != nil {
-		return nil, nil, nil, &RequestError{Code: "UNKNOWN_POLICY_VERSION", Message: fmt.Sprintf("policy file %s is missing; fail closed", policyFile)}
+	auxPatterns := []string{
+		filepath.Join("data", "*", "policies", entityType, policyVersion+".mg"),
+		filepath.Join(e.policyDir, "../../data", "*", "policies", entityType, policyVersion+".mg"),
+	}
+	for _, pattern := range auxPatterns {
+		matches, globErr := filepath.Glob(pattern)
+		if globErr != nil || len(matches) == 0 {
+			continue
+		}
+		if _, statErr := os.Stat(matches[0]); statErr == nil {
+			return matches[0], nil
+		}
+	}
+	return "", &RequestError{
+		Code:    "UNKNOWN_POLICY_VERSION",
+		Message: fmt.Sprintf("policy file %s is missing; fail closed", policyFile),
+	}
+}
+
+// mkitBinary returns the manglekit executable to shell out to.
+func mkitBinary() string {
+	if bin := os.Getenv("MANGLEKIT_BIN"); bin != "" {
+		return bin
+	}
+	return "mkit"
+}
+
+func (e *Engine) evaluate(request DeriveRequest, input deriveInput) ([]outcomeRow, []loserRow, []verifiedLinkRow, error) {
+	mkitBin := mkitBinary()
+	policyFile, err := e.resolvePolicyFile(request.EntityType, request.PolicyVersion)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	payload, err := json.Marshal(input)
@@ -582,12 +616,19 @@ func mapOutput(request DeriveRequest, input deriveInput, factsByID map[string]Ca
 func primaryRule(outcomes []outcomeRow) string {
 	severity := map[string]int{
 		"R2": 0, "R3": 1, "L1": 2, "C1": 3, "C2": 4, "T1": 5, "R4": 6, "R1": 7,
+		// M1 = multi-valued publish (analytical_mesh). Least severe: it is
+		// reported only when it is the sole rule fired, which is exactly the
+		// case for a profile with no esc/den rules at all.
+		"M1": 8,
 	}
-	best, bestSev := "R1", 7
+	best, bestSev := "", int(^uint(0)>>1)
 	for _, row := range outcomes {
 		if sev, ok := severity[row.R]; ok && sev < bestSev {
 			best, bestSev = row.R, sev
 		}
+	}
+	if best == "" {
+		return "R1" // unknown codes keep the historical default
 	}
 	return best
 }

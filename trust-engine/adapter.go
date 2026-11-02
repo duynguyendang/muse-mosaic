@@ -186,6 +186,41 @@ func loadPolicies(policyDir string) (map[string]map[string]Policy, map[string]st
 		activeVersion[entityType] = versions[len(versions)-1]
 	}
 
+	// Also discover staged auxiliary policies (data/<dataset>/policies) so
+	// datasets targeting specific staged policies can derive without changing
+	// the active repo policy versions. Any bundled dataset may stage its own
+	// versioned policy next to its sample file (e.g. data/kaggle/policies,
+	// data/olist/policies).
+	for _, entityType := range []string{entityTypeUser, entityTypeProduct} {
+		auxCandidates := []string{
+			filepath.Join("data", "*", "policies", entityType, "*.json"),
+			filepath.Join(policyDir, "../../data", "*", "policies", entityType, "*.json"),
+		}
+		for _, pattern := range auxCandidates {
+			auxFiles, _ := filepath.Glob(pattern)
+			for _, path := range auxFiles {
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					continue
+				}
+				var policy Policy
+				if err := json.Unmarshal(raw, &policy); err != nil {
+					continue
+				}
+				// Staged policies get the same validation as the active ones;
+				// an invalid file is skipped, so requests naming it fail
+				// closed with an unknown-policy error instead of deriving
+				// from an unchecked matrix.
+				if err := validatePolicy(entityType, policy); err != nil {
+					continue
+				}
+				if _, exists := policies[entityType][policy.PolicyVersion]; !exists {
+					policies[entityType][policy.PolicyVersion] = policy
+				}
+			}
+		}
+	}
+
 	return policies, activeVersion, nil
 }
 
