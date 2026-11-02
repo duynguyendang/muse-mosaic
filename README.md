@@ -26,7 +26,7 @@ field, and a visible fail-closed boundary everywhere a guess could leak in.
 
 ## Proven twice: synthetic suite + real dirty data
 
-**1. Synthetic correctness gate — 143 tests passing** (121 core pipeline + 22 jobs/inbox/analyser from the parallel jobs workstream) (`python3 -m pytest -q`):
+**1. Synthetic correctness gate — 200+ tests** (`python3 -m pytest -q`; plus `go test ./...` in `trust-engine/`, both run in CI):
 G-01..G-21 user rules (G21: agreeing display_name publishes under v2) plus C1, P-01..P-06 product rules plus T1, H-01..H-03
 hidden-connection chain/trap, S-01..S-05 matching-engine tests against the
 *live* service (S-04 with the service down, S-05 with a malformed response),
@@ -486,3 +486,23 @@ option and records the question instead of inventing an answer.
 - A steward decision (approve/reject/split/Accept) is a new fact or a new
   taxonomy version + explicit re-derive — never a hand edit. Accept is bound
   to one exact suggested action and version, single-use.
+
+
+## Operating notes
+
+- **API token.** Set `MOSAIC_API_TOKEN` to require `Authorization: Bearer <token>`
+  on every state-changing request (steward approve/reject, jobs, uploads, policy
+  apply). Reads stay open. Unset = open, for local development only; the server
+  logs a warning. The cockpit asks for the token once on a 401 and keeps it in
+  `sessionStorage`.
+- **Policy Copilot** (`POST /api/v1/pipeline/copilot/draft`). English in, a *draft*
+  out. The proposer (a deterministic parser in mock mode, the Meta model in live
+  mode) can only set a source's trust tier or mark an attribute multivalued;
+  anything else is refused. Fixed templates compile the change and `mkit` decides
+  whether the result is a valid program. Nothing is applied or published.
+- **Proposer model.** `/health` reports `proposer_mode` (`mock`|`live`) and the
+  model id; the cockpit shows it on Stage 01 instead of naming a model it is not
+  running.
+- **Styling.** `web/studio.css` is built from `web/tailwind.config.js` with
+  `scripts/build_css.sh` and committed; no runtime Tailwind CDN. Fonts and icons
+  still load from Google Fonts, so the demo needs network for those.
