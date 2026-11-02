@@ -11,7 +11,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[1] / "web"
+WEB_ROOT = Path(__file__).resolve().parents[1] / "web"
+WEB = WEB_ROOT / "legacy"  # archived Friendly/Detail UI; studio checked below
 
 
 def _created_ids() -> set[str]:
@@ -294,3 +295,59 @@ def test_protocol_chat_surface_exists():
     # Dataset isolation: runs pin their entity keys; steps filter by them.
     assert "activeKeys" in src
     assert "scopedNeeds" in src
+
+
+# --- Studio (current UI): index.html + studio.js -------------------------
+
+
+def _studio_js_ids() -> set[str]:
+    src = (WEB_ROOT / "studio.js").read_text(encoding="utf-8")
+    ids = set(re.findall(r"""\$\("([^"]+)"\)""", src))
+    ids.update(re.findall(r"""getElementById\(["']([^"']+)["']\)""", src))
+    return ids
+
+
+def _studio_html_ids() -> set[str]:
+    html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+    src = (WEB_ROOT / "studio.js").read_text(encoding="utf-8")
+    created = set(re.findall(r'id="([^"]+)"', src))
+    created.update(re.findall(r'\.id = "([^"]+)"', src))
+    return set(re.findall(r'id="([^"]+)"', html)) | created
+
+
+def test_studio_js_ids_exist_in_html():
+    missing = sorted(_studio_js_ids() - _studio_html_ids())
+    assert not missing, f"studio.js references missing HTML ids: {missing}"
+
+
+def test_studio_is_the_only_script():
+    html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+    local = [s for s in re.findall(r'<script src="([^"]+)"', html) if s.startswith(".")]
+    assert local == ["./studio.js"], local
+
+
+def test_studio_has_no_dead_legacy_scripts_at_top_level():
+    for name in ("app.js", "chat.js", "drawers.js", "config.js"):
+        assert not (WEB_ROOT / name).exists(), f"dead file web/{name}"
+
+
+def test_studio_gates_otp_and_bcbs_for_unattested_profiles():
+    """Analytical Mesh publishes unverified multi-valued output: OTP and the
+    BCBS dossier must not read as ready/certified under it."""
+    src = (WEB_ROOT / "studio.js").read_text(encoding="utf-8")
+    assert "isUnattestedPolicy()" in src
+    assert src.count("Gated by Policy (Unattested Mode)") >= 2
+
+
+def test_studio_has_no_runtime_tailwind_cdn():
+    html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+    assert "cdn.tailwindcss.com" not in html
+    assert (WEB_ROOT / "studio.css").exists()
+
+
+def test_studio_kpis_use_disjoint_cluster_buckets():
+    """Certified + held must never exceed clusters: a partial golden (some
+    attributes published, some held) is counted once, as held."""
+    src = (WEB_ROOT / "studio.js").read_text(encoding="utf-8")
+    assert "partial_goldens_count" in src
+    assert "partial" in src and "readable" in src
