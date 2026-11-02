@@ -93,6 +93,7 @@ class CandidatePair:
     left_profile: dict[str, list[str]] = field(default_factory=dict)
     right_profile: dict[str, list[str]] = field(default_factory=dict)
     hints: list[str] = field(default_factory=list)
+    evidence: list[dict[str, str]] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------
@@ -124,36 +125,64 @@ def cluster_profile(cluster: dict[str, Any]) -> dict[str, list[str]]:
     return {"names": sorted(names), "addresses": sorted(addresses)}
 
 
-def cluster_identifiers(cluster: dict[str, Any]) -> dict[str, set[str]]:
-    """Normalised emails and phone digits. Used locally; never sent to a model."""
-    emails: set[str] = set()
-    phones: set[str] = set()
+def phone_key(value: str) -> str:
+    """Last 9 digits, extension dropped. Same definition as trust-engine semantic.go."""
+    digits = re.sub(r"\D", "", re.split(r"[xX]", value)[0])
+    return digits[-9:] if len(digits) >= 9 else ""
+
+
+def email_deletion_keys(value: str) -> set[str]:
+    """Deletion neighbourhood (edit distance <= 1). Same as trust-engine semantic.go."""
+    value = value.strip().lower()
+    local, at, domain = value.rpartition("@")
+    if not at or not local or not domain or not 8 <= len(local) <= 64:
+        return set()
+    suffix = "@" + domain
+    return {value} | {local[:i] + local[i + 1 :] + suffix for i in range(len(local))}
+
+
+def cluster_identifiers(cluster: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Per-document phone keys and emails. Used locally; never sent to a model."""
+    phones: dict[str, str] = {}  # document id -> phone digits (extension dropped)
+    emails: dict[str, str] = {}  # document id -> email
     for document in cluster["member_docs"]:
-        if email := _field_value(document, "email"):
-            emails.add(email.strip().lower())
-        if phone := _field_value(document, "phone"):
-            digits = re.sub(r"\D", "", phone.split("x")[0])
-            if digits:
-                phones.add(digits)
-    return {"emails": emails, "phones": phones}
+        doc_id = document["document_id"]
+        if (phone := _field_value(document, "phone")) and phone_key(phone):
+            phones[doc_id] = re.sub(r"\D", "", re.split(r"[xX]", phone)[0])
+        if (email := _field_value(document, "email")) and email_deletion_keys(email):
+            emails[doc_id] = email.strip().lower()
+    return {"phones": phones, "emails": emails}
 
 
-def identifier_hints(a: dict[str, set[str]], b: dict[str, set[str]]) -> list[str]:
-    """Deterministic evidence that two clusters share a *near* identifier.
+def identifier_evidence(
+    a: dict[str, dict[str, str]], b: dict[str, dict[str, str]]
+) -> list[dict[str, str]]:
+    """Near-identical (not exactly equal) phone/email pairs, computed by code.
 
-    Computed by code from the records, not claimed by a model. Exact matches
-    are not hints: those clusters would already be one cluster.
+    These mirror the trust-engine's S1/S2 features exactly, so every item here
+    is something the engine can verify. Exact matches are excluded: those
+    clusters would already be one cluster.
     """
-    hints: list[str] = []
-    for x in a["phones"]:
-        for y in b["phones"]:
-            if x != y and len(x) >= 9 and len(y) >= 9 and x[-9:] == y[-9:]:
-                hints.append("phone_suffix_match")
-    for x in a["emails"]:
-        for y in b["emails"]:
-            if x != y and SequenceMatcher(None, x, y).ratio() >= 0.9:
-                hints.append("email_near_match")
-    return sorted(set(hints))
+    found: list[dict[str, str]] = []
+    for da, pa in sorted(a["phones"].items()):
+        for db, pb in sorted(b["phones"].items()):
+            if pa != pb and pa[-9:] == pb[-9:]:
+                found.append({"proof": "semantic_phone", "doc_a": da, "doc_b": db})
+    for da, ea in sorted(a["emails"].items()):
+        for db, eb in sorted(b["emails"].items()):
+            if ea != eb and email_deletion_keys(ea) & email_deletion_keys(eb):
+                found.append({"proof": "semantic_email", "doc_a": da, "doc_b": db})
+    return found
+
+
+def identifier_hints(a: dict[str, dict[str, str]], b: dict[str, dict[str, str]]) -> list[str]:
+    """Hint labels for the model (no values): which kinds of evidence exist."""
+    return sorted(
+        {
+            "phone_suffix_match" if e["proof"] == "semantic_phone" else "email_near_match"
+            for e in identifier_evidence(a, b)
+        }
+    )
 
 
 def _ratio(a: str, b: str) -> float:
@@ -192,10 +221,9 @@ def shortlist(
                 if len(token) >= 3:
                     index.setdefault(token, set()).add(i)
         # Near-identifier blocking keys (phone tail, email domain + local prefix).
-        for phone in idents[i]["phones"]:
-            if len(phone) >= 9:
-                index.setdefault("ph:" + phone[-9:], set()).add(i)
-        for email in idents[i]["emails"]:
+        for digits in set(idents[i]["phones"].values()):
+            index.setdefault("ph:" + digits[-9:], set()).add(i)
+        for email in idents[i]["emails"].values():
             local, _, domain = email.partition("@")
             index.setdefault(f"em:{domain}:{local[:4]}", set()).add(i)
 
@@ -212,6 +240,7 @@ def shortlist(
                 seen.add((a, b))
                 name = _best(profiles[a]["names"], profiles[b]["names"])
                 address = _best(profiles[a]["addresses"], profiles[b]["addresses"])
+                evidence = identifier_evidence(idents[a], idents[b])
                 hints = identifier_hints(idents[a], idents[b])
                 if (
                     name >= min_name
@@ -219,7 +248,9 @@ def shortlist(
                     or hints
                 ):
                     scored.append(
-                        CandidatePair("", a, b, name, address, profiles[a], profiles[b], hints)
+                        CandidatePair(
+                            "", a, b, name, address, profiles[a], profiles[b], hints, evidence
+                        )
                     )
 
     scored.sort(key=lambda p: (-(p.name_score + p.address_score + len(p.hints)), p.left, p.right))
@@ -379,8 +410,11 @@ def apply_merges(
                 "reason": verdict.reason,
                 # semantic_verified: code found a near-identical phone/email as
                 # supporting evidence. semantic_only: names/address alone.
-                "tier": "semantic_verified" if pair.hints else "semantic_only",
+                "tier": "semantic_verified" if pair.evidence else "semantic_only",
                 "hints": pair.hints,
+                # Engine-verifiable identifier pairs; each becomes a
+                # semantic_phone / semantic_email link the policy checks (S1/S2).
+                "evidence": pair.evidence,
                 "name_score": round(pair.name_score, 3),
                 "address_score": round(pair.address_score, 3),
             }
@@ -399,7 +433,18 @@ def apply_merges(
                 "cluster_id": base["cluster_id"],
                 "entity_type": base["entity_type"],
                 "member_docs": docs,
-                **({"muse_links": links[find(members[0])]} if len(members) > 1 else {}),
+                **(
+                    {
+                        "muse_links": links.get(find(members[0]), []),
+                        # The separately-clustered parts, so co-location chains
+                        # do not bridge a merge the engine has not verified.
+                        "components": [
+                            [d["document_id"] for d in clusters[i]["member_docs"]] for i in members
+                        ],
+                    }
+                    if len(members) > 1
+                    else {}
+                ),
             }
         )
     for index, cluster in enumerate(merged):
@@ -463,21 +508,40 @@ async def propose_and_merge(
 def link_claims(
     cluster: dict[str, Any], facts: list, fact_documents: dict[str, str]
 ) -> list[dict[str, Any]]:
-    """``fuzzy_name_address`` link claims for a Muse-merged cluster."""
+    """Link claims for a Muse-merged cluster.
+
+    Always a ``fuzzy_name_address`` claim (names alone: never verifies). Plus one
+    ``semantic_phone`` / ``semantic_email`` claim per code-found identifier pair;
+    the engine verifies those against its own features (policy rules S1/S2).
+    """
+
+    def fact_of(doc: str, attribute: str) -> str | None:
+        ids = sorted(
+            f.fact_id
+            for f in facts
+            if f.attribute == attribute and fact_documents.get(f.fact_id) == doc
+        )
+        return ids[0] if ids else None
+
+    def first_fact(doc: str) -> str | None:
+        ids = sorted(f.fact_id for f in facts if fact_documents.get(f.fact_id) == doc)
+        return ids[0] if ids else None
+
     claims: list[dict[str, Any]] = []
     for link in cluster.get("muse_links", []):
-        first = {
-            doc: sorted(f.fact_id for f in facts if fact_documents.get(f.fact_id) == doc)
-            for doc in (link["doc_a"], link["doc_b"])
-        }
-        if not first[link["doc_a"]] or not first[link["doc_b"]]:
-            continue
-        claims.append(
-            {
-                "from_fact_id": first[link["doc_a"]][0],
-                "to_fact_id": first[link["doc_b"]][0],
-                "proof": PROOF,
-                "proposer": "Muse",
-            }
-        )
+        a, b = first_fact(link["doc_a"]), first_fact(link["doc_b"])
+        if a and b:
+            claims.append({"from_fact_id": a, "to_fact_id": b, "proof": PROOF, "proposer": "Muse"})
+        for item in link.get("evidence", []):
+            attribute = "phone" if item["proof"] == "semantic_phone" else "email"
+            fa, fb = fact_of(item["doc_a"], attribute), fact_of(item["doc_b"], attribute)
+            if fa and fb:
+                claims.append(
+                    {
+                        "from_fact_id": fa,
+                        "to_fact_id": fb,
+                        "proof": item["proof"],
+                        "proposer": "Muse",
+                    }
+                )
     return claims

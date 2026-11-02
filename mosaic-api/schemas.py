@@ -289,6 +289,9 @@ LINK_PROOFS = {
     "same_phone_different_email",
     "same_order_two_users",
     "same_fragment",
+    # Muse semantic claims; the trust-engine verifies them (policy rules S1/S2).
+    "semantic_phone",
+    "semantic_email",
 }
 
 SOLE_LINK_PROOFS = {"exact_email", "exact_phone", "exact_order"}

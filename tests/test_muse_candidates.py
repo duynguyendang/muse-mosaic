@@ -247,11 +247,34 @@ def test_on_merges_the_person_and_the_engine_will_not_certify_it(te_url, matchin
 
 
 def test_identifier_hints_are_computed_by_code_and_ignore_exact_matches():
-    a = {"emails": {"maria.day@x.com"}, "phones": {"4499771729"}}
-    typo = {"emails": {"maria.dqy@x.com"}, "phones": {"14499771729"}}  # +1 prefix, 1-char typo
+    a = {"emails": {"a": "maria.day@x.com"}, "phones": {"a": "4499771729"}}
+    typo = {"emails": {"b": "maria.dqy@x.com"}, "phones": {"b": "14499771729"}}  # +1, 1-char typo
     assert mc.identifier_hints(a, typo) == ["email_near_match", "phone_suffix_match"]
     assert mc.identifier_hints(a, a) == []  # exact matches are not "hints"
-    assert mc.identifier_hints(a, {"emails": {"other@y.org"}, "phones": {"5551234567"}}) == []
+    other = {"emails": {"c": "other.person@y.org"}, "phones": {"c": "5551234567"}}
+    assert mc.identifier_hints(a, other) == []
+
+
+def test_python_features_match_the_engine_definition():
+    """Same cases as trust-engine/engine_test.go: Python must not claim evidence
+    the engine would reject (it would only be wasted, but drift is a bug)."""
+    assert mc.phone_key("+1 449-977-1729") == mc.phone_key("(449) 977-1729") == "499771729"
+    assert mc.phone_key("449.977.1729x282") == "499771729"
+    assert mc.phone_key("12345") == ""
+    base = mc.email_deletion_keys("maria.day@example.com")
+    assert base & mc.email_deletion_keys("maria.dqy@example.com")  # substitution
+    assert base & mc.email_deletion_keys("maria.daay@example.com")  # insertion
+    assert not base & mc.email_deletion_keys("maria.dqq@example.com")  # two edits
+    assert not base & mc.email_deletion_keys("maria.day@example.org")  # other domain
+    assert mc.email_deletion_keys("short@x.com") == set()  # local part too short
+
+
+def test_evidence_names_the_documents_holding_the_near_identifiers():
+    a = cluster(1, doc("a1", "Maria Day", email="maria.day@x.com", phone="4499771729"))
+    b = cluster(2, doc("b1", "maria day", email="maria.dqy@x.com", phone="+1 4499771729"))
+    pairs = mc.shortlist([a, b])
+    assert {e["proof"] for e in pairs[0].evidence} == {"semantic_phone", "semantic_email"}
+    assert all(e["doc_a"] == "a1" and e["doc_b"] == "b1" for e in pairs[0].evidence)
 
 
 def test_near_identifier_shortlists_a_pair_even_when_names_differ_but_judge_decides():
@@ -292,3 +315,152 @@ def test_blocking_normalises_identifiers_like_the_facts_the_engine_verifies():
     groups = _exact_identifier_groups(docs, ["email", "phone"])
     assert sorted(groups[("phone", "4499771729")]) == ["x", "y"]
     assert sorted(groups[("email", "a@x.com")]) == ["x", "y"]
+
+
+def _verifiable_docs():
+    """Same person; phone has a country code and the email a typo. Exact blocking
+    sees nothing in common, but both differences are checkable by the engine.
+    Ranks follow the policy matrix (the engine rejects a rank that contradicts it):
+    sap-like phone 1 / name 1 / email 3 / address 3, salesforce-like 2 throughout."""
+
+    def d(doc_id, source, **fields):  # fields: name -> (value, rank)
+        stamp = {"event_time": "2026-10-27T09:00:00+07:00", "verified": True, "ttl_seconds": 3600}
+        return {
+            "synthetic": True,
+            "document_id": doc_id,
+            "entity_type": "user",
+            "source": source,
+            "fields": {
+                k: {"value": v, "authority_rank": r, **stamp} for k, (v, r) in fields.items()
+            },
+        }
+
+    return [
+        d(
+            "m1",
+            "sap-like",
+            display_name=("Maria Day", 1),
+            address=("12 Elm Street Hanoi", 3),
+            email=("maria.day@old.example", 3),
+            phone=("4499771729", 1),
+        ),
+        d(
+            "m2",
+            "salesforce-like",
+            display_name=("maria  DAY", 2),
+            address=("12 elm st hanoi", 2),
+            email=("maria.dqy@old.example", 2),
+            phone=("+1 4499771729", 2),
+        ),
+    ]
+
+
+@pytest.mark.usefixtures("te_url")
+def test_engine_verifies_semantic_evidence_so_the_merge_is_not_chain_broken(
+    te_url, matching_engine, tmp_path
+):
+    with _client(te_url, matching_engine, tmp_path, True) as client:
+        body = {
+            "work_id": "w-sem",
+            "idempotency_key": "sem",
+            "dataset": {"documents": _verifiable_docs()},
+        }
+        response = client.post("/build", json=body)
+    assert response.status_code == 200, response.text
+    out = response.json()
+    assert out["muse_candidates"]["merged"] == 1
+    assert out["muse_candidates"]["tiers"] == {"semantic_verified": 1}
+    reasons = {c["reason_code"] for c in out["conflicts"]}
+    # The merged person is grounded by engine-verified semantic hops, so it is
+    # no longer cut off (CHAIN_BROKEN) the way an unverifiable merge is.
+    assert "CHAIN_BROKEN" not in reasons, out["conflicts"]
+    # Authority now decides the conflicting values (R1); nothing is held.
+    published = [g for g in out["goldens"] if g.get("golden_id")]
+    assert published, out
+    attrs = published[0]["attributes"]
+    assert attrs["phone"]["value"] == "4499771729"  # sap-like (rank 1) beats salesforce-like
+    assert attrs["phone"]["rule_fired"] == "R1"
+    assert out["verdict"] == "published"
+
+
+def test_co_location_chain_stops_at_the_parts_of_a_muse_merged_cluster():
+    """Chaining every fact would ground a merge nobody verified (C2/S3 could never fire)."""
+    from datetime import datetime
+
+    from publisher import _batch_links
+    from schemas import CandidateFact
+
+    def f(fid):
+        return CandidateFact(
+            fact_id=fid,
+            entity_type="user",
+            entity_id="c",
+            attribute="phone",
+            value="1",
+            source="crm",
+            source_id=fid,
+            authority_rank=1,
+            event_time=datetime.fromisoformat("2026-10-27T09:00:00+07:00"),
+            verified=True,
+            ttl_seconds=3600,
+        )
+
+    facts = [f("a1"), f("a2"), f("b1"), f("b2")]
+    parts = {"a1": 0, "a2": 0, "b1": 1, "b2": 1}
+    chained = {
+        (link["from_fact_id"], link["to_fact_id"]) for link in _batch_links(facts, None, [], parts)
+    }
+    assert chained == {("a1", "a2"), ("b1", "b2")}  # nothing crosses the merge
+    # ordinary clusters keep the old behaviour: one chain across all facts
+    legacy = {(link["from_fact_id"], link["to_fact_id"]) for link in _batch_links(facts, None, [])}
+    assert ("a2", "b1") in legacy
+
+
+@pytest.mark.usefixtures("te_url")
+def test_names_only_merge_is_not_certified_through_build(te_url, matching_engine, tmp_path):
+    """No identifier evidence, newest record wins -> the engine must hold it."""
+
+    def d(doc_id, source, minute, **fields):
+        stamp = {
+            "event_time": f"2026-10-27T09:{minute:02d}:00+07:00",
+            "verified": True,
+            "ttl_seconds": 3600,
+        }
+        return {
+            "synthetic": True,
+            "document_id": doc_id,
+            "entity_type": "user",
+            "source": source,
+            "fields": {
+                k: {"value": v, "authority_rank": r, **stamp} for k, (v, r) in fields.items()
+            },
+        }
+
+    docs = [
+        d(
+            "m1",
+            "salesforce-like",
+            0,
+            display_name=("Maria Day", 2),
+            address=("12 Elm Street Hanoi", 2),
+            email=("maria.day@old.example", 2),
+            phone=("0901111111", 2),
+        ),
+        d(
+            "m2",
+            "salesforce-like",
+            5,
+            display_name=("maria  DAY", 2),
+            address=("12 elm st hanoi", 2),
+            email=("mday@new.example", 2),
+            phone=("0902222222", 2),
+        ),
+    ]
+    with _client(te_url, matching_engine, tmp_path, True) as client:
+        out = client.post(
+            "/build", json={"work_id": "w", "idempotency_key": "k", "dataset": {"documents": docs}}
+        ).json()
+    assert out["muse_candidates"]["tiers"] == {"semantic_only": 1}
+    reasons = {c["reason_code"] for c in out["conflicts"]}
+    assert reasons & {"SEMANTIC_MERGE_UNVERIFIED", "CHAIN_BROKEN"}, out["conflicts"]
+    assert not [g for g in out["goldens"] if g.get("golden_id")], "nothing may certify"

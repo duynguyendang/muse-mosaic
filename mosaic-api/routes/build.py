@@ -116,6 +116,18 @@ async def _match_documents(
     return splink_out, status
 
 
+def _fact_components(
+    cluster: dict[str, Any], fact_documents: dict[str, str]
+) -> dict[str, int] | None:
+    """fact id -> index of the separately-clustered part it came from, for a
+    Muse-merged cluster. None for ordinary clusters (unchanged behaviour)."""
+    parts = cluster.get("components")
+    if not parts:
+        return None
+    part_of_doc = {doc: i for i, docs in enumerate(parts) for doc in docs}
+    return {fid: part_of_doc[doc] for fid, doc in fact_documents.items() if doc in part_of_doc}
+
+
 async def _cluster_inputs(
     ctx: _BuildContext,
     cluster: dict[str, Any],
@@ -171,6 +183,7 @@ async def _cluster_inputs(
         fact_documents or None,
         extra_links=_splink_link_claims(ctx.splink_out, member_docs, facts, fact_documents)
         + muse_candidates.link_claims(cluster, facts, fact_documents),
+        components=_fact_components(cluster, fact_documents),
     )
     proposal = Proposal.model_validate(proposal_dict)
     links = [ProposedLink.model_validate(item) for item in link_dicts]

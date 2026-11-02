@@ -132,6 +132,7 @@ def _batch_links(
     facts: list[CandidateFact],
     fact_documents: dict[str, str] | None,
     linker_links: list[ProposedLink],
+    components: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Links for one derive call: batch co-location + Linker claims.
 
@@ -158,7 +159,19 @@ def _batch_links(
             }
         )
 
-    if fact_documents:
+    if components and len(set(components.values())) > 1:
+        # A cluster Muse assembled from separately-clustered parts. Co-location
+        # chains stay INSIDE each part: chaining across parts would ground every
+        # fact and hide a merge no engine rule has verified (C2 / S3 could never
+        # fire). Parts are joined only by exact/semantic hops the engine verifies.
+        by_part: dict[int, list[str]] = {}
+        for fact in facts:
+            by_part.setdefault(components.get(fact.fact_id, -1), []).append(fact.fact_id)
+        for part_ids in by_part.values():
+            ordered = sorted(part_ids)
+            for first, second in zip(ordered, ordered[1:], strict=False):
+                add(first, second, "same_fragment", "mosaic-api")
+    elif fact_documents:
         by_doc: dict[str, list[str]] = {}
         for fact in facts:
             document = fact_documents.get(fact.fact_id)
@@ -187,6 +200,7 @@ async def run_builder_pipeline(
     allowed_attributes: set[str],
     fact_documents: dict[str, str] | None = None,
     extra_links: list[dict[str, Any]] | None = None,
+    components: dict[str, int] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     """Run the five sub-agents (mock deterministic, or real Muse).
 
@@ -213,7 +227,7 @@ async def run_builder_pipeline(
             "invalid-links",
             f"Linker produced invalid links: {link_errors[0]}",
         )
-    batch = _batch_links(facts, fact_documents, valid_links)
+    batch = _batch_links(facts, fact_documents, valid_links, components)
     return proposal, batch, proposal.get("subagent_trace", [])
 
 
