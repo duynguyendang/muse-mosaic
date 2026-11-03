@@ -663,6 +663,14 @@ async def _build_clusters(
         policy = policies.get(entity_type)
         if policy is None:
             continue
+        # G1: raw field names (full_name, address_line, mobile ...) become the canonical
+        # identity roles via the taxonomy aliases BEFORE clustering, so exact blocking
+        # and Muse matching see the same names the engine does.
+        try:
+            tax = (taxonomies or {}).get(default_version(taxonomies, entity_type))
+        except Exception:  # noqa: BLE001 - no taxonomy for this type: documents stay as given
+            tax = None
+        docs = muse_candidates.canonicalize_documents(docs, tax)
         entity_clusters = _cluster_entity_docs(entity_type, docs, policy, splink_out)
         # Opt-in: Muse proposes near-matches the exact identifiers missed. Only
         # user records carry the name/address it judges on.

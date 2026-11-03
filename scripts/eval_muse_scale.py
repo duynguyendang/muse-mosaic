@@ -284,6 +284,7 @@ async def main() -> None:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--judge", choices=["mock", "live"], default="mock")
     ap.add_argument("--min-confidence", choices=["high", "medium"], default="high")
+    ap.add_argument("--blocking", choices=list(mc.BLOCKING_MODES), default="token")
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -314,7 +315,7 @@ async def main() -> None:
 
     stats: dict = {}
     started = time.time()
-    pairs = mc.shortlist(base, per_cluster=3, stats=stats)
+    pairs = mc.shortlist(base, per_cluster=3, stats=stats, blocking=args.blocking)
     shortlist_s = time.time() - started
     print(
         f"candidate_pairs={stats['candidate_pairs']}  judged={len(pairs)}"

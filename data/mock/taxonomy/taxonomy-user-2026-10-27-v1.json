@@ -4,11 +4,45 @@
   "entity_type": "user",
   "notice": "SYNTHETIC DEMO TAXONOMY. Canonical attribute names and aliases for user fragments. No real data.",
   "attribute_aliases": {
-    "phone": ["phone_number", "mobile", "tel", "sdt", "dien_thoai", "customer_phone"],
-    "email": ["customer_email", "e-mail", "mail"],
-    "address": ["shipping_address", "dia_chi", "addr"],
-    "display_name": ["name", "full_name", "customer_name", "reviewer"],
-    "order_id": ["order", "order_number", "orderid"]
+    "phone": [
+      "phone_number",
+      "mobile",
+      "tel",
+      "sdt",
+      "dien_thoai",
+      "customer_phone",
+      "mobile_phone",
+      "phone_no",
+      "contact_phone"
+    ],
+    "email": [
+      "customer_email",
+      "e-mail",
+      "mail",
+      "email_address",
+      "contact_email"
+    ],
+    "address": [
+      "shipping_address",
+      "dia_chi",
+      "addr",
+      "address_line",
+      "street_address",
+      "address_1"
+    ],
+    "display_name": [
+      "name",
+      "full_name",
+      "customer_name",
+      "reviewer",
+      "contact_name",
+      "customer_full_name"
+    ],
+    "order_id": [
+      "order",
+      "order_number",
+      "orderid"
+    ]
   },
   "terms": []
 }

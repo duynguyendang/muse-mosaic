@@ -668,3 +668,150 @@ def test_cache_lookup_handles_more_keys_than_sqlite_allows_in_one_query(tmp_path
     assert len(asyncio.run(mc.live_judge(settings, pairs, stats=second_stats))) == 1200
     assert first_stats["judge_calls"] == 60
     assert second_stats["cache_hits"] == 1200 and second_stats["judge_calls"] == 0
+
+
+# --------------------------------------------------------------------------
+# G1: field roles via taxonomy aliases. G2: blocking for common names.
+# --------------------------------------------------------------------------
+
+
+def _user_taxonomy():
+    import json
+    from pathlib import Path
+
+    from schemas import Taxonomy
+
+    path = (
+        Path(__file__).resolve().parents[1] / "data/mock/taxonomy/taxonomy-user-2026-10-27-v1.json"
+    )
+    return Taxonomy.model_validate(json.loads(path.read_text()))
+
+
+def _raw_doc(doc_id, name_key, name, addr_key, addr, phone_key="mobile", phone="0900111222"):
+    return {
+        "document_id": doc_id,
+        "entity_type": "user",
+        "source": "crm",
+        "fields": {
+            name_key: {"value": name},
+            addr_key: {"value": addr},
+            phone_key: {"value": phone},
+        },
+    }
+
+
+def test_other_schema_yields_no_candidates_without_canonicalisation():
+    a = cluster(1, _raw_doc("a", "full_name", "Maria Day", "address_line", "12 Elm St"))
+    b = cluster(2, _raw_doc("b", "full_name", "maria day", "address_line", "12 elm st"))
+    assert mc.shortlist([a, b]) == []  # the failure G1 fixes
+
+
+def test_canonicalize_maps_aliases_so_other_schemas_link():
+    tax = _user_taxonomy()
+    docs = [
+        _raw_doc("a", "full_name", "Maria Day", "address_line", "12 Elm St"),
+        _raw_doc("b", "customer_name", "maria day", "street_address", "12 elm st"),
+    ]
+    mapped = mc.canonicalize_documents(docs, tax)
+    assert set(mapped[0]["fields"]) == {"display_name", "address", "phone"}
+    pairs = mc.shortlist([cluster(1, mapped[0]), cluster(2, mapped[1])])
+    assert len(pairs) == 1
+    assert docs[0]["fields"].keys() >= {"full_name"}  # input untouched
+
+
+def test_canonicalize_never_overwrites_or_drops_a_value():
+    tax = _user_taxonomy()
+    d = {
+        "document_id": "x",
+        "fields": {"display_name": {"value": "Real Name"}, "full_name": {"value": "Other"}},
+    }
+    out = mc.canonicalize_documents([d], tax)[0]
+    assert out["fields"]["display_name"]["value"] == "Real Name"
+    assert out["fields"]["full_name"]["value"] == "Other"  # kept, not lost
+    plain = {"document_id": "y", "fields": {"display_name": {"value": "A"}}}
+    assert mc.canonicalize_documents([plain], tax)[0] is plain
+    assert mc.canonicalize_documents([plain], None)[0] is plain
+
+
+SURNAMES = ["Nguyen", "Tran", "Le", "Pham", "Hoang", "Phan", "Vu", "Dang"]
+GIVENS = ["Lan", "Mai", "Linh", "Hoa", "Nam", "Hung", "Tam", "Binh"]
+
+
+def _common_name_clusters():
+    out = []
+    for i in range(640):  # 8 x 8 name combos, each word in ~80 clusters: all "hot"
+        surname, given = SURNAMES[i % 8], GIVENS[(i // 8) % 8]
+        out.append(cluster(i, doc(f"v{i}", f"{surname} Thi {given}", f"{i} Le Loi")))
+    out.append(
+        cluster(900, doc("w900", "Mai Tran", "77 Hai Ba Trung"))
+    )  # reorder of "Tran Thi Mai"
+    return out
+
+
+def test_common_names_block_nothing_by_default():
+    clusters = _common_name_clusters()
+    assert mc.shortlist(clusters) == []
+
+
+def test_rarest_pair_blocking_recovers_common_names_and_reports_it():
+    clusters = _common_name_clusters()
+    target = next(i for i, c in enumerate(clusters) if c["member_docs"][0]["document_id"] == "w900")
+    # the true counterpart lives at the same address as the reordered record
+    twin = cluster(901, doc("t901", "Tran Thi Mai", "77 Hai Ba Trung"))
+    clusters.append(twin)
+    stats: dict = {}
+    pairs = mc.shortlist(clusters, blocking="rarest_pair", stats=stats)
+    keys = {(p.left, p.right) for p in pairs}
+    assert (target, len(clusters) - 1) in keys
+    assert stats["blocking"] == "rarest_pair" and stats["block_keys"] > 0
+
+
+def test_zero_candidates_at_scale_is_reported_not_silent():
+    clusters = _common_name_clusters()
+    stats: dict = {}
+    assert mc.shortlist(clusters, stats=stats) == []
+    assert "rarest_pair" in stats["warning"] and stats["hot_keys_skipped"] > 0
+    blank = [
+        cluster(i, {"document_id": f"b{i}", "fields": {"full_name": {"value": "A B"}}})
+        for i in range(300)
+    ]
+    stats = {}
+    mc.shortlist(blank, stats=stats)
+    assert "field mapping" in stats["warning"]
+
+
+def test_cjk_two_character_names_can_block():
+    a = cluster(1, doc("a", "张伟", "1 Road"))
+    b = cluster(2, doc("b", "张伟", "1 Road"))
+    assert len(mc.shortlist([a, b])) == 1
+
+
+def test_unknown_blocking_mode_is_rejected():
+    with pytest.raises(ValueError):
+        mc.shortlist([], blocking="nope")
+    with pytest.raises(Exception, match="MUSE_BLOCKING_MODE"):
+        dataclasses.replace(Settings(), muse_blocking_mode="nope").validate_startup()
+
+
+def test_build_clusters_links_another_schema_through_taxonomy_aliases():
+    from policies import load_policies
+    from routes.build import _build_clusters
+    from taxonomies import load_taxonomies
+
+    docs = [
+        _raw_doc(
+            "a", "full_name", "Maria Day", "address_line", "12 Elm St", "mobile", "0900111222"
+        ),
+        _raw_doc(
+            "b", "customer_name", "maria day", "street_address", "12 elm st", "tel", "0911999888"
+        ),
+        _raw_doc("c", "full_name", "Zed Quux", "address_line", "5 Oak Rd", "mobile", "0900111222"),
+    ]
+    settings = dataclasses.replace(Settings(), use_mock_muse=True, muse_candidate_matching=True)
+    out: dict = {}
+    clusters = asyncio.run(_build_clusters(settings, load_policies(), load_taxonomies(), docs, out))
+    # a+c share a phone under the alias `mobile` (exact blocking sees it only after
+    # canonicalisation); b joins through Muse on name + address (aliases again).
+    assert sorted(len(c["member_docs"]) for c in clusters) == [3]
+    info = out["muse_candidates"]
+    assert info["shortlisted"] >= 1 and info["merged"] == 1

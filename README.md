@@ -380,6 +380,8 @@ adjudication on escalations; unset means a labelled stub, never a simulated one.
 | `MUSE_CANDIDATE_MAX_PAIRS` | Global judge cap. `0` (default) = no cap. |
 | `MUSE_CANDIDATE_PER_CLUSTER` | Max judged pairs per cluster (default 3) — the main cost control. |
 | `MUSE_CANDIDATE_MIN_CONFIDENCE` | `high` (default) or `medium`: lowest judge confidence that may merge. |
+| `MUSE_BLOCKING_MODE` | `token` (default) or `rarest_pair`: also block on name-token pairs and exact address, for names made of common words. |
+| `MUSE_BLOCKING_MAX_BLOCK` | Clusters one blocking key may hold before it is skipped (`0` = built-in 50). |
 | `MUSE_JUDGE_CONCURRENCY` | Judge batches in parallel (default 8). |
 | `MUSE_VERDICT_CACHE` | `true` (default): reuse verdicts for identical name+address inputs. |
 | `MUSE_TAXONOMY_PROPOSALS` | `off` (default), `rules` or `muse`: evidence-verified taxonomy extension. |
@@ -440,15 +442,21 @@ between runs, so `--dump` / `--from-dump` rescore a saved run without API calls.
 
 Stated plainly, because the roadmap is built on them:
 
-- **Candidate matching is coupled to one schema and one entity type.** It reads
-  `display_name` / `address` / `phone` / `email` and runs only for
-  `entity_type == "user"`. A source using `full_name` / `address_line` produces
-  empty profiles and zero candidates. Taxonomy aliases are applied later, at
-  fragment level, so they do not rescue candidate generation.
-- **Blocking is Latin- and space-oriented.** Tokens shorter than 3 characters
-  are dropped; tokens in more than 50 clusters block nothing; 2-character CJK
-  names block nothing. Measured: a 10k Vietnamese-name set with realistic
-  surname distribution returns **0 candidate pairs**.
+- **Field names map through the user taxonomy's aliases, nothing more.** Before
+  clustering, `full_name`, `address_line`, `mobile`, `email_address` and the other
+  aliases in `taxonomy-user-*.json` become `display_name` / `address` / `phone` /
+  `email`, so exact blocking and candidate matching work on those schemas. A name
+  that is not an alias is not read; the cockpit's Ingest dialog lists the fields
+  it found (read-only) and the build report warns on zero candidates. There is no
+  editable per-dataset mapping yet, and candidate matching still runs only for
+  `entity_type == "user"`.
+- **Blocking defaults to the old behaviour.** `MUSE_BLOCKING_MODE=token` drops
+  tokens in more than 50 clusters, which returns **0 candidate pairs** on a 10k
+  Vietnamese-name set with realistic surnames (0/500). `rarest_pair` recovers
+  481/500 there (13.9k candidates, 13.5 s) but judged 8,285 pairs instead of
+  4,496 on the 10k benchmark with no recall gain, so it is opt-in. The Muse arm
+  has not been rerun under `rarest_pair`. Tokens under 3 characters still do not
+  block (2-character CJK names do), and there is no phonetic or n-gram strategy.
 - **Taxonomy verification is Latin-only.** `skeleton()` folds to `[a-z0-9]`, so
   CJK, Cyrillic and Arabic terms normalise to empty and cannot be verified.
   Taxonomy extension is wired for product + `category` only.

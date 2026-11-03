@@ -128,6 +128,9 @@ class Settings:
     muse_candidate_per_cluster: int = 3
     muse_judge_concurrency: int = 8  # parallel judge batches per build
     muse_verdict_cache: bool = True  # reuse verdicts for identical name+address pairs
+    # "token" (default, single name tokens) or "rarest_pair" (also token pairs + address).
+    muse_blocking_mode: str = "token"
+    muse_blocking_max_block: int = 0  # 0 = built-in default (50 clusters per blocking key)
     # When set, every state-changing request (POST/PUT/PATCH/DELETE) must carry
     # "Authorization: Bearer <token>". Empty = open (local dev only).
     api_token: str = ""
@@ -199,6 +202,11 @@ class Settings:
             muse_verdict_cache=_parse_bool(
                 get("MUSE_VERDICT_CACHE") or "true", "MUSE_VERDICT_CACHE"
             ),
+            muse_blocking_mode=(get("MUSE_BLOCKING_MODE") or "token").strip().lower(),
+            muse_blocking_max_block=_parse_optional_int(
+                get("MUSE_BLOCKING_MAX_BLOCK"), "MUSE_BLOCKING_MAX_BLOCK", minimum=0
+            )
+            or 0,
             autonomy_mode=(get("AUTONOMY_MODE") or "manual").strip().lower(),
             job_max_attempts=_parse_optional_int(
                 get("JOB_MAX_ATTEMPTS"), "JOB_MAX_ATTEMPTS", minimum=1
@@ -252,6 +260,10 @@ class Settings:
         if self.taxonomy_proposals not in ("off", "rules", "muse"):
             raise ConfigurationError(
                 f"MUSE_TAXONOMY_PROPOSALS must be off, rules or muse, got {self.taxonomy_proposals!r}"
+            )
+        if self.muse_blocking_mode not in ("token", "rarest_pair"):
+            raise ConfigurationError(
+                f"MUSE_BLOCKING_MODE must be token or rarest_pair, got {self.muse_blocking_mode!r}"
             )
         if self.muse_candidate_min_confidence not in ("high", "medium"):
             raise ConfigurationError(

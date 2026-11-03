@@ -14,6 +14,14 @@ from the routine loop without weakening the trust boundary.
 
 ## 0. Where we are
 
+**G1-lite and G2-lite landed on branch `g1-g2-slice`** (2026-11-03): identity
+fields map through taxonomy aliases before clustering, a read-only mapping panel
+shows what was found, `MUSE_BLOCKING_MODE=rarest_pair` blocks on token pairs and
+address, and a zero-candidate build now reports a warning. Not done: editable
+per-dataset mapping, entity-type registry, phonetic / n-gram blocking,
+calibration on a second dataset. Vietnamese 10k candidate recall: 0/500 ->
+481/500 with `rarest_pair`; the live Muse arm has not been rerun under it.
+
 Working today:
 
 - Splink exact-identifier blocking, a Muse semantic judge on shortlisted pairs,

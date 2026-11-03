@@ -1664,6 +1664,7 @@
         <div class="flex justify-between gap-2"><span class="text-text-muted">Entity</span><span class="font-bold text-text-primary">${escapeHtml(preview.entityType)}</span></div>
         <div class="flex justify-between gap-2"><span class="text-text-muted">Source documents</span><span class="font-bold text-text-primary">${num(preview.documents.length)}</span></div>
         <div class="flex justify-between gap-2"><span class="text-text-muted">Sources</span><span class="font-bold text-text-primary text-right">${escapeHtml(preview.sources.join(", ") || "—")}</span></div>`;
+      renderFieldMapping(preview);
       return;
     }
     host.innerHTML = `
@@ -1672,6 +1673,45 @@
       <div class="flex justify-between gap-2"><span class="text-text-muted">Source documents</span><span class="font-bold text-text-primary">${num(preview.documents.length)}</span></div>
       <div class="flex justify-between gap-2"><span class="text-text-muted">Sources</span><span class="font-bold text-text-primary text-right">${escapeHtml(preview.sources.join(", ") || "—")}</span></div>
       <div class="flex justify-between gap-2"><span class="text-text-muted">Link proposals</span><span class="font-bold text-text-primary">${num(preview.linkProposals)}</span></div>`;
+  }
+
+  // Read-only: which raw field each identity role (name, address, phone, email) will
+  // be read from, using the user taxonomy's aliases. Mirrors the backend, which maps
+  // field names before clustering; nothing here is editable or sent anywhere.
+  const IDENTITY_ROLES = [
+    ["display_name", "Name"],
+    ["address", "Address"],
+    ["phone", "Phone"],
+    ["email", "Email"],
+  ];
+
+  async function renderFieldMapping(preview) {
+    const host = $("upload-summary");
+    if (!host || !preview || !preview.documents || !preview.documents.length) return;
+    let aliases = {};
+    try {
+      const view = await api("/taxonomy/user");
+      aliases = view.attribute_aliases || {};
+    } catch (error) {
+      return; // no taxonomy: the summary stays as it is
+    }
+    const norm = (name) => String(name).trim().toLowerCase().replace(/ /g, "_");
+    const seen = new Set();
+    preview.documents.slice(0, 200).forEach((doc) => {
+      Object.keys(doc.fields || {}).forEach((key) => seen.add(key));
+    });
+    const rows = IDENTITY_ROLES.map(([role, label]) => {
+      const names = [role].concat(aliases[role] || []).map(norm);
+      const hit = [...seen].find((key) => names.includes(norm(key)));
+      const how = !hit ? "not found" : norm(hit) === role ? "as is" : "taxonomy alias";
+      const tone = hit ? "text-text-primary" : "text-status-error-deep";
+      return `<div class="flex justify-between gap-2"><span class="text-text-muted">${label}</span><span class="font-bold ${tone} text-right">${hit ? escapeHtml(hit) : "—"} <span class="font-normal text-text-muted">(${how})</span></span></div>`;
+    }).join("");
+    if (state.uploadPreview !== preview) return; // the user picked another file meanwhile
+    host.insertAdjacentHTML(
+      "beforeend",
+      `<div class="pt-1 mt-1 border-t border-border-subtle text-text-muted">Identity fields detected</div>${rows}`
+    );
   }
 
   function validateDocuments(documents) {

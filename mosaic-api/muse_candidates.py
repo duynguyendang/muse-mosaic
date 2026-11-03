@@ -42,6 +42,58 @@ PROOF = "fuzzy_name_address"
 JUDGE_BATCH = 20
 MAX_MERGED_DOCS = 20  # never let chained merges build a giant cluster
 COMMON_TOKEN_CLUSTERS = 50  # tokens in more clusters than this block nothing
+BLOCKING_MODES = ("token", "rarest_pair")
+ZERO_CANDIDATE_WARN_CLUSTERS = 200  # fewer clusters than this: zero candidates is unremarkable
+
+
+def _has_cjk(text: str) -> bool:
+    return any("぀" <= ch <= "鿿" or "가" <= ch <= "힯" for ch in text)
+
+
+IDENTITY_ROLES = ("display_name", "address", "phone", "email")
+
+
+def canonicalize_documents(
+    documents: list[dict[str, Any]], taxonomy: Any | None
+) -> list[dict[str, Any]]:
+    """Rename raw field names to the canonical identity roles via taxonomy aliases.
+
+    ``full_name`` / ``address_line`` / ``mobile`` become ``display_name`` /
+    ``address`` / ``phone``, so exact blocking, the candidate shortlist and the
+    judge all see the same names. Only the four identity roles are renamed;
+    the first non-empty value wins and a canonical field is never overwritten.
+    Documents with nothing to rename are returned as-is (no copy). Never raises.
+    """
+    if taxonomy is None:
+        return documents
+    lookup: dict[str, str] = {}
+    for role in IDENTITY_ROLES:
+        for alias in taxonomy.attribute_aliases.get(role, []):
+            lookup[alias.strip().lower().replace(" ", "_")] = role
+    out: list[dict[str, Any]] = []
+    for document in documents:
+        fields = document.get("fields") or {}
+        renames = {
+            raw: lookup[raw.strip().lower().replace(" ", "_")]
+            for raw in fields
+            if raw not in IDENTITY_ROLES and raw.strip().lower().replace(" ", "_") in lookup
+        }
+        if not renames:
+            out.append(document)
+            continue
+        new_fields = dict(fields)
+        for raw, role in renames.items():
+            value = fields[raw]
+            present = new_fields.get(role)
+            empty = present is None or not (
+                present.get("value") if isinstance(present, dict) else present
+            )
+            if empty and (value.get("value") if isinstance(value, dict) else value):
+                new_fields[role] = value
+                del new_fields[raw]  # moved; a field that lost the race stays as it was
+        out.append({**document, "fields": new_fields})
+    return out
+
 
 SYSTEM_PROMPT = (
     "You decide whether two customer records describe the SAME real person, "
@@ -215,6 +267,8 @@ def shortlist(
     min_name: float = 0.8,
     min_name_with_address: float = 0.6,
     min_address: float = 0.8,
+    blocking: str = "token",
+    max_block: int | None = None,
     stats: dict[str, Any] | None = None,
 ) -> list[CandidatePair]:
     """Candidate pairs. Blocks on shared name tokens, then scores.
@@ -223,15 +277,34 @@ def shortlist(
     everything (the main cost control at 10k-100k). ``max_pairs`` is optional:
     ``None`` (the default) judges every candidate, because a global cap of 200
     left 99%+ of the candidates unjudged at 100k clusters.
+
+    ``blocking="token"`` (default) indexes single name tokens only, so a token
+    shared by more than ``max_block`` clusters blocks nothing. That is what
+    empties the shortlist for names built from a few very common words (most
+    Vietnamese names). ``"rarest_pair"`` also indexes every *pair* of tokens in
+    a name (order-free, so ``Nguyen Thi Lan`` meets ``Lan Nguyen``) and the
+    exact address: a pair of common words is rare even when each word is not.
     """
+    if blocking not in BLOCKING_MODES:
+        raise ValueError(f"blocking must be one of {BLOCKING_MODES}, got {blocking!r}")
+    limit = max_block or COMMON_TOKEN_CLUSTERS
     profiles = [cluster_profile(c) for c in clusters]
     idents = [cluster_identifiers(c) for c in clusters]
     index: dict[str, set[int]] = {}
     for i, profile in enumerate(profiles):
         for name in profile["names"]:
-            for token in name.split():
-                if len(token) >= 3:
+            tokens = name.split()
+            for token in tokens:
+                if len(token) >= 3 or (_has_cjk(token) and len(token) >= 2):
                     index.setdefault(token, set()).add(i)
+            if blocking == "rarest_pair":
+                usable = sorted({t for t in tokens if len(t) >= 2})[:6]
+                for a_pos, first in enumerate(usable):
+                    for second in usable[a_pos + 1 :]:
+                        index.setdefault(f"pair:{first}|{second}", set()).add(i)
+        if blocking == "rarest_pair":
+            for address in profile["addresses"]:
+                index.setdefault(f"ad:{address}", set()).add(i)
         # Near-identifier blocking keys (phone tail, email domain + local prefix).
         for digits in set(idents[i]["phones"].values()):
             index.setdefault("ph:" + digits[-9:], set()).add(i)
@@ -241,9 +314,15 @@ def shortlist(
 
     seen: set[tuple[int, int]] = set()
     scored: list[CandidatePair] = []
+    hot_keys = 0
+    block_keys = 0
     for members in index.values():
-        if len(members) < 2 or len(members) > COMMON_TOKEN_CLUSTERS:
+        if len(members) < 2:
             continue
+        if len(members) > limit:
+            hot_keys += 1
+            continue
+        block_keys += 1
         ordered = sorted(members)
         for a_pos, a in enumerate(ordered):
             for b in ordered[a_pos + 1 :]:
@@ -286,6 +365,21 @@ def shortlist(
         stats["kept_pairs"] = len(kept)
         stats["skipped_per_cluster"] = skipped_per_cluster
         stats["skipped_max_pairs"] = skipped_max_pairs
+        stats["blocking"] = blocking
+        stats["block_keys"] = block_keys
+        stats["hot_keys_skipped"] = hot_keys
+        # A silent zero is the failure that matters: say so instead of "nothing to merge".
+        if not scored and len(clusters) >= ZERO_CANDIDATE_WARN_CLUSTERS:
+            named = sum(1 for p in profiles if p["names"])
+            stats["warning"] = (
+                f"0 candidate pairs from {len(clusters)} clusters ({named} with a name; "
+                f"{hot_keys} blocking keys skipped as too common). "
+                + (
+                    "No cluster has a recognised name field: check the field mapping."
+                    if not named
+                    else "Common names are blocking nothing: try MUSE_BLOCKING_MODE=rarest_pair."
+                )
+            )
     return kept
 
 
@@ -663,6 +757,8 @@ async def propose_and_merge(
         clusters,
         max_pairs=settings.muse_candidate_max_pairs or None,
         per_cluster=settings.muse_candidate_per_cluster,
+        blocking=settings.muse_blocking_mode,
+        max_block=settings.muse_blocking_max_block or None,
         stats=info,
     )
     info["shortlisted"] = len(pairs)
