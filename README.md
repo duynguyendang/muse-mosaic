@@ -55,7 +55,8 @@ fragments ──► Splink            candidate clusters (scale)
 ## Proof: Muse earns its place
 
 These are measured runs, not targets. Each number names its dataset, its arm
-and whether Muse was live.
+and whether Muse was live. The full run — 285 tests, lint, format and Go
+checks — is in **[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**.
 
 ### 1. Semantic linking at 10k people (live Muse)
 
@@ -510,8 +511,8 @@ data/              mock/ fixtures and taxonomy, kaggle/ and olist/ samples,
 scripts/           eval_muse_scale.py, eval_hard_names.py, eval_muse_candidates.py,
                    eval_taxonomy_gap.py, Kaggle e2e harness, build_css.sh
 tests/             contract, rules, hidden-connection, Splink, flows, auth, copilot, UI wiring
-docs/              ARCHITECTURE.md (design record), ROADMAP.md (post-MVP plan);
-                   internal/ is local-only
+docs/              ARCHITECTURE.md (design record), ROADMAP.md (post-MVP plan),
+                   TEST-REPORT.md (verified run); internal/ is local-only
 ```
 
 Three services, fixed names: `mosaic-api`, `trust-engine`, `matching-engine`.
@@ -527,6 +528,11 @@ fall back to their text names. See [web/README.md](web/README.md) for the data
 source behind each panel.
 
 ## Tests and CI
+
+Full run, environment and what is *not* verified:
+**[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**. Last verified commit
+`7721f95`: **285 passed**, ruff and black clean, `gofmt`/`go vet`/`go test`
+clean.
 
 ```bash
 python3 -m pytest -q                              # full suite, live trust-engine + matching-engine
