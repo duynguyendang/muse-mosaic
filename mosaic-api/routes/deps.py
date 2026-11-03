@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,13 @@ import httpx
 from config import Settings
 from fastapi import HTTPException, Request
 from schemas import Taxonomy
-from taxonomies import TaxonomyError, default_version, load_taxonomies, taxonomies_dir
+from taxonomies import (
+    TaxonomyError,
+    default_version,
+    load_taxonomies,
+    taxonomies_dir,
+    write_text_atomic,
+)
 
 logger = logging.getLogger("mosaic-api")
 
@@ -147,15 +154,16 @@ def _write_taxonomy_version(taxonomies: dict, base, suggested_action: str, new_v
         "synthetic": True,
         "taxonomy_version": new_version,
         "entity_type": base.entity_type,
+        "parent_version": base.taxonomy_version,
+        "created_at": datetime.now(UTC).isoformat(),
         "notice": f"Extended by steward accept from {base.taxonomy_version}.",
         "attribute_aliases": base.attribute_aliases,
         "terms": terms,
     }
     directory = _taxonomy_write_dir()
     path = directory / f"{new_version}.json"
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    validated = Taxonomy.model_validate(payload)
-    _ = validated
+    Taxonomy.model_validate(payload)  # validate before anything touches the directory
+    write_text_atomic(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     return new_version
 
 

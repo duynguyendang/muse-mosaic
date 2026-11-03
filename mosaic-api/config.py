@@ -115,6 +115,13 @@ class Settings:
     # Opt-in: let Muse propose near-match cluster merges that exact identifiers
     # miss (see muse_candidates.py). Off by default: it changes cluster counts.
     muse_candidate_matching: bool = False
+    # Extend the product taxonomy with evidence-verified terms before deriving:
+    # "off" (default), "rules" (no model) or "muse" (a model proposes; the same
+    # evidence checks decide). Never auto-accepts on a model's say-so.
+    taxonomy_proposals: str = "off"
+    taxonomy_min_support: int = 3
+    # Lowest judge confidence that may merge two clusters: "high" (default) or "medium".
+    muse_candidate_min_confidence: str = "high"
     # When set, every state-changing request (POST/PUT/PATCH/DELETE) must carry
     # "Authorization: Bearer <token>". Empty = open (local dev only).
     api_token: str = ""
@@ -160,6 +167,14 @@ class Settings:
             manglekit_bin=get("MANGLEKIT_BIN"),
             database_path=get("DATABASE_PATH") or "./data/mosaic.db",
             api_token=get("MOSAIC_API_TOKEN").strip(),
+            taxonomy_proposals=(get("MUSE_TAXONOMY_PROPOSALS") or "off").strip().lower(),
+            taxonomy_min_support=_parse_optional_int(
+                get("TAXONOMY_MIN_SUPPORT"), "TAXONOMY_MIN_SUPPORT", minimum=1
+            )
+            or 3,
+            muse_candidate_min_confidence=(get("MUSE_CANDIDATE_MIN_CONFIDENCE") or "high")
+            .strip()
+            .lower(),
             muse_candidate_matching=_parse_bool(
                 get("MUSE_CANDIDATE_MATCHING") or "false", "MUSE_CANDIDATE_MATCHING"
             ),
@@ -213,6 +228,15 @@ class Settings:
         all-or-nothing: partial configuration would risk mixing vectors from
         different models or versions, which CSD 5.3a forbids.
         """
+        if self.taxonomy_proposals not in ("off", "rules", "muse"):
+            raise ConfigurationError(
+                f"MUSE_TAXONOMY_PROPOSALS must be off, rules or muse, got {self.taxonomy_proposals!r}"
+            )
+        if self.muse_candidate_min_confidence not in ("high", "medium"):
+            raise ConfigurationError(
+                "MUSE_CANDIDATE_MIN_CONFIDENCE must be high or medium, "
+                f"got {self.muse_candidate_min_confidence!r}"
+            )
         if self.autonomy_mode not in ("manual", "supervised"):
             raise ConfigurationError(
                 f"AUTONOMY_MODE must be manual or supervised, got {self.autonomy_mode!r}"

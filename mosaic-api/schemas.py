@@ -451,6 +451,10 @@ class Taxonomy(BaseModel):
 
     taxonomy_version: str = Field(min_length=1)
     entity_type: str = Field(pattern=ENTITY_TYPE_PATTERN)
+    # Lineage for derived versions; absent on the shipped base files. default_version
+    # orders by created_at so a newer steward or evidence version always wins.
+    parent_version: str | None = None
+    created_at: str | None = None
     attribute_aliases: dict[str, list[str]] = Field(default_factory=dict)
     terms: list[TaxonomyTerm] = Field(default_factory=list)
 

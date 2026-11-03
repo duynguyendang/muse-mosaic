@@ -464,3 +464,40 @@ def test_names_only_merge_is_not_certified_through_build(te_url, matching_engine
     reasons = {c["reason_code"] for c in out["conflicts"]}
     assert reasons & {"SEMANTIC_MERGE_UNVERIFIED", "CHAIN_BROKEN"}, out["conflicts"]
     assert not [g for g in out["goldens"] if g.get("golden_id")], "nothing may certify"
+
+
+# --- configurable merge threshold -----------------------------------------
+
+
+def _verdicts(pairs, confidence):
+    return [
+        mc.Verdict(pair_id=p.pair_id, verdict="same", confidence=confidence, reason="r")
+        for p in pairs
+    ]
+
+
+def test_min_confidence_controls_what_merges(clusters):
+    pairs = mc.shortlist(clusters)
+    medium = _verdicts(pairs, "medium")
+    assert mc.select_merges(pairs, medium) == []  # default is "high"
+    assert len(mc.select_merges(pairs, medium, "medium")) == len(pairs)
+    low = _verdicts(pairs, "low")
+    assert mc.select_merges(pairs, low, "medium") == []  # "low" never merges
+
+
+def test_min_confidence_never_lets_a_non_same_verdict_merge(clusters):
+    pairs = mc.shortlist(clusters)
+    for verdict in ("different", "unsure"):
+        v = [
+            mc.Verdict(pair_id=p.pair_id, verdict=verdict, confidence="high", reason="r")
+            for p in pairs
+        ]
+        assert mc.select_merges(pairs, v, "medium") == []
+
+
+def test_min_confidence_setting_is_validated():
+    from config import ConfigurationError, Settings
+
+    Settings(muse_candidate_min_confidence="medium").validate_startup()
+    with pytest.raises(ConfigurationError):
+        Settings(muse_candidate_min_confidence="low").validate_startup()

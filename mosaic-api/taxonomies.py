@@ -61,14 +61,32 @@ def load_taxonomies(taxonomy_dir: str | Path | None = None) -> dict[str, Taxonom
     return loaded
 
 
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write via a temp name the engine's ``*.json`` glob ignores, then rename.
+
+    The engine reloads every ``*.json`` and fails the whole reload on a malformed
+    one, so a half-written taxonomy file must never be visible under that name.
+    """
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def default_version(taxonomies: dict[str, Taxonomy], entity_type: str) -> str:
-    """Latest taxonomy version for an entity type (demo default input)."""
+    """Latest taxonomy version for an entity type (demo default input).
+
+    Newest ``created_at`` wins (files without one are the shipped bases and rank
+    oldest); ties and legacy files fall back to the version name. Ordering by name
+    alone let a hash-named evidence version outrank a later steward version.
+    """
     versions = sorted(
-        version for version, taxonomy in taxonomies.items() if taxonomy.entity_type == entity_type
+        (taxonomy.created_at or "", version)
+        for version, taxonomy in taxonomies.items()
+        if taxonomy.entity_type == entity_type
     )
     if not versions:
         raise TaxonomyError(f"no taxonomy for entity_type {entity_type!r}")
-    return versions[-1]
+    return versions[-1][1]
 
 
 def normalize_text(value: str) -> str:

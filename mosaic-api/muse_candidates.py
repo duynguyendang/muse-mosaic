@@ -364,14 +364,29 @@ def _dump(value: Any) -> str:
 # --------------------------------------------------------------------------
 
 
+CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
 def select_merges(
-    pairs: list[CandidatePair], verdicts: list[Verdict]
+    pairs: list[CandidatePair], verdicts: list[Verdict], min_confidence: str = "high"
 ) -> list[tuple[CandidatePair, Verdict]]:
+    """Pairs to merge: verdict ``same`` at or above ``min_confidence``.
+
+    Default ``high`` is deliberately conservative. On the hard-name benchmark
+    Muse answered ``same`` at ``medium`` for 39 of 318 true pairs and never said
+    ``same`` for a different person, so ``medium`` is supported by the data, but
+    that is a small synthetic test (see README).
+    """
+    if min_confidence not in ("medium", "high"):  # "low" must never merge
+        raise ValueError(f"min_confidence must be medium or high, got {min_confidence!r}")
+    floor = CONFIDENCE_RANK[min_confidence]
     by_id = {p.pair_id: p for p in pairs}
     return [
         (by_id[v.pair_id], v)
         for v in verdicts
-        if v.verdict == "same" and v.confidence == "high" and v.pair_id in by_id
+        if v.verdict == "same"
+        and CONFIDENCE_RANK.get(v.confidence, -1) >= floor  # unknown confidence never merges
+        and v.pair_id in by_id
     ]
 
 
@@ -493,7 +508,7 @@ async def propose_and_merge(
         info["skipped_reason"] = f"Muse unavailable: {type(exc).__name__}"
         return clusters, info
     info["judged"] = len(verdicts)
-    merges = select_merges(pairs, verdicts)
+    merges = select_merges(pairs, verdicts, settings.muse_candidate_min_confidence)
     merged, applied = apply_merges(clusters, merges)
     info["merged"] = applied
     info["clusters_out"] = len(merged)

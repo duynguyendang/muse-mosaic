@@ -370,6 +370,13 @@ async def execute_full_build(
     )
     ctx.splink_out = splink_out
     ctx.splink_status = splink_status
+    if settings.taxonomy_proposals != "off" and taxonomies:
+        # Opt-in: extend the taxonomy with evidence-verified terms before deriving.
+        from routes.build import _extend_taxonomies
+
+        taxonomies, extension = await _extend_taxonomies(settings, taxonomies, documents)
+        ctx.taxonomies = taxonomies
+        splink_out["taxonomy_extension"] = extension
     clusters = await _build_clusters(
         settings,
         policies=policies,

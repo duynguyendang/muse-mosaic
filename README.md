@@ -162,7 +162,8 @@ What this does and does not show:
 - Most of the rest is recovered by the **shortlist and code-computed hints**.
   Muse found 2 more records than the deterministic judge and avoided its one
   false merge ("K. Brown" vs "L. Brown"), but on this benchmark a simple
-  threshold gets most of the way. Do not read it as Muse being indispensable.
+  threshold gets most of the way. The hard-name benchmark below is where the
+  judge matters.
 - The variants were written by us (typos, case, word order, abbreviations,
   accents, new identifiers). The numbers show the mechanism works, not how it
   performs on real fragmented data.
@@ -171,6 +172,49 @@ What this does and does not show:
 - End to end through `/build` on a 428-record Kaggle subset (25 customers, 72
   variants), turning the feature on merged 31 cluster pairs (96 to 65 clusters)
   and raised conflicts from 50 to 133: merged people are held, not certified.
+
+#### Hard names: where a model judge differs from string rules
+
+The first benchmark used typos and case, which string similarity handles. A
+second one, `scripts/eval_hard_names.py`, uses what it does not: nicknames
+(Robert / Bob), initials (`R. Brown`), surname-first order, dropped middle names,
+Vietnamese word order and diacritics, city aliases (`TP.HCM` / `Sài Gòn`), and
+**hard negatives**: a spouse at the same address, the same name at another
+address. It judges labelled pairs directly (so it measures judgement, not the
+shortlist) and sends only name and address, as the product does.
+
+479 pairs: 319 same person, 160 different. English persons are real Kaggle
+Customer 360 customers with name variants written by us; the Vietnamese set is
+synthetic (20 people). Same pairs, same rule for every judge: merge on `same`.
+
+| Judge | Merged right (of 319) | False merges (of 160) | Precision | Recall |
+| --- | --- | --- | --- | --- |
+| String-similarity rules (`mock_judge`) | 203 | 3 | 99% | 64% |
+| Rules that know every nickname in the test ("oracle") | 310 | 0 | 100% | 97% |
+| Muse, merging at `high` confidence (product default) | 279 | 0 | 100% | 87% |
+| Muse, merging at `medium` or `high` | 318 | 0 | 100% | 100% |
+
+Reading it honestly:
+
+- **Muse clearly beats plain string rules** on the hard variants: initials
+  7/60 correct vs 51/60 (60/60 at `medium`), Vietnamese given-name-first 0/20 vs
+  4/20 (20/20 at `medium`). It also got every household and same-name-other-
+  address negative right: it answered `different` for a spouse and `unsure` for
+  a namesake, and never `same`.
+- **The "oracle" is not a fair real-world baseline.** It is hand-built from the
+  exact nickname table that generated the test, so it is an upper bound for a
+  dictionary approach. A rule set you maintain yourself would need to cover
+  nicknames, name orders and city aliases in every language you see; the model
+  needs none of that, but costs about 0.75 s per pair against microseconds.
+- **The default threshold leaves recall on the table.** Muse answered `same` for
+  318 of 319 true pairs, but 39 at `medium` confidence, which the default rule
+  drops. `MUSE_CANDIDATE_MIN_CONFIDENCE=medium` merges them. That gave 0 false
+  merges here, but 160 easy-to-moderate negatives is a small sample with no
+  lookalike relatives or twins, so the default stays `high` until you have
+  measured your own data. A merge is still only a proposal: without
+  engine-verifiable identifier evidence it cannot certify a value.
+- One live run, one model; verdicts can differ between runs. Rescore a saved run
+  without API calls with `--dump` and `--from-dump`.
 
 ### Semantic matching rules (engine)
 
@@ -224,6 +268,72 @@ a baseline of that policy and are identical with the feature on or off):
 
 Verified evidence promotes the newer value; names-only evidence promotes
 nothing.
+
+### Evidence-verified taxonomy extension
+
+A categorical value the taxonomy does not contain (`clo`, `3l3ctronics`,
+`Foldable Phone`) makes the engine hold `category` (rule T1). Opt-in
+(`MUSE_TAXONOMY_PROPOSALS=rules|muse`, off by default) extends the taxonomy
+before deriving. A proposer, rules or Muse, only **proposes**; each proposal is
+accepted for the part the data verifies (`taxonomy_proposals.py`):
+
+| Check | Meaning |
+| --- | --- |
+| ground | every cited synonym is a value that really occurs |
+| attest | the canonical term is an existing term, or occurs verbatim with at least `TAXONOMY_MIN_SUPPORT` records, so it is not an invented name |
+| not a variant | a "new" term that is only a prefix, typo or case variant of another term is refused (`clo` is not a category) |
+| relate | each synonym relates to the term by case, punctuation or leet folding, a unique prefix of 3+ letters, or one typo on a word of 5+ letters |
+| unique | a synonym claimed by two terms is refused for both |
+
+Anything unverifiable is not accepted, however plausible, and stays held.
+Accepted terms are written as a **new** taxonomy version (`tax-product-evidence-<hash>`,
+idempotent, never an edit) with an evidence log beside it, log first and the
+taxonomy file atomically last. Each derived version records `parent_version` and
+`created_at`, and the newest `created_at` is the default, so a later steward
+version is never outranked by an evidence one. A model outage changes nothing.
+
+**Measured** with `scripts/eval_taxonomy_gap.py` through `/build` and a live
+engine. *Unified* = certified and grouped with its synonyms; *fragmented* = certified
+but the class was split over several terms; *wrong* = merged into another class.
+
+Kaggle Customer 360, the 389 real products (8 categories written 37 ways):
+
+| Arm | Unified | Fragmented | Wrong | Held | Terms added |
+| --- | --- | --- | --- | --- | --- |
+| A. Fixed taxonomy | 0 | 0 | 0 | 389 (100%) | 0 |
+| B. Rules + evidence check (no model) | 389 (100%) | 0 | 0 | 0 | 8 |
+| C. Muse + evidence check | 389 (100%) | 0 | 0 | 0 | 8 |
+| D. Muse, no check (risk only) | 389 (100%) | 0 | 0 | 0 | 8 |
+
+Synthetic semantic set (88 records, 6 classes: Galaxy Fold, `điện thoại gập`, iPad
+Pro, Surface Pro ...), one run:
+
+| Arm | Unified | Fragmented | Wrong | Held | Terms added |
+| --- | --- | --- | --- | --- | --- |
+| A. Fixed taxonomy | 21 (24%) | 0 | 0 | 67 (76%) | 0 |
+| B. Rules + evidence check | 58 (66%) | 28 (32%) | 0 | 2 (2%) | 11 |
+| C. Muse + evidence check | 58 (66%) | 0 | 0 | 30 (34%) | 3 |
+| D. Muse, no check (risk only) | 56 (64%) | 0 | 0 | 32 (36%) | 3 |
+
+What this does and does not show:
+
+- **On the real Kaggle data Muse adds nothing.** The dirt is string-level (case,
+  leet-speak, truncation), so rules plus the evidence check reach 100% alone, and
+  Muse's proposals were all accepted and identical.
+- **The taxonomy gap is real and large:** a fixed taxonomy certifies none of the
+  389 products' categories.
+- **Where Muse helps is consolidation, not coverage.** On the semantic set the rule
+  proposer certifies 86 records but splits them over 11 terms (`iPhone 14`,
+  `Galaxy Fold 5` each become a "category"); Muse produced 3 clean terms. Both
+  unify 58 records.
+- **The check refuses what it cannot verify.** `điện thoại gập` = `Foldable Phone`
+  is right, but no rule can verify it, so those records stay held (34%).
+  Accepting them unchecked (arm D) gained about 6 records in an earlier run and
+  nothing in this one; the model's proposals vary between runs, and neither
+  produced a wrong merge here. The check costs coverage and buys a guarantee that
+  the model's say-so never creates vocabulary the engine certifies.
+- The Kaggle labels were assigned by hand; the semantic set is small, synthetic
+  and written by us. It shows the mechanism and the trade-off, not field accuracy.
 
 ### Policy Copilot
 
@@ -314,6 +424,9 @@ escalations; unset means a labelled stub, never a simulated one.
 | `DATABASE_PATH`, `TAXONOMY_DIR` | Ledger and taxonomy locations. |
 | `MOSAIC_API_TOKEN` | If set, every POST/PUT/PATCH/DELETE needs `Authorization: Bearer <token>`. Reads stay open. Unset = open (local dev only; a warning is logged). |
 | `MUSE_CANDIDATE_MATCHING` | `true`: Muse proposes near-match cluster merges (see above). Default `false`. |
+| `MUSE_TAXONOMY_PROPOSALS` | `off` (default), `rules` (no model) or `muse`: extend the product taxonomy with evidence-verified terms before deriving. |
+| `TAXONOMY_MIN_SUPPORT` | records a new term needs behind it (default 3). |
+| `MUSE_CANDIDATE_MIN_CONFIDENCE` | `high` (default) or `medium`: lowest judge confidence that may merge. |
 | `EMBEDDING_MODEL/VERSION/DIM` | Empty by default; similar search runs structured-only (`vector_recall: skipped`). |
 
 ## API surface
@@ -359,8 +472,10 @@ Enforced in code and tests; do not relax:
    side (C2).
 7. **No unvalidated golden.** The whole nested document must validate, or the
    golden is withheld (`STRUCTURE_MISMATCH`).
-8. **No new term without an explicit Accept.** Accept is single-use and bound to one
-   exact action and version.
+8. **No new term without an explicit Accept, or verifiable evidence.** Accept is
+   single-use and bound to one exact action and version. The opt-in
+   [taxonomy extension](#evidence-verified-taxonomy-extension) accepts a term only
+   for what the data verifies, never on a model's confidence.
 9. **Replay is exact.** Same key and hash never re-derives; nearest-neighbour is
    never identity.
 
@@ -429,6 +544,18 @@ failing case is reported as a failure, never edited into a pass.
   Muse's name check must then reject; S2 covers one typo on a local part of 8+
   characters. Transpositions, two typos, domain typos and abbreviations of a
   name are not evidence, so they stay `semantic_only`.
+- **The taxonomy verifier is permissive about frequent strings.** Any value that
+  occurs verbatim at least `TAXONOMY_MIN_SUPPORT` times can become a term, so a
+  rules-only run can mint `iPhone 14` as a category. Support counts distinct
+  entities (`product_ref`, else the document), so copies of one product do not
+  add up, but distinct documents with no `product_ref` each count. Muse
+  consolidates better here, but the check itself would still accept a frequent
+  unrelated string it proposes.
+- **Evidence-extension numbers predate the digit fix.** Digits are now kept in
+  matching (`iPhone 13` is not `iPhone 14`), which can lower the rules-only
+  arm's term count on the semantic set. Rerun `scripts/eval_taxonomy_gap.py
+  --dataset semantic --arms A B C D`; it now also prints `vocab` (certified
+  terms per true class, 1.0 is clean) before trusting those two tables.
 - **Co-location chaining in ordinary `/build` clusters.** For a cluster of
   several documents that Muse did not merge, `publisher._batch_links` chains
   every fact with `same_fragment`, which grounds all facts and means the

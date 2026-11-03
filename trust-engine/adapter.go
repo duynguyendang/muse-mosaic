@@ -78,6 +78,10 @@ type TaxonomyTerm struct {
 type Taxonomy struct {
 	Synthetic         bool                `json:"synthetic"`
 	Notice            string              `json:"notice"`
+	// ParentVersion and CreatedAt order derived versions (mosaic-api picks the
+	// newest as the default); the engine never uses them in derivation.
+	ParentVersion     string              `json:"parent_version,omitempty"`
+	CreatedAt         string              `json:"created_at,omitempty"`
 	TaxonomyVersion   string              `json:"taxonomy_version"`
 	EntityType        string              `json:"entity_type"`
 	AttributeAliases  map[string][]string `json:"attribute_aliases"`

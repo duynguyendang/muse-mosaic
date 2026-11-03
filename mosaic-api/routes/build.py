@@ -16,6 +16,7 @@ from typing import Any
 
 import ledger
 import muse_candidates
+import taxonomy_proposals
 from config import Settings
 from fastapi import APIRouter, HTTPException, Request
 from ingest import (
@@ -114,6 +115,52 @@ async def _match_documents(
     if status != "ok":
         status = f"unavailable ({splink_out.get('detail', '')})"
     return splink_out, status
+
+
+async def _extend_taxonomies(
+    settings: Settings, taxonomies: dict, documents: list[dict[str, Any]]
+) -> tuple[dict, dict[str, Any]]:
+    """Extend the product taxonomy with evidence-verified terms (opt-in).
+
+    Returns the (possibly new) taxonomy store and a compact report. Writes a NEW
+    version beside the others; the engine hot-reloads it. Any model trouble
+    leaves the taxonomy unchanged (the unknown values stay held by T1).
+    """
+    from taxonomies import default_version, load_taxonomies, taxonomies_dir
+
+    report: dict[str, Any] = {"mode": settings.taxonomy_proposals}
+    try:
+        base = taxonomies[default_version(taxonomies, "product")]
+    except Exception as exc:  # noqa: BLE001 - no product taxonomy: nothing to extend
+        report["skipped_reason"] = f"no product taxonomy: {type(exc).__name__}"
+        return taxonomies, report
+    mode = "muse" if settings.taxonomy_proposals == "muse" else "rules"
+    if mode == "muse" and settings.use_mock_muse:
+        # no live model to ask: fall back to the rule proposer, and say so
+        mode = "rules"
+        report["downgraded_reason"] = "MUSE_TAXONOMY_PROPOSALS=muse but Muse is mocked"
+        logger.warning("taxonomy extension: %s; using rules", report["downgraded_reason"])
+    result = await taxonomy_proposals.extend_taxonomy(
+        settings,
+        base,
+        documents,
+        taxonomies_dir(),
+        mode=mode,
+        min_support=settings.taxonomy_min_support,
+    )
+    verdicts = result.pop("verdicts")
+    report.update(
+        {k: v for k, v in result.items() if k != "mode"},
+        proposer=mode,
+        rejected_examples=[
+            {"term": v.term, "synonym": s, "why": why}
+            for v in verdicts
+            for s, why in v.rejected[:3]
+        ][:10],
+    )
+    if report["version"]:
+        taxonomies = load_taxonomies()
+    return taxonomies, report
 
 
 def _fact_components(
@@ -498,6 +545,7 @@ def _build_summary(
             "duckdb_version": ctx.splink_out.get("duckdb_version"),
         },
         "muse_candidates": ctx.splink_out.get("muse_candidates"),
+        "taxonomy_extension": ctx.splink_out.get("taxonomy_extension"),
     }
 
 
