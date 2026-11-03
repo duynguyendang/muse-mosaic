@@ -76,8 +76,8 @@ type TaxonomyTerm struct {
 // image; a steward Accept creates a new version file (see mosaic-api).
 // Synthetic/Notice are demo labels, tolerated but never derivation inputs.
 type Taxonomy struct {
-	Synthetic         bool                `json:"synthetic"`
-	Notice            string              `json:"notice"`
+	Synthetic bool   `json:"synthetic"`
+	Notice    string `json:"notice"`
 	// ParentVersion and CreatedAt order derived versions (mosaic-api picks the
 	// newest as the default); the engine never uses them in derivation.
 	ParentVersion     string              `json:"parent_version,omitempty"`

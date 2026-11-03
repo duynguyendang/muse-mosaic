@@ -143,7 +143,10 @@ def observe(
             continue
         entry = seen.setdefault(value, {"count": 0, "sources": set()})
         entry["sources"].add(document.get("source", ""))
-        key = (value, str(document.get("product_ref") or document.get("document_id") or id(document)))
+        key = (
+            value,
+            str(document.get("product_ref") or document.get("document_id") or id(document)),
+        )
         if key not in counted:
             counted.add(key)
             entry["count"] += 1
