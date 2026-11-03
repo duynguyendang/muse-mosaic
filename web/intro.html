@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Muse Mosaic — Clean Data at Scale with Proof</title>
+  <link rel="icon" type="image/png" href="./favicon.png"/>
+  <link rel="alternate icon" type="image/svg+xml" href="./logo.svg"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            primary: '#0037b0',
+            'primary-hover': '#1d4ed8',
+            surface: '#faf8ff',
+            card: '#ffffff',
+            border: '#e2e8f0',
+            'border-strong': '#cbd5e1',
+            verified: '#059669',
+            'verified-surface': '#ecfdf5',
+            'verified-border': '#86efac',
+            warning: '#d97706',
+            'warning-surface': '#fffbeb',
+            'warning-border': '#fde68a',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col justify-between p-6 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Top bar -->
+  <header class="max-w-7xl mx-auto w-full flex items-center justify-between pb-4 border-b border-slate-800">
+    <div class="flex items-center space-x-3">
+      <img src="./logo.png" alt="Muse Mosaic" class="w-9 h-9 rounded-lg shadow-lg shadow-blue-500/20 object-contain"/>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          Muse Mosaic
+          <span class="text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">Architecture & Flow</span>
+        </h1>
+        <p class="text-xs text-slate-400">Autonomous Entity Resolution with Deterministic Proof</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-3">
+      <span class="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        FAIL-CLOSED TRUST BOUNDARY
+      </span>
+      <a href="/" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold tracking-wide transition shadow-lg shadow-blue-600/30 flex items-center gap-2">
+        Open Live Studio <span class="text-xs">→</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main class="max-w-7xl mx-auto w-full py-8 space-y-8 flex-1">
+    
+    <!-- Hero Pitch Banner -->
+    <div id="card-mission" class="bg-gradient-to-r from-blue-950/50 via-slate-800/40 to-slate-900/60 border border-slate-700/80 rounded-2xl p-6 shadow-xl backdrop-blur-sm transition-all duration-300">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="text-xs font-mono uppercase tracking-wider text-blue-400 font-semibold">The Mission</div>
+          <h2 class="text-2xl font-extrabold text-white">Before an agent can act, it needs clean data.</h2>
+          <p class="text-sm text-slate-300 max-w-3xl leading-relaxed">
+            Sending an OTP to a wrong number or refunding the wrong account happens when agents act on raw, messy fragments. Mosaic guarantees clean records with verifiable proof—or tells downstream to halt.
+          </p>
+        </div>
+        <div id="card-invariant" class="shrink-0 font-mono text-xs text-right bg-slate-900/80 px-4 py-3 rounded-xl border border-slate-700 transition-all duration-300">
+          <div class="text-slate-400">Strict Core Invariant:</div>
+          <div class="text-blue-300 font-bold mt-0.5">Muse proposes · Datalog decides · Publisher writes</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 1: The 4 Pressures (Pain Points) -->
+    <div id="section-pressures">
+      <div class="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold mb-3 flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+        The 4 Pressures of Enterprise Data Linkage
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        
+        <!-- Pain 1 -->
+        <div id="pressure-volume" class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 space-y-2 hover:border-slate-600 transition-all duration-300">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono text-blue-400 font-bold">01 · VOLUME</span>
+            <span class="text-lg">📈</span>
+          </div>
+          <h3 class="font-bold text-white text-sm">Many (Pairwise $O(N^2)$)</h3>
+          <p class="text-xs text-slate-400 leading-normal">
+            Comparing every record naively explodes: 2.5k records is already 3.3M pairs; portfolios reach trillions.
+          </p>
+        </div>
+
+        <!-- Pain 2 -->
+        <div id="pressure-messy" class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 space-y-2 hover:border-slate-600 transition-all duration-300">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono text-amber-400 font-bold">02 · REPRESENTATION</span>
+            <span class="text-lg">🔀</span>
+          </div>
+          <h3 class="font-bold text-white text-sm">Messy (Syntax & Diacritics)</h3>
+          <p class="text-xs text-slate-400 leading-normal">
+            Differing keys (<code class="text-amber-300">sdt</code>, <code class="text-amber-300">dien_thoai</code>), nicknames (<code class="text-slate-300">Bob</code> $\leftrightarrow$ <code class="text-slate-300">Robert</code>), and transposed name orders.
+          </p>
+        </div>
+
+        <!-- Pain 3 -->
+        <div id="pressure-multisource" class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 space-y-2 hover:border-slate-600 transition-all duration-300">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono text-purple-400 font-bold">03 · AUTHORITY</span>
+            <span class="text-lg">⚖️</span>
+          </div>
+          <h3 class="font-bold text-white text-sm">Multi-Source Conflicts</h3>
+          <p class="text-xs text-slate-400 leading-normal">
+            CRM, ERP, and tickets disagree. Tickets hold unverified data that cannot be trusted without a provenance gate.
+          </p>
+        </div>
+
+        <!-- Pain 4 -->
+        <div id="pressure-fast" class="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 space-y-2 hover:border-slate-600 transition-all duration-300">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono text-emerald-400 font-bold">04 · VELOCITY</span>
+            <span class="text-lg">⚡</span>
+          </div>
+          <h3 class="font-bold text-white text-sm">Fast (Sub-second Deciding)</h3>
+          <p class="text-xs text-slate-400 leading-normal">
+            Traditional MDM takes months of consulting and heavy setup. Teams need batch linkage in seconds, not weeks.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Section 2: The 3 Pillars Architecture -->
+    <div id="section-pillars">
+      <div class="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold mb-3 flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+        The 3 Independent Pillars & The Trust Gate
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Pillar 1: Splink -->
+        <div id="pillar-splink" class="bg-slate-800/40 border border-slate-700 rounded-xl p-5 space-y-3 relative overflow-hidden flex flex-col justify-between transition-all duration-300">
+          <div class="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl"></div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-mono text-blue-400 uppercase font-bold tracking-wide">Pillar 1 · Scale</span>
+              <span class="text-xs font-mono text-slate-500">:8081</span>
+            </div>
+            <h3 class="text-lg font-bold text-white">Splink (Matching Engine)</h3>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              Fast candidate clustering via DuckDB. Blocks on identifiers (phone, email, order ID) to reduce billions of pairs to candidate clusters in seconds.
+            </p>
+          </div>
+          <div class="pt-3 border-t border-slate-700/70">
+            <span class="text-xs font-mono text-slate-400 block font-semibold mb-1">Role: <span class="text-blue-300">Proposer Only</span></span>
+            <span class="text-caption text-xs text-slate-400">Narrows search space. Never publishes or decides a winner.</span>
+          </div>
+        </div>
+
+        <!-- Pillar 2: Muse -->
+        <div id="pillar-muse" class="bg-slate-800/40 border border-slate-700 rounded-xl p-5 space-y-3 relative overflow-hidden flex flex-col justify-between transition-all duration-300">
+          <div class="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl"></div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-mono text-purple-400 uppercase font-bold tracking-wide">Pillar 2 · Understanding</span>
+              <span class="text-xs font-mono text-slate-500">:8000</span>
+            </div>
+            <h3 class="text-lg font-bold text-white">Muse (LLM Semantic Judge)</h3>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              Zero-shot semantic reasoning over hard cases (nicknames, initials, Vietnamese diacritics). Operates per cluster on bounded shortlists—never 1 giant prompt.
+            </p>
+          </div>
+          <div class="pt-3 border-t border-slate-700/70">
+            <span class="text-xs font-mono text-slate-400 block font-semibold mb-1">Role: <span class="text-purple-300">Semantic Claims</span></span>
+            <span class="text-caption text-xs text-slate-400">Zero false merges on 10k benchmark. Sends hint labels only, no raw PII.</span>
+          </div>
+        </div>
+
+        <!-- Pillar 3: Trust Engine -->
+        <div id="pillar-datalog" class="bg-slate-800/40 border border-slate-700 rounded-xl p-5 space-y-3 relative overflow-hidden flex flex-col justify-between border-emerald-500/40 transition-all duration-300">
+          <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl"></div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-mono text-emerald-400 uppercase font-bold tracking-wide">Pillar 3 · Proof & Gate</span>
+              <span class="text-xs font-mono text-slate-500">:8080</span>
+            </div>
+            <h3 class="text-lg font-bold text-white">Manglekit (Go + Datalog)</h3>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              The sole deterministic decider. Enforces mechanical link proofs (<code class="text-emerald-300">S1</code> phone, <code class="text-emerald-300">S2</code> email), authority tiers (<code class="text-emerald-300">R1</code>), and dispute guards (<code class="text-emerald-300">R2</code>, <code class="text-emerald-300">S3</code>).
+            </p>
+          </div>
+          <div class="pt-3 border-t border-slate-700/70">
+            <span class="text-xs font-mono text-slate-400 block font-semibold mb-1">Role: <span class="text-emerald-300">Deterministic Decider</span></span>
+            <span class="text-caption text-xs text-slate-400">Pure logic. Refuses unverified claims. Publisher validates whole schema.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Section 3: The Two Distinct Outputs -->
+    <div id="card-outputs" class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-300">
+      <div class="flex items-center gap-3">
+        <span class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-blue-400">2</span>
+        <div>
+          <h4 class="text-sm font-bold text-white">Exactly Two Downstream Outputs</h4>
+          <p class="text-xs text-slate-400">Downstream agents act on verified goldens, or halt immediately on refusal. No guessing.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 font-mono text-xs">
+        <div class="px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 flex items-center gap-1.5">
+          <span class="text-emerald-400">✓</span> Golden Record (with Lineage)
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-800 text-amber-300 flex items-center gap-1.5">
+          <span class="text-amber-400">⚠</span> No Trusted Value (Hold)
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom CTA bar -->
+  <footer class="max-w-7xl mx-auto w-full pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
+    <div class="font-mono">Ready to film: LIVE LEDGER verified · Cache pre-warmed · 207 clusters evaluated</div>
+    <div>
+      <a href="/" class="text-blue-400 hover:text-blue-300 font-semibold underline underline-offset-4">Proceed to Live Web Studio →</a>
+    </div>
+  </footer>
+
+</body>
+</html>

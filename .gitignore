@@ -37,3 +37,4 @@ trust-engine/trust-engine
 data/kaggle/
 # Internal (never published)
 /docs/internal/
+demo_output/
