@@ -640,7 +640,30 @@ def select_merges(
         if v.verdict == "same"
         and CONFIDENCE_RANK.get(v.confidence, -1) >= floor  # unknown confidence never merges
         and v.pair_id in by_id
+        and not house_number_conflict(by_id[v.pair_id])
     ]
+
+
+def house_number_conflict(pair: CandidatePair) -> bool:
+    """True when the two sides give different house numbers and no identifier backs the link.
+
+    A model reads "116" vs "110" as a plausible typo and merges two neighbours who
+    share a street and a common name (3 false merges in 5,250 Vietnamese records).
+    Numbers are the one part of an address a typo model cannot be trusted with, so
+    code refuses: if every address on one side has numbers, none of them appears on
+    the other side, and code found no phone or email evidence, the pair stays apart.
+    Addresses without digits, or a number shared by any address, are never a conflict.
+    """
+    if pair.evidence:
+        return False
+
+    def numbers(addresses: list[str]) -> set[str]:
+        return {n.lstrip("0") or "0" for a in addresses for n in re.findall(r"\d+", a)}
+
+    left, right = numbers(pair.left_profile.get("addresses", [])), numbers(
+        pair.right_profile.get("addresses", [])
+    )
+    return bool(left) and bool(right) and left.isdisjoint(right)
 
 
 def apply_merges(

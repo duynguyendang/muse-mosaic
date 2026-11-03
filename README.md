@@ -55,7 +55,7 @@ fragments ──► Splink            candidate clusters (scale)
 ## Proof: Muse earns its place
 
 These are measured runs, not targets. Each number names its dataset, its arm
-and whether Muse was live. The full run — 285 tests, lint, format and Go
+and whether Muse was live. The full run — 298 tests, lint, format and Go
 checks — is in **[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**.
 
 ### 1. Semantic linking at 10k people (live Muse)
@@ -117,7 +117,31 @@ a namesake, never `same`. The 39 pairs it marked `medium` are why
 `MUSE_CANDIDATE_MIN_CONFIDENCE` exists; the default stays `high` until you have
 measured your own data, because 160 negatives is a small sample.
 
-### 3. Where Muse adds nothing — and we say so
+### 3. Vietnamese names: blocking and field mapping (live Muse)
+
+`scripts/eval_vn_blocking.py`: 5,000 people (5,250 records) with a realistic
+surname distribution (Nguyen ~38%), so nearly every name token is common. 250
+people have a second record written given-name first, middle name dropped, same
+address, new phone and email. One run, one model.
+
+| Arm | Candidates | Candidate recall | Recovered | False merges |
+| --- | --- | --- | --- | --- |
+| `MUSE_BLOCKING_MODE=token` (old default) | 0 | 0/250 | n/a | n/a |
+| `rarest_pair`, string rules | 7,564 | 247/250 | 210/250 | 858 |
+| `rarest_pair`, Muse (first run) | 7,564 | 247/250 | 238/250 | **3** |
+| `rarest_pair`, Muse + house-number guard | 7,564 | 247/250 | 238/250 | **0** |
+| Same data as `full_name` / `address_line` / `mobile`, no mapping | 0 | n/a | n/a | n/a |
+| Same data, taxonomy-alias mapping | 7,564 | 247/250 | 238/250 | 0 |
+
+The first Muse run made 3 false merges, all neighbours on a common street whose
+house numbers differed (`116` vs `110 Tran Hung Dao`); Muse read the digit as a
+typo. `house_number_conflict` now refuses a merge when both sides have house
+numbers, share none, and code found no phone/email evidence. It was checked by
+rescoring the same cached verdicts (no new calls), and the 10k benchmark above is
+unchanged (188/198/198, 0 false merges). Cost of the live run: 379 calls, 1.53M
+tokens, 826 s.
+
+### 4. Where Muse adds nothing — and we say so
 
 On the Kaggle variant benchmark (`scripts/eval_muse_candidates.py`, 282
 labelled variants of 100 real customers), normalising identifiers recovers every
@@ -128,7 +152,7 @@ for free.
 Muse's value is the residue code cannot reach: meaning. Knowing where that
 boundary sits is what keeps the model bill worth paying.
 
-### 4. Taxonomy: Muse consolidates, evidence verifies
+### 5. Taxonomy: Muse consolidates, evidence verifies
 
 A category the taxonomy does not contain (`clo`, `3l3ctronics`, `Foldable Phone`)
 is held by rule T1. With `MUSE_TAXONOMY_PROPOSALS=muse`, Muse proposes new terms
@@ -453,8 +477,8 @@ Stated plainly, because the roadmap is built on them:
 - **Blocking defaults to the old behaviour.** `MUSE_BLOCKING_MODE=token` drops
   tokens in more than 50 clusters, which returns **0 candidate pairs** on a 10k
   Vietnamese-name set with realistic surnames (0/500). `rarest_pair` recovers
-  481/500 there (13.9k candidates, 13.5 s) but judged 8,285 pairs instead of
-  4,496 on the 10k benchmark with no recall gain, so it is opt-in. The Muse arm
+  481/500 there (13.9k candidates, 13.5 s; live Muse in §3) but judged 8,285 pairs instead of
+  4,496 on the 10k benchmark with no recall gain, so it is opt-in. The 10k Muse arm
   has not been rerun under `rarest_pair`. Tokens under 3 characters still do not
   block (2-character CJK names do), and there is no phonetic or n-gram strategy.
 - **Taxonomy verification is Latin-only.** `skeleton()` folds to `[a-z0-9]`, so
@@ -538,8 +562,8 @@ source behind each panel.
 ## Tests and CI
 
 Full run, environment and what is *not* verified:
-**[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**. Last verified commit
-`7721f95`: **285 passed**, ruff and black clean, `gofmt`/`go vet`/`go test`
+**[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**. Last verified on
+branch `g1-g2-slice`: **298 passed**, ruff and black clean, `gofmt`/`go vet`/`go test`
 clean.
 
 ```bash

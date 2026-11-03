@@ -482,7 +482,8 @@ def test_min_confidence_controls_what_merges(clusters):
     pairs = mc.shortlist(clusters)
     medium = _verdicts(pairs, "medium")
     assert mc.select_merges(pairs, medium) == []  # default is "high"
-    assert len(mc.select_merges(pairs, medium, "medium")) == len(pairs)
+    allowed = [p for p in pairs if not mc.house_number_conflict(p)]
+    assert len(mc.select_merges(pairs, medium, "medium")) == len(allowed) >= 1
     low = _verdicts(pairs, "low")
     assert mc.select_merges(pairs, low, "medium") == []  # "low" never merges
 
@@ -815,3 +816,38 @@ def test_build_clusters_links_another_schema_through_taxonomy_aliases():
     assert sorted(len(c["member_docs"]) for c in clusters) == [3]
     info = out["muse_candidates"]
     assert info["shortlisted"] >= 1 and info["merged"] == 1
+
+
+def _pair(left_addr, right_addr, evidence=None):
+    return mc.CandidatePair(
+        "p1", 0, 1, 0.9, 0.9,
+        {"names": ["a b"], "addresses": left_addr},
+        {"names": ["a b"], "addresses": right_addr},
+        [], evidence or [],
+    )  # fmt: skip
+
+
+def test_house_number_conflict_blocks_neighbours_a_model_calls_typos():
+    assert mc.house_number_conflict(_pair(["116 tran hung dao"], ["110 tran hung dao"]))
+    assert mc.house_number_conflict(_pair(["35 nguyen trai"], ["135 nguyen trai"]))
+
+
+def test_house_number_conflict_leaves_real_matches_alone():
+    assert not mc.house_number_conflict(_pair(["12 elm street"], ["12 elm st"]))
+    assert not mc.house_number_conflict(_pair(["012 elm"], ["12 elm"]))  # leading zero
+    assert not mc.house_number_conflict(_pair(["elm street"], ["12 elm st"]))  # one side no number
+    assert not mc.house_number_conflict(_pair([], ["12 elm st"]))
+    assert not mc.house_number_conflict(
+        _pair(["12 elm", "9 oak"], ["9 oak rd"])
+    )  # any shared number
+
+
+def test_house_number_conflict_yields_to_identifier_evidence():
+    evidence = [{"proof": "semantic_phone", "doc_a": "a", "doc_b": "b"}]
+    assert not mc.house_number_conflict(_pair(["1 a st"], ["2 a st"], evidence))
+
+
+def test_select_merges_refuses_a_house_number_conflict_even_at_high_confidence():
+    pair = _pair(["116 tran hung dao"], ["110 tran hung dao"])
+    verdict = mc.Verdict(pair_id="p1", verdict="same", confidence="high", reason="typo")
+    assert mc.select_merges([pair], [verdict]) == []
