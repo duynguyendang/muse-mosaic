@@ -8,8 +8,8 @@ This step looks for exactly those near-matches.
 Scale is the point. Judging every pair of clusters is O(n^2), so a machine
 narrows first and the model only judges what is left:
 
-1. ``shortlist``: token blocking + cheap string scores pick a bounded set of
-   candidate cluster pairs. No model is involved.
+1. ``shortlist``: token blocking + cheap string scores pick the candidate
+   cluster pairs, capped per cluster (not globally by default). No model runs.
 2. ``judge``: Muse (or a deterministic mock) rules on each shortlisted pair
    from display name and address ONLY (no email/phone are sent) as
    same / different / unsure with a confidence and a reason.
@@ -24,10 +24,15 @@ Any model failure skips the step: no merges, labelled in the build summary.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
+from time import perf_counter
 from typing import Any, Literal
 
 from config import Settings
@@ -205,13 +210,20 @@ def _best(left: list[str], right: list[str]) -> float:
 def shortlist(
     clusters: list[dict[str, Any]],
     *,
-    max_pairs: int = 200,
+    max_pairs: int | None = None,
     per_cluster: int = 3,
     min_name: float = 0.8,
     min_name_with_address: float = 0.6,
     min_address: float = 0.8,
+    stats: dict[str, Any] | None = None,
 ) -> list[CandidatePair]:
-    """Bounded candidate pairs. Blocks on shared name tokens, then scores."""
+    """Candidate pairs. Blocks on shared name tokens, then scores.
+
+    Two limits apply. ``per_cluster`` keeps one cluster from being paired with
+    everything (the main cost control at 10k-100k). ``max_pairs`` is optional:
+    ``None`` (the default) judges every candidate, because a global cap of 200
+    left 99%+ of the candidates unjudged at 100k clusters.
+    """
     profiles = [cluster_profile(c) for c in clusters]
     idents = [cluster_identifiers(c) for c in clusters]
     index: dict[str, set[int]] = {}
@@ -256,15 +268,24 @@ def shortlist(
     scored.sort(key=lambda p: (-(p.name_score + p.address_score + len(p.hints)), p.left, p.right))
     kept: list[CandidatePair] = []
     load: dict[int, int] = {}
+    skipped_per_cluster = 0
+    skipped_max_pairs = 0
     for pair in scored:
         if load.get(pair.left, 0) >= per_cluster or load.get(pair.right, 0) >= per_cluster:
+            skipped_per_cluster += 1
             continue
         load[pair.left] = load.get(pair.left, 0) + 1
         load[pair.right] = load.get(pair.right, 0) + 1
         pair.pair_id = f"p{len(kept) + 1}"
         kept.append(pair)
-        if len(kept) >= max_pairs:
+        if max_pairs is not None and len(kept) >= max_pairs:
+            skipped_max_pairs = len(scored) - len(kept) - skipped_per_cluster
             break
+    if stats is not None:
+        stats["candidate_pairs"] = len(scored)
+        stats["kept_pairs"] = len(kept)
+        stats["skipped_per_cluster"] = skipped_per_cluster
+        stats["skipped_max_pairs"] = skipped_max_pairs
     return kept
 
 
@@ -314,22 +335,89 @@ def mock_judge(pairs: list[CandidatePair]) -> list[Verdict]:
     return out
 
 
-async def live_judge(settings: Settings, pairs: list[CandidatePair]) -> list[Verdict]:
+CACHE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS muse_verdicts (
+  pair_key TEXT PRIMARY KEY,
+  verdict TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+"""
+
+
+def _pair_key(settings: Settings, pair: CandidatePair) -> str:
+    """Stable key for a verdict: model, prompt and the exact model input.
+
+    The prompt text is hashed into the key, so editing SYSTEM_PROMPT invalidates
+    every cached verdict instead of silently reusing an old judgement.
+    """
+    payload = json.dumps(
+        [
+            settings.muse_model_id,
+            hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12],
+            pair.left_profile,
+            pair.right_profile,
+            sorted(pair.hints),
+        ],
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+CACHE_QUERY_CHUNK = 500  # SQLite caps bound parameters (~999); stay well under
+
+
+def _cache_get(connection, keys: list[str]) -> dict[str, dict[str, str]]:
+    rows = []
+    for start in range(0, len(keys), CACHE_QUERY_CHUNK):
+        chunk = keys[start : start + CACHE_QUERY_CHUNK]
+        marks = ",".join("?" for _ in chunk)
+        rows.extend(
+            connection.execute(
+                "SELECT pair_key, verdict, confidence, reason FROM muse_verdicts"
+                f" WHERE pair_key IN ({marks})",
+                chunk,
+            ).fetchall()
+        )
+    return {
+        row["pair_key"]: {
+            "verdict": row["verdict"],
+            "confidence": row["confidence"],
+            "reason": row["reason"],
+        }
+        for row in rows
+    }
+
+
+def _cache_put(connection, items: list[tuple[str, Verdict]]) -> None:
+    now = datetime.now(UTC).isoformat()
+    connection.executemany(
+        "INSERT OR REPLACE INTO muse_verdicts (pair_key, verdict, confidence, reason, created_at)"
+        " VALUES (?, ?, ?, ?, ?)",
+        [(key, v.verdict, v.confidence, v.reason, now) for key, v in items],
+    )
+    connection.commit()
+
+
+async def _judge_batch(
+    settings: Settings, batch: list[CandidatePair], semaphore: asyncio.Semaphore
+) -> tuple[list[Verdict], int]:
+    """Judge one batch. Returns (verdicts, tokens used)."""
     from meta_client import chat_json
 
-    verdicts: list[Verdict] = []
-    for start in range(0, len(pairs), JUDGE_BATCH):
-        batch = pairs[start : start + JUDGE_BATCH]
-        payload = [
-            {
-                "pair_id": p.pair_id,
-                "a": p.left_profile,
-                "b": p.right_profile,
-                "identifier_hints": p.hints,
-            }
-            for p in batch
-        ]
-        parsed, _usage = await chat_json(
+    payload = [
+        {
+            "pair_id": p.pair_id,
+            "a": p.left_profile,
+            "b": p.right_profile,
+            "identifier_hints": p.hints,
+        }
+        for p in batch
+    ]
+    async with semaphore:
+        parsed, usage = await chat_json(
             settings,
             model=settings.muse_model_id,
             system=SYSTEM_PROMPT,
@@ -339,23 +427,94 @@ async def live_judge(settings: Settings, pairs: list[CandidatePair]) -> list[Ver
             reasoning_effort="low",
             prompt_cache_key="mosaic-candidate-judge-v1",
         )
-        sent = {p.pair_id for p in batch}
-        got: set[str] = set()
-        for item in parsed.get("verdicts", []):
-            verdict = Verdict.model_validate(item)
-            if verdict.pair_id not in sent:
-                raise ValueError(f"verdict for unknown pair {verdict.pair_id!r}")
-            if verdict.pair_id in got:
-                raise ValueError(f"duplicate verdict for {verdict.pair_id!r}")
-            got.add(verdict.pair_id)
-            verdicts.append(verdict)
-        # A pair the model skipped simply gets no verdict, so it never merges.
-    return verdicts
+    sent = {p.pair_id for p in batch}
+    got: set[str] = set()
+    out: list[Verdict] = []
+    for item in parsed.get("verdicts", []):
+        verdict = Verdict.model_validate(item)
+        if verdict.pair_id not in sent:
+            raise ValueError(f"verdict for unknown pair {verdict.pair_id!r}")
+        if verdict.pair_id in got:
+            raise ValueError(f"duplicate verdict for {verdict.pair_id!r}")
+        got.add(verdict.pair_id)
+        out.append(verdict)
+    # A pair the model skipped simply gets no verdict, so it never merges.
+    tokens = int(usage.get("total_tokens", 0) or 0)
+    return out, tokens
+
+
+async def live_judge(
+    settings: Settings, pairs: list[CandidatePair], stats: dict[str, Any] | None = None
+) -> list[Verdict]:
+    """Judge all pairs, reusing cached verdicts and running batches in parallel.
+
+    A batch that fails is skipped (its pairs get no verdict, so they never
+    merge). The step fails only when every batch that had work failed, which
+    ``propose_and_merge`` reports as Muse unavailable.
+    """
+    stats = stats if stats is not None else {}
+    stats.setdefault("cache_hits", 0)
+    stats.setdefault("judge_calls", 0)
+    stats.setdefault("judge_failures", 0)
+    stats.setdefault("tokens", 0)
+    if not pairs:
+        return []
+
+    connection = None
+    if settings.muse_verdict_cache:
+        try:
+            import ledger
+
+            connection = ledger.connect(settings.database_path)
+            connection.execute(CACHE_SCHEMA)
+        except Exception:  # noqa: BLE001 - a cache must never block judging
+            connection = None
+
+    try:
+        keys = {p.pair_id: _pair_key(settings, p) for p in pairs}
+        cached = _cache_get(connection, list(keys.values())) if connection else {}
+        by_pairs_id: dict[str, Verdict] = {}
+        for pair in pairs:
+            hit = cached.get(keys[pair.pair_id])
+            if hit:
+                by_pairs_id[pair.pair_id] = Verdict(pair_id=pair.pair_id, **hit)
+        stats["cache_hits"] = len(by_pairs_id)
+        missing = [p for p in pairs if p.pair_id not in by_pairs_id]
+
+        semaphore = asyncio.Semaphore(settings.muse_judge_concurrency)
+        batches = [missing[i : i + JUDGE_BATCH] for i in range(0, len(missing), JUDGE_BATCH)]
+        stats["judge_calls"] = len(batches)
+        results = await asyncio.gather(
+            *(_judge_batch(settings, b, semaphore) for b in batches), return_exceptions=True
+        )
+
+        failures = [r for r in results if isinstance(r, BaseException)]
+        fresh: list[Verdict] = []
+        for result in results:
+            if isinstance(result, BaseException):
+                continue
+            verdicts, tokens = result
+            stats["tokens"] += tokens
+            fresh.extend(verdicts)
+        stats["judge_failures"] = len(failures)
+        if failures and not fresh and not by_pairs_id:
+            raise failures[0]
+
+        if connection:
+            pairs_by_id = {p.pair_id: p for p in missing}
+            _cache_put(
+                connection,
+                [(keys[v.pair_id], v) for v in fresh if v.pair_id in pairs_by_id],
+            )
+        for verdict in fresh:
+            by_pairs_id[verdict.pair_id] = verdict
+        return [by_pairs_id[p.pair_id] for p in pairs if p.pair_id in by_pairs_id]
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def _dump(value: Any) -> str:
-    import json
-
     return json.dumps(value, ensure_ascii=False, indent=1)
 
 
@@ -488,30 +647,48 @@ async def propose_and_merge(
         "enabled": True,
         "mode": mode,
         "clusters_in": len(clusters),
+        "candidate_pairs": 0,
         "shortlisted": 0,
         "judged": 0,
         "merged": 0,
+        "cache_hits": 0,
+        "judge_calls": 0,
+        "judge_failures": 0,
+        "tokens": 0,
+        "elapsed_s": 0.0,
         "skipped_reason": None,
     }
-    pairs = shortlist(clusters)
+    started = perf_counter()
+    pairs = shortlist(
+        clusters,
+        max_pairs=settings.muse_candidate_max_pairs or None,
+        per_cluster=settings.muse_candidate_per_cluster,
+        stats=info,
+    )
     info["shortlisted"] = len(pairs)
     if not pairs:
+        info["elapsed_s"] = round(perf_counter() - started, 1)
         return clusters, info
     try:
         verdicts = (
-            mock_judge(pairs) if settings.use_mock_muse else await live_judge(settings, pairs)
+            mock_judge(pairs)
+            if settings.use_mock_muse
+            else await live_judge(settings, pairs, stats=info)
         )
     except (ValidationError, ValueError) as exc:
         info["skipped_reason"] = f"Muse output rejected: {exc}"
+        info["elapsed_s"] = round(perf_counter() - started, 1)
         return clusters, info
     except Exception as exc:  # noqa: BLE001 - a model outage must never block or loosen a build
         info["skipped_reason"] = f"Muse unavailable: {type(exc).__name__}"
+        info["elapsed_s"] = round(perf_counter() - started, 1)
         return clusters, info
     info["judged"] = len(verdicts)
     merges = select_merges(pairs, verdicts, settings.muse_candidate_min_confidence)
     merged, applied = apply_merges(clusters, merges)
     info["merged"] = applied
     info["clusters_out"] = len(merged)
+    info["elapsed_s"] = round(perf_counter() - started, 1)
     tiers: dict[str, int] = {}
     for cluster in merged:
         for link in cluster.get("muse_links", []):

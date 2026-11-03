@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 from pathlib import Path
 
 import muse_candidates as mc
 import pytest
+from config import Settings
 
 
 def doc(doc_id, name, address=None, email=None, phone=None, source="crm"):
@@ -116,7 +118,7 @@ def test_live_schema_is_strict_mode_compatible():
 def test_model_outage_means_no_merges_and_a_label(clusters, monkeypatch):
     from config import Settings
 
-    async def boom(settings, pairs):
+    async def boom(settings, pairs, stats=None):
         raise RuntimeError("down")
 
     monkeypatch.setattr(mc, "live_judge", boom)
@@ -131,7 +133,7 @@ def test_unknown_pair_in_model_output_is_rejected(clusters, monkeypatch):
     async def bad(settings, pairs):
         return mc.Verdict.model_validate  # not a list: forces a TypeError path
 
-    async def evil(settings, pairs):
+    async def evil(settings, pairs, stats=None):
         raise ValueError("verdict for unknown pair 'p99'")
 
     monkeypatch.setattr(mc, "live_judge", evil)
@@ -501,3 +503,168 @@ def test_min_confidence_setting_is_validated():
     Settings(muse_candidate_min_confidence="medium").validate_startup()
     with pytest.raises(ConfigurationError):
         Settings(muse_candidate_min_confidence="low").validate_startup()
+
+
+# --- scale: no pair cap, cache, parallel judging ---------------------------
+
+
+def _many_clusters(groups=4, size=40):
+    out = []
+    for g in range(groups):
+        for i in range(size):
+            out.append(
+                cluster(
+                    g * size + i,
+                    doc(
+                        f"d{g}-{i}",
+                        f"Group{chr(65 + g)} Person {i}",
+                        f"{i} Street {g}",
+                        phone=f"090{g}{i:05d}",
+                    ),
+                )
+            )
+    return out
+
+
+def test_shortlist_has_no_cap_by_default_but_honours_an_explicit_one():
+    clusters = _many_clusters()
+    assert len(mc.shortlist(clusters)) > 200  # the old global cap hid these
+    assert len(mc.shortlist(clusters, max_pairs=200)) == 200
+    stats = {}
+    pairs = mc.shortlist(clusters, stats=stats)
+    assert stats["candidate_pairs"] >= stats["kept_pairs"] == len(pairs)
+    assert stats["skipped_per_cluster"] > 0
+
+
+def _fake_judge(calls, fail_on=None, in_flight=None):
+    async def fake(settings, *, model, system, user, schema_name, schema, **kwargs):
+        calls.append(1)
+        if in_flight is not None:
+            in_flight["now"] += 1
+            in_flight["peak"] = max(in_flight["peak"], in_flight["now"])
+            await asyncio.sleep(0.01)
+            in_flight["now"] -= 1
+        if fail_on is not None and len(calls) == fail_on:
+            raise RuntimeError("batch down")
+        payload = json.loads(user.split("\n", 1)[1])
+        return (
+            {
+                "verdicts": [
+                    {
+                        "pair_id": p["pair_id"],
+                        "verdict": "same",
+                        "confidence": "high",
+                        "reason": "r",
+                    }
+                    for p in payload
+                ]
+            },
+            {"total_tokens": 10 * len(payload)},
+        )
+
+    return fake
+
+
+def _pairs(n):
+    out = []
+    for i in range(n):
+        out.append(
+            mc.CandidatePair(
+                pair_id=f"p{i + 1}",
+                left=i,
+                right=i + 1,
+                name_score=0.9,
+                address_score=0.9,
+                left_profile={"names": [f"a{i}"], "addresses": ["x"]},
+                right_profile={"names": [f"a{i + 1}"], "addresses": ["x"]},
+            )
+        )
+    return out
+
+
+def _live_settings(tmp_path, **kwargs):
+    import dataclasses
+
+    return dataclasses.replace(
+        Settings(use_mock_muse=False, database_path=str(tmp_path / "m.db")), **kwargs
+    )
+
+
+def test_verdict_cache_reuses_identical_pairs(tmp_path, monkeypatch):
+    import meta_client
+
+    calls = []
+    monkeypatch.setattr(meta_client, "chat_json", _fake_judge(calls))
+    settings = _live_settings(tmp_path)
+    pairs = _pairs(45)
+    first_stats, second_stats = {}, {}
+    first = asyncio.run(mc.live_judge(settings, pairs, stats=first_stats))
+    second = asyncio.run(mc.live_judge(settings, pairs, stats=second_stats))
+    assert len(first) == len(second) == 45
+    assert first_stats["judge_calls"] == 3 and second_stats["judge_calls"] == 0
+    assert second_stats["cache_hits"] == 45 and second_stats["tokens"] == 0
+    assert len(calls) == 3  # no second round of calls
+
+
+def test_cache_is_keyed_on_the_prompt_and_model(tmp_path, monkeypatch):
+    import meta_client
+
+    calls = []
+    monkeypatch.setattr(meta_client, "chat_json", _fake_judge(calls))
+    pairs = _pairs(2)
+    asyncio.run(mc.live_judge(_live_settings(tmp_path), pairs, stats={}))
+    # a different model may not reuse the verdicts
+    asyncio.run(
+        mc.live_judge(_live_settings(tmp_path, muse_model_id="other-model"), pairs, stats={})
+    )
+    assert len(calls) == 2
+
+
+def test_judge_runs_batches_in_parallel_within_the_limit(tmp_path, monkeypatch):
+    import meta_client
+
+    in_flight = {"now": 0, "peak": 0}
+    monkeypatch.setattr(meta_client, "chat_json", _fake_judge([], in_flight=in_flight))
+    settings = _live_settings(tmp_path, muse_judge_concurrency=2)
+    verdicts = asyncio.run(mc.live_judge(settings, _pairs(120), stats={}))
+    assert len(verdicts) == 120
+    assert 1 < in_flight["peak"] <= 2
+
+
+def test_one_failed_batch_does_not_discard_the_others(tmp_path, monkeypatch):
+    import meta_client
+
+    monkeypatch.setattr(meta_client, "chat_json", _fake_judge([], fail_on=2))
+    stats = {}
+    verdicts = asyncio.run(mc.live_judge(_live_settings(tmp_path), _pairs(60), stats=stats))
+    assert stats["judge_failures"] == 1
+    assert len(verdicts) == 40  # the two healthy batches still count
+
+
+def test_all_batches_failing_is_reported_as_unavailable(tmp_path, monkeypatch):
+    import meta_client
+
+    async def down(settings, **kwargs):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(meta_client, "chat_json", down)
+    settings = dataclasses.replace(
+        Settings(use_mock_muse=False, database_path=str(tmp_path / "m.db")),
+        muse_verdict_cache=False,
+    )
+    out, info = asyncio.run(mc.propose_and_merge(settings, _many_clusters()))
+    assert out and info["merged"] == 0 and "unavailable" in info["skipped_reason"]
+
+
+def test_cache_lookup_handles_more_keys_than_sqlite_allows_in_one_query(tmp_path, monkeypatch):
+    import meta_client
+
+    calls = []
+    monkeypatch.setattr(meta_client, "chat_json", _fake_judge(calls))
+    settings = _live_settings(tmp_path)
+    pairs = _pairs(1200)  # 1,200 keys > the 999 bound-parameter limit
+    first_stats, second_stats = {}, {}
+    assert len(asyncio.run(mc.live_judge(settings, pairs, stats=first_stats))) == 1200
+    assert len(asyncio.run(mc.live_judge(settings, pairs, stats=second_stats))) == 1200
+    assert first_stats["judge_calls"] == 60
+    assert second_stats["cache_hits"] == 1200 and second_stats["judge_calls"] == 0

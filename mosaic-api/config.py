@@ -122,6 +122,12 @@ class Settings:
     taxonomy_min_support: int = 3
     # Lowest judge confidence that may merge two clusters: "high" (default) or "medium".
     muse_candidate_min_confidence: str = "high"
+    # Judge budget for candidate matching. 0 = no cap: at 10k-100k clusters the
+    # shortlist stays bounded by per_cluster, and the cap only hid pairs.
+    muse_candidate_max_pairs: int = 0
+    muse_candidate_per_cluster: int = 3
+    muse_judge_concurrency: int = 8  # parallel judge batches per build
+    muse_verdict_cache: bool = True  # reuse verdicts for identical name+address pairs
     # When set, every state-changing request (POST/PUT/PATCH/DELETE) must carry
     # "Authorization: Bearer <token>". Empty = open (local dev only).
     api_token: str = ""
@@ -177,6 +183,21 @@ class Settings:
             .lower(),
             muse_candidate_matching=_parse_bool(
                 get("MUSE_CANDIDATE_MATCHING") or "false", "MUSE_CANDIDATE_MATCHING"
+            ),
+            muse_candidate_max_pairs=_parse_optional_int(
+                get("MUSE_CANDIDATE_MAX_PAIRS"), "MUSE_CANDIDATE_MAX_PAIRS", minimum=0
+            )
+            or 0,
+            muse_candidate_per_cluster=_parse_optional_int(
+                get("MUSE_CANDIDATE_PER_CLUSTER"), "MUSE_CANDIDATE_PER_CLUSTER", minimum=1
+            )
+            or 3,
+            muse_judge_concurrency=_parse_optional_int(
+                get("MUSE_JUDGE_CONCURRENCY"), "MUSE_JUDGE_CONCURRENCY", minimum=1
+            )
+            or 8,
+            muse_verdict_cache=_parse_bool(
+                get("MUSE_VERDICT_CACHE") or "true", "MUSE_VERDICT_CACHE"
             ),
             autonomy_mode=(get("AUTONOMY_MODE") or "manual").strip().lower(),
             job_max_attempts=_parse_optional_int(
