@@ -86,6 +86,7 @@
 <option value="retail_balanced">Enterprise Commercial (Retail Balanced)</option>
 <option value="analytical_mesh">Analytical Mesh (Multi-Valued)</option>
 </select>
+<button id="muse-open" type="button" aria-haspopup="dialog" aria-controls="muse-dialog" title="Where the model helped the last build: grouping and taxonomy" class="px-3.5 py-1 rounded-full bg-surface-panel border border-border-strong hover:bg-surface-muted text-text-primary font-code-sm text-code-sm font-semibold whitespace-nowrap cursor-pointer shadow-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">Muse impact</button>
 <button id="copilot-open" type="button" aria-haspopup="dialog" aria-controls="copilot-dialog" title="Describe a policy change in English; the engine validates the draft" class="px-3.5 py-1 rounded-full bg-primary hover:bg-primary-container text-on-primary font-code-sm text-code-sm font-semibold whitespace-nowrap cursor-pointer shadow-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">✨ Policy Copilot</button>
 <div id="autonomy-pill" class="flex items-center space-x-1.5 max-w-[calc(100vw-3.5rem)] min-w-0 px-2.5 py-1 rounded-full bg-status-verified-surface border border-status-verified-border text-status-verified-deep font-code-sm text-code-sm font-semibold whitespace-nowrap">
 <span id="autonomy-dot" class="w-2 h-2 shrink-0 rounded-full bg-status-verified animate-pulse"></span>
@@ -745,6 +746,26 @@
 </div>
 <!-- Toast host -->
 <div id="toast" class="fixed bottom-6 right-6 z-50 flex flex-col items-end space-y-2 pointer-events-none"></div>
+
+<!-- Muse impact: read-only. Shows what the model did in the latest build, from that
+     build's own report. When a feature was off or ran without a model it says so. -->
+<dialog id="muse-dialog" aria-labelledby="muse-title" class="w-full max-w-4xl rounded-xl border border-border-subtle bg-surface-panel p-0 shadow-[0_24px_64px_rgba(15,23,42,0.28)] backdrop:bg-black/40">
+<div class="p-space-md space-y-space-md overflow-y-auto" style="max-height:88vh">
+<div class="flex items-center justify-between">
+<h2 id="muse-title" class="font-headline-sm text-headline-sm font-bold text-text-primary">Muse impact</h2>
+<button type="button" id="muse-close" class="text-text-muted hover:text-text-primary" aria-label="Close">✕</button>
+</div>
+<p id="muse-sub" class="font-body-sm text-body-sm text-text-muted"></p>
+<section class="space-y-space-sm">
+<h3 class="font-headline-sm text-headline-sm font-bold text-text-primary">1. Grouping <span class="font-body-sm text-body-sm font-normal text-text-muted">did Muse join records that exact identifiers missed?</span></h3>
+<div id="muse-grouping" class="space-y-space-sm"></div>
+</section>
+<section class="space-y-space-sm">
+<h3 class="font-headline-sm text-headline-sm font-bold text-text-primary">2. Taxonomy <span class="font-body-sm text-body-sm font-normal text-text-muted">did Muse help name new categories, and did the data back them?</span></h3>
+<div id="muse-taxonomy" class="space-y-space-sm"></div>
+</section>
+</div>
+</dialog>
 
 <!-- Policy Copilot: English -> DRAFT policy change. The model only fills a closed
      vocabulary; fixed templates compile it; the Datalog engine validates it.

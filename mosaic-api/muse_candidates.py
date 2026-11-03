@@ -813,7 +813,103 @@ async def propose_and_merge(
         for link in cluster.get("muse_links", []):
             tiers[link["tier"]] = tiers.get(link["tier"], 0) + 1
     info["tiers"] = tiers
+    info.update(merge_report(merged))
+    info["declined"] = declined_report(pairs, verdicts, merges)
     return merged, info
+
+
+MAX_REPORTED_DECLINED = 50
+
+
+def declined_report(
+    pairs: list[CandidatePair],
+    verdicts: list[Verdict],
+    merges: list[tuple[CandidatePair, Verdict]],
+) -> list[dict[str, Any]]:
+    """Pairs the judge looked at and did NOT join, with its reason.
+
+    Seeing these is how a person decides whether the threshold is too strict
+    (``same`` at medium confidence) or the judge is right to hold back.
+    """
+    joined = {pair.pair_id for pair, _ in merges}
+    by_id = {p.pair_id: p for p in pairs}
+    rows: list[dict[str, Any]] = []
+    for verdict in verdicts:
+        pair = by_id.get(verdict.pair_id)
+        if pair is None or pair.pair_id in joined:
+            continue
+        refused_by_code = verdict.verdict == "same" and house_number_conflict(pair)
+        rows.append(
+            {
+                "a": {
+                    "name": "; ".join(pair.left_profile.get("names", [])),
+                    "address": "; ".join(pair.left_profile.get("addresses", [])),
+                },
+                "b": {
+                    "name": "; ".join(pair.right_profile.get("names", [])),
+                    "address": "; ".join(pair.right_profile.get("addresses", [])),
+                },
+                "verdict": verdict.verdict,
+                "confidence": verdict.confidence,
+                "reason": verdict.reason,
+                "why_not_joined": (
+                    "house numbers differ and no phone or email backs the link"
+                    if refused_by_code
+                    else (
+                        "judged same, but below the confidence needed to join"
+                        if verdict.verdict == "same"
+                        else f"judge said {verdict.verdict}"
+                    )
+                ),
+            }
+        )
+    rows.sort(key=lambda r: (r["verdict"] != "same", r["verdict"] != "unsure"))  # near-misses first
+    return rows[:MAX_REPORTED_DECLINED]
+
+
+MAX_REPORTED_MERGES = 100
+
+
+def _side(by_id: dict[str, dict[str, Any]], doc_id: str) -> dict[str, Any]:
+    doc = by_id.get(doc_id, {})
+    return {
+        "document_id": doc_id,
+        "name": _field_value(doc, "display_name"),
+        "address": _field_value(doc, "address"),
+    }
+
+
+def merge_report(merged: list[dict[str, Any]]) -> dict[str, Any]:
+    """What Muse did, in terms a person can check: who was joined, and why.
+
+    Names and addresses are exactly what the judge was sent, so this exposes
+    nothing new. Capped, with the true total kept.
+    """
+    rows: list[dict[str, Any]] = []
+    total = 0
+    records = 0
+    for cluster in merged:
+        links = cluster.get("muse_links") or []
+        if not links:
+            continue
+        records += len(cluster["member_docs"])
+        by_id = {d["document_id"]: d for d in cluster["member_docs"]}
+        for link in links:
+            total += 1
+            if len(rows) >= MAX_REPORTED_MERGES:
+                continue
+            rows.append(
+                {
+                    "cluster_id": cluster["cluster_id"],
+                    "a": _side(by_id, link["doc_a"]),
+                    "b": _side(by_id, link["doc_b"]),
+                    "confidence": link["confidence"],
+                    "reason": link["reason"],
+                    "tier": link["tier"],
+                    "evidence": sorted({e["proof"] for e in link.get("evidence", [])}),
+                }
+            )
+    return {"merges": rows, "merges_total": total, "records_regrouped": records}
 
 
 def link_claims(

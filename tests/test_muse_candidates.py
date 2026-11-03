@@ -463,6 +463,15 @@ def test_names_only_merge_is_not_certified_through_build(te_url, matching_engine
             "/build", json={"work_id": "w", "idempotency_key": "k", "dataset": {"documents": docs}}
         ).json()
     assert out["muse_candidates"]["tiers"] == {"semantic_only": 1}
+    grouping = out["muse_impact"]["grouping"]  # what the UI shows: who was joined, and why
+    assert grouping["status"] == "mock" and grouping["model"] is None
+    assert grouping["clusters_before"] == 2 and grouping["clusters_after"] == 1
+    assert grouping["merges_total"] == 1 and grouping["records_regrouped"] == 2
+    merge = grouping["merges"][0]
+    assert {merge["a"]["name"], merge["b"]["name"]} == {"Maria Day", "maria  DAY"}
+    assert merge["tier"] == "semantic_only" and merge["reason"]
+    assert out["muse_impact"]["taxonomy"]["status"] == "off"
+    assert out["muse_impact"]["grouping"]["declined"] == []  # the one pair it saw was joined
     reasons = {c["reason_code"] for c in out["conflicts"]}
     assert reasons & {"SEMANTIC_MERGE_UNVERIFIED", "CHAIN_BROKEN"}, out["conflicts"]
     assert not [g for g in out["goldens"] if g.get("golden_id")], "nothing may certify"
@@ -851,3 +860,48 @@ def test_select_merges_refuses_a_house_number_conflict_even_at_high_confidence()
     pair = _pair(["116 tran hung dao"], ["110 tran hung dao"])
     verdict = mc.Verdict(pair_id="p1", verdict="same", confidence="high", reason="typo")
     assert mc.select_merges([pair], [verdict]) == []
+
+
+def test_impact_says_off_rather_than_implying_the_model_helped():
+    import muse_impact
+
+    impact = muse_impact.build(Settings(), None, None)
+    assert (
+        impact["grouping"]["status"] == "off"
+        and "MUSE_CANDIDATE_MATCHING" in impact["grouping"]["note"]
+    )
+    assert impact["taxonomy"]["status"] == "off"
+
+
+def test_impact_labels_a_rules_only_taxonomy_run_as_not_the_model():
+    import muse_impact
+
+    ext = {"mode": "rules", "proposer": "rules", "accepted": 3, "rejected": 1, "terms": []}
+    live = dataclasses.replace(Settings(), use_mock_muse=False, muse_model_id="muse-x")
+    tax = muse_impact.build(live, None, ext)["taxonomy"]
+    assert tax["status"] == "rules" and tax["model"] is None
+    ext["proposer"] = "muse"
+    tax = muse_impact.build(live, None, ext)["taxonomy"]
+    assert tax["status"] == "live" and tax["model"] == "muse-x"
+
+
+def test_impact_endpoint_without_a_build_is_unavailable(te_url, matching_engine, tmp_path):
+    with _client(te_url, matching_engine, tmp_path, False) as client:
+        assert client.get("/muse/impact").json() == {"available": False, "job_id": None}
+
+
+def test_declined_report_explains_why_a_pair_was_not_joined():
+    near = _pair(["116 tran hung dao"], ["110 tran hung dao"])
+    near.pair_id = "p1"
+    other = _pair(["1 a st"], ["1 a st"])
+    other.pair_id = "p2"
+    verdicts = [
+        mc.Verdict(pair_id="p1", verdict="same", confidence="high", reason="typo"),
+        mc.Verdict(pair_id="p2", verdict="same", confidence="medium", reason="close"),
+    ]
+    merges = mc.select_merges([near, other], verdicts, "high")
+    rows = mc.declined_report([near, other], verdicts, merges)
+    assert [r["pair"] if "pair" in r else r["why_not_joined"] for r in rows] == [
+        "house numbers differ and no phone or email backs the link",
+        "judged same, but below the confidence needed to join",
+    ]

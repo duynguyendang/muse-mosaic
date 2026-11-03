@@ -6,7 +6,7 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 | | |
 | --- | --- |
 | Date | 2026-11-03 |
-| Commit | branch `g1-g2-slice` (G1/G2 + house-number guard); baseline `7721f95` |
+| Commit | branch `muse-impact-ui` (Muse impact view); baseline `7721f95` |
 | Python | 3.12.3 |
 | pytest | 9.1.1 |
 | Go | 1.25.1 |
@@ -17,7 +17,7 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Python tests | `python3 -m pytest -q` | **298 passed, 0 failed**, 96.47 s |
+| Python tests | `python3 -m pytest -q` | **302 passed, 0 failed**, 149.31 s |
 | Lint | `ruff check mosaic-api matching-engine scripts tests shared` | **clean** |
 | Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 86 files unchanged |
 | Go format | `gofmt -l .` | **clean**, no output |
@@ -35,7 +35,7 @@ $ python3 -m pytest -q
 ........................................................................ [ 50%]
 ........................................................................ [ 75%]
 .....................................................................    [100%]
-298 passed in 96.47s (0:01:36)
+302 passed in 149.31s (0:02:29)
 
 $ python3 -m ruff check mosaic-api matching-engine scripts tests shared
 All checks passed!
@@ -49,13 +49,13 @@ ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.209s
 
 ## Suite inventory
 
-298 collected tests across 30 files (13 added on `g1-g2-slice`, all in `test_muse_candidates.py`).
+302 collected tests across 30 files (17 added on `g1-g2-slice`, all in `test_muse_candidates.py`).
 
 | Area | Tests | Files | What it proves |
 | --- | --- | --- | --- |
 | Contract, rules, trust gate | 88 | 9 | Facts and goldens carry provenance; user/product authority, freshness, TTL and conflict rules hold; S1/S2 semantic evidence and the S3 guard behave; split, rollback and replay are exact; killing the engine publishes nothing |
 | Taxonomy | 41 | 3 | Versioned vocabulary, exact-match mapping, steward Accept creates a new version and re-derives, evidence-verified extension accepts only what the data attests |
-| Muse and model layer | 78 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure; Copilot closed vocabulary |
+| Muse and model layer | 82 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure; Copilot closed vocabulary |
 | Pipeline, API, jobs, UI | 91 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end |
 
 Per file:
@@ -64,7 +64,7 @@ Per file:
 | --- | --- | --- |
 | `test_contract.py` | 35 | Fact/golden schema, provenance, policy and taxonomy rejection, DDL, mock-data shape |
 | `test_taxonomy_proposals.py` | 34 | Evidence checks (ground, attest, not-a-variant, relate, unique), digit-safe skeleton, version lineage, atomic writes, idempotency |
-| `test_muse_candidates.py` | 44 | Shortlist scoring and caps, no global cap, verdict cache (reuse, invalidation, 1,200-key chunking), parallel judge, partial and total failure, merge limits |
+| `test_muse_candidates.py` | 48 | Shortlist scoring and caps, no global cap, verdict cache (reuse, invalidation, 1,200-key chunking), parallel judge, partial and total failure, merge limits |
 | `test_rules_user.py` | 21 | G-01..G-20 user survivorship through the live engine |
 | `test_ui_wiring.py` | 19 | DOM ids referenced by `studio.js` exist in `index.html`; file split guards |
 | `test_semantic_rules.py` | 15 | S1 `semantic_phone`, S2 `semantic_email`, S3 guard, against the live engine |
@@ -104,7 +104,7 @@ Per file:
 | Fail closed when the engine is down | `test_kill_service.py`, `test_flows.py`, `test_jobs.py` | verified |
 | Split, rollback and replay are exact | `test_split.py`, `test_idempotency.py` | verified |
 | Splink proposes only; malformed output fails closed | `test_splink.py` (8), `test_matching_engine.py` (3) | verified |
-| Candidate matching scales without a global cap | `test_muse_candidates.py` (44) | verified |
+| Candidate matching scales without a global cap | `test_muse_candidates.py` (48) | verified |
 | Verdict cache never changes a decision, prompt edits invalidate | `test_muse_candidates.py` | verified |
 | Taxonomy extension accepts only attested, related terms | `test_taxonomy_proposals.py` (34) | verified |
 | Copilot cannot write policy or Datalog | `test_policy_copilot.py` (14) | verified |

@@ -313,3 +313,20 @@ def golden_history(
             status_code=404, detail=f"no golden history for {entity_type}/{entity_id}"
         )
     return {"entity_type": entity_type, "entity_id": entity_id, "versions": entries}
+
+
+@router.get("/muse/impact")
+def muse_impact_latest(request: Request) -> dict[str, Any]:
+    """What Muse did in the most recent finished build: grouping and taxonomy.
+
+    Read-only. Every field comes from that build's own report; when a feature
+    was off, or ran without a model, the payload says so.
+    """
+    from config import Settings
+
+    current: Settings = request.app.state.settings
+    for job in ledger.list_jobs(current.database_path, None, 20):
+        impact = (job.get("result") or {}).get("muse_impact")
+        if impact:
+            return {"available": True, "job_id": job["job_id"], "at": job["updated_at"], **impact}
+    return {"available": False, "job_id": None}

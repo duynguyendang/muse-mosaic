@@ -723,6 +723,145 @@
     if (total) total.textContent = v.fixpointMs == null ? "—" : `${v.fixpointMs}ms Total`;
   }
 
+  // Muse impact: read-only view of what the model did in the latest build. Every string
+  // that came from data or a model goes through escapeHtml.
+  const MUSE_STATUS = {
+    live: ["Live model", "bg-status-verified-surface border-status-verified-border text-status-verified-deep"],
+    mock: ["Mock — no model ran", "bg-status-warning-surface border-status-warning-border text-status-warning-deep"],
+    rules: ["Rules — no model ran", "bg-status-warning-surface border-status-warning-border text-status-warning-deep"],
+    skipped: ["Skipped", "bg-status-error-surface border-status-error-border text-status-error-deep"],
+    off: ["Off", "bg-surface-muted border-border-subtle text-text-muted"],
+  };
+
+  function museBadge(status, model) {
+    const [label, tone] = MUSE_STATUS[status] || MUSE_STATUS.off;
+    const name = status === "live" && model ? ` · ${escapeHtml(model)}` : "";
+    return `<span class="px-2 py-0.5 rounded border font-code-sm text-code-sm font-bold ${tone}">${label}${name}</span>`;
+  }
+
+  function museStat(label, value) {
+    return `<div class="p-space-sm rounded-md bg-surface-muted border border-border-subtle"><div class="text-text-muted font-caption-micro text-caption-micro">${label}</div><div class="font-bold text-text-primary font-headline-sm text-headline-sm">${value}</div></div>`;
+  }
+
+  function museOffNote(text) {
+    return `<div class="p-space-sm rounded-md bg-surface-muted border border-border-subtle font-body-sm text-body-sm text-text-body">${escapeHtml(text)}</div>`;
+  }
+
+  function renderMuseGrouping(g) {
+    if (!g || g.status === "off") return museOffNote((g && g.note) || "No grouping report.");
+    const reduced = (g.clusters_before || 0) - (g.clusters_after || 0);
+    const parts = [
+      `<div class="flex items-center gap-2 flex-wrap">${museBadge(g.status, g.model)}<span class="text-text-muted font-code-sm text-code-sm">blocking ${escapeHtml(g.blocking || "token")} · merge at ${escapeHtml(g.min_confidence)} confidence</span></div>`,
+    ];
+    if (g.skipped_reason) parts.push(museOffNote(`Muse did not run: ${g.skipped_reason}. Nothing was merged.`));
+    if (g.warning) parts.push(`<div class="p-space-sm rounded-md bg-status-warning-surface border border-status-warning-border text-status-warning-deep font-code-sm text-code-sm">${escapeHtml(g.warning)}</div>`);
+    parts.push(
+      `<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">` +
+        museStat("Groups", `${num(g.clusters_before)} → ${num(g.clusters_after)}`) +
+        museStat("Joins by Muse", num(g.merged)) +
+        museStat("Records regrouped", num(g.records_regrouped)) +
+        `</div>`
+    );
+    parts.push(
+      `<div class="text-text-muted font-code-sm text-code-sm">${num(g.candidate_pairs)} candidate pairs · ${num(g.judged)} judged · ${num(g.judge_calls)} calls (${num(g.cache_hits)} cached) · ${num(g.tokens)} tokens · ${g.elapsed_s}s</div>`
+    );
+    if (g.status === "mock") {
+      parts.push(museOffNote("Mock mode uses plain string rules, not the model. These joins show the mechanism, not Muse's judgement."));
+    }
+    if (reduced > 0) {
+      parts.push(
+        `<div class="font-body-sm text-body-sm text-text-body">Muse's joins removed ${num(reduced)} duplicate group${reduced === 1 ? "" : "s"}: ${num(g.records_regrouped)} records now sit together instead of each producing its own golden record.</div>`
+      );
+    }
+    const rows = (g.merges || [])
+      .map((m) => {
+        const verified = m.tier === "semantic_verified";
+        const tier = verified
+          ? `<span class="text-status-verified font-bold" title="A phone or email is nearly identical too, so the engine can verify the link">verified</span>`
+          : `<span class="text-status-warning-deep font-bold" title="Joined on name and address only: the values stay held, not certified">names only</span>`;
+        const side = (x) => `${escapeHtml(x.name || "—")} <span class="text-text-muted">· ${escapeHtml(x.address || "no address")}</span>`;
+        return `<div class="p-space-sm rounded-md border border-border-subtle space-y-1"><div class="font-code-sm text-code-sm text-text-primary break-words">${side(m.a)}<br/>= ${side(m.b)}</div><div class="flex gap-3 flex-wrap font-code-sm text-code-sm"><span>${escapeHtml(m.confidence)} confidence</span>${tier}<span class="text-text-muted break-words">${escapeHtml(m.reason)}</span></div></div>`;
+      })
+      .join("");
+    if (rows) {
+      const more = g.merges_total > g.merges.length ? ` (first ${g.merges.length} of ${num(g.merges_total)})` : "";
+      parts.push(`<div class="font-label-md text-label-md uppercase tracking-wider text-text-muted">Joins to review${more}</div><div class="text-text-muted font-code-sm text-code-sm"><b>verified</b>: a phone or email is also nearly identical, so the engine can check the link. <b>names only</b>: joined for grouping, but the values stay held until something verifies them.</div><div class="space-y-1" style="max-height:18rem;overflow-y:auto">${rows}</div>`);
+    }
+    const declined = (g.declined || [])
+      .map((m) => {
+        const side = (x) => `${escapeHtml(x.name || "—")} <span class="text-text-muted">· ${escapeHtml(x.address || "no address")}</span>`;
+        return `<div class="p-space-sm rounded-md border border-border-subtle space-y-1"><div class="font-code-sm text-code-sm text-text-primary break-words">${side(m.a)}<br/>≠ ${side(m.b)}</div><div class="flex gap-3 flex-wrap font-code-sm text-code-sm"><span class="text-status-warning-deep font-bold">${escapeHtml(m.why_not_joined)}</span><span class="text-text-muted break-words">${escapeHtml(m.reason)}</span></div></div>`;
+      })
+      .join("");
+    if (declined) {
+      parts.push(`<div class="font-label-md text-label-md uppercase tracking-wider text-text-muted">Looked at, not joined</div><div class="space-y-1" style="max-height:14rem;overflow-y:auto">${declined}</div>`);
+    }
+    return parts.join("");
+  }
+
+  function renderMuseTaxonomy(t) {
+    if (!t || t.status === "off") return museOffNote((t && t.note) || "No taxonomy report.");
+    const parts = [
+      `<div class="flex items-center gap-2 flex-wrap">${museBadge(t.status, t.model)}<span class="text-text-muted font-code-sm text-code-sm">proposed by ${escapeHtml(t.proposer || "—")}, verified against the data</span></div>`,
+    ];
+    if (t.skipped_reason) parts.push(museOffNote(`Proposer did not run: ${t.skipped_reason}. Unknown categories stay held.`));
+    if (t.downgraded_reason) parts.push(museOffNote(`Fell back to rules: ${t.downgraded_reason}.`));
+    parts.push(
+      `<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">` +
+        museStat("Unknown values seen", num(t.unknown_values)) +
+        museStat("Accepted / refused", `${num(t.accepted)} / ${num(t.rejected)}`) +
+        museStat("Records that were held", num(t.unknown_records)) +
+        `</div>`
+    );
+    if (t.version) parts.push(`<div class="text-text-muted font-code-sm text-code-sm">Wrote taxonomy version ${escapeHtml(t.version)}. It is a new version, never an edit.</div>`);
+    const rows = (t.terms || [])
+      .map((term) => {
+        const ok = term.term_ok;
+        const accepted = (term.accepted || [])
+          .map((a) => `<span class="px-1.5 py-0.5 rounded bg-status-verified-surface border border-status-verified-border text-status-verified-deep">${escapeHtml(a.value)} <span class="text-text-muted">(${escapeHtml(a.rule)})</span></span>`)
+          .join(" ");
+        const rejected = (term.rejected || [])
+          .map((r) => `<span class="px-1.5 py-0.5 rounded bg-status-error-surface border border-status-error-border text-status-error-deep" title="${escapeHtml(r.why)}">${escapeHtml(r.value)}: ${escapeHtml(r.why)}</span>`)
+          .join(" ");
+        const note = ok ? "" : `<div class="text-status-warning-deep">Term not accepted: ${escapeHtml(term.term_reason || "unverified")}</div>`;
+        return `<div class="p-space-sm rounded-md border border-border-subtle space-y-1"><div class="font-code-sm text-code-sm"><span class="font-bold text-text-primary">${escapeHtml(term.term)}</span> <span class="text-text-muted">· backed by ${num(term.support)} records · ${escapeHtml(term.proposer || "")}</span></div>${note}<div class="flex gap-1 flex-wrap font-code-sm text-code-sm">${accepted}${rejected}</div></div>`;
+      })
+      .join("");
+    if (rows) parts.push(`<div class="font-label-md text-label-md uppercase tracking-wider text-text-muted">Terms</div><div class="space-y-1" style="max-height:18rem;overflow-y:auto">${rows}</div>`);
+    return parts.join("");
+  }
+
+  async function loadMuseImpact() {
+    const sub = $("muse-sub");
+    sub.textContent = "Loading…";
+    try {
+      const data = await api("/muse/impact");
+      if (!data.available) {
+        sub.textContent = "No finished build has a Muse report yet. Run a build, then open this again.";
+        $("muse-grouping").innerHTML = museOffNote("Nothing to show yet.");
+        $("muse-taxonomy").innerHTML = museOffNote("Nothing to show yet.");
+        return;
+      }
+      sub.textContent = `Latest build, job ${data.job_id}, ${data.at}. Numbers come from that build's own report.`;
+      $("muse-grouping").innerHTML = renderMuseGrouping(data.grouping);
+      $("muse-taxonomy").innerHTML = renderMuseTaxonomy(data.taxonomy);
+    } catch (error) {
+      sub.textContent = `Muse report unavailable: ${error.message}`;
+    }
+  }
+
+  function initMuseImpact() {
+    const dialog = $("muse-dialog");
+    const open = $("muse-open");
+    if (!dialog || !open) return;
+    open.addEventListener("click", () => {
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+      loadMuseImpact();
+    });
+    $("muse-close").addEventListener("click", () => dialog.close());
+  }
+
   // Policy Copilot: English -> draft. Renders with textContent only (the draft
   // text comes from a model, so it is never trusted as markup).
   function initCopilot() {
@@ -2003,6 +2142,7 @@
     }
 
     initCopilot();
+    initMuseImpact();
 
     // Items 2 and 3 are real anchors; the active underline follows the
     // section actually in view rather than a hardcoded design state.

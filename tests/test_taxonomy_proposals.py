@@ -328,6 +328,12 @@ def test_rules_mode_certifies_categories_the_data_verifies(
     # variant was folded into its term and certified
     assert values == ["clothing"] * 4 + ["toys"] * 2, values
     assert (tax_dir / f"{ext['version']}.json").exists()
+    # the impact report names every term, its evidence and who proposed it
+    impact = out["muse_impact"]["taxonomy"]
+    assert impact["status"] == "rules" and impact["model"] is None  # no model did this
+    assert impact["accepted"] == ext["accepted"] and impact["version"] == ext["version"]
+    clothing = next(t for t in impact["terms"] if t["term"] == "clothing")
+    assert clothing["term_ok"] and clothing["accepted"] and clothing["accepted"][0]["rule"]
 
 
 # --- lineage, atomic writes, support ---------------------------------------

@@ -55,7 +55,7 @@ fragments ──► Splink            candidate clusters (scale)
 ## Proof: Muse earns its place
 
 These are measured runs, not targets. Each number names its dataset, its arm
-and whether Muse was live. The full run — 298 tests, lint, format and Go
+and whether Muse was live. The full run — 302 tests, lint, format and Go
 checks — is in **[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**.
 
 ### 1. Semantic linking at 10k people (live Muse)
@@ -273,6 +273,25 @@ Contract guardrails, enforced in code and tests:
 **Fail closed everywhere a guess could leak in:** engine down, malformed
 response, unknown policy, a rank contradicting the authority matrix, a broken
 link chain — deny or escalate, never publish.
+
+### See what Muse did
+
+The cockpit's **Muse impact** button (header) shows, for the latest finished build,
+where the model helped and where it did not. Every number comes from that build's
+own report (`GET /muse/impact`), and a feature that was off, mocked or rules-only
+is labelled as such rather than credited to the model.
+
+- **Grouping:** groups before and after, the joins Muse made (each with its
+  reason and a `verified` / `names only` tier), and the pairs it looked at and
+  *declined*, with why (judge said different, below the confidence needed, or
+  the house-number guard).
+- **Taxonomy:** unknown values seen, terms accepted and refused, and for each term
+  the synonyms the data verified (with the rule) and the ones it refused.
+
+It is read-only. The settings that decide Muse's role are still environment
+variables (`MUSE_CANDIDATE_MATCHING`, `MUSE_BLOCKING_MODE`,
+`MUSE_CANDIDATE_MIN_CONFIDENCE`, `MUSE_TAXONOMY_PROPOSALS`); the report only
+appears for a build that ran with them on.
 
 ### Policy profiles
 
@@ -563,7 +582,7 @@ source behind each panel.
 
 Full run, environment and what is *not* verified:
 **[docs/TEST-REPORT.md](docs/TEST-REPORT.md)**. Last verified on
-branch `g1-g2-slice`: **298 passed**, ruff and black clean, `gofmt`/`go vet`/`go test`
+branch `muse-impact-ui`: **302 passed**, ruff and black clean, `gofmt`/`go vet`/`go test`
 clean.
 
 ```bash

@@ -16,6 +16,7 @@ from typing import Any
 
 import ledger
 import muse_candidates
+import muse_impact
 import taxonomy_proposals
 from config import Settings
 from fastapi import APIRouter, HTTPException, Request
@@ -149,6 +150,18 @@ async def _extend_taxonomies(
         min_support=settings.taxonomy_min_support,
     )
     verdicts = result.pop("verdicts")
+    result["terms"] = [
+        {
+            "term": v.term,
+            "term_ok": v.term_ok,
+            "term_reason": v.term_reason,
+            "support": v.support,
+            "proposer": v.proposer,
+            "accepted": [{"value": syn, "rule": rule} for syn, rule in v.accepted],
+            "rejected": [{"value": syn, "why": why} for syn, why in v.rejected],
+        }
+        for v in verdicts
+    ]
     report.update(
         {k: v for k, v in result.items() if k != "mode"},
         proposer=mode,
@@ -546,6 +559,11 @@ def _build_summary(
         },
         "muse_candidates": ctx.splink_out.get("muse_candidates"),
         "taxonomy_extension": ctx.splink_out.get("taxonomy_extension"),
+        "muse_impact": muse_impact.build(
+            ctx.settings,
+            ctx.splink_out.get("muse_candidates"),
+            ctx.splink_out.get("taxonomy_extension"),
+        ),
     }
 
 
