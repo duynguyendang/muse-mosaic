@@ -89,6 +89,7 @@ esc(A, "NO_AUTHORITY_RANKS", "R4") :- attr(A), !has_matrix(A), !multivalued(A).
 esc(A, "WINNER_TIE_AMBIGUOUS", "R2") :- attr(A), has_matrix(A), !multivalued(A), winners_disagree(A), mixed_tie(A).
 esc(A, "CLUSTER_CONFLICT", "C1") :- attr(A), has_matrix(A), !multivalued(A), cross_source(A), !mixed_tie(A).
 esc(A, "CHAIN_BROKEN", "C2") :- attr(A), has_matrix(A), !multivalued(A), win(F), live(F, A, _, _, _, _, "false"), detached(F).
+esc(A, "TAXONOMY_UNKNOWN_TERM", "T1") :- attr(A), has_matrix(A), categorical(A), win(F), live(F, A, V, _, _, _, _), !tax_term(V), !denied_attr(A).
 den(A, "WEAK_PROVENANCE", "R4") :- attr(A), has_matrix(A), !has_verified(A).
 
 escalated(A) :- esc(A, W, Rule).

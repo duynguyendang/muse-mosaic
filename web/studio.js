@@ -123,6 +123,13 @@
     policy: null,
     policyCatalog: null,
     policyLoading: false,
+    // The profile this session asked for (null = adopt the server's active one).
+    // Set synchronously on change so a pick made while the catalog or another
+    // switch is still in flight is applied rather than reverted to the default.
+    policyChoice: null,
+    // Resolves when the apply-policy request running now settles; later
+    // switches wait on it instead of being dropped.
+    policyInFlight: null,
     policyError: null,
     offline: false,
     demo: false,
@@ -1389,18 +1396,24 @@
   // Rule codes the profiles use, mapped to the display copy the card shows.
   // Unknown codes still render (code + verdict) rather than being dropped:
   // a rule that fired must be visible even if this table has no blurb.
+  // Short names on purpose: the Stage 03 column is 215px wide and anything
+  // longer truncates with an ellipsis (measured: "Cluster Uniqueness" needed
+  // 176px against 133px available).
   const RULE_COPY = {
-    R1: ["Authority Wins", "Lowest rank, then verified, then freshest", "ok"],
+    R1: ["Authority", "Lowest rank, then verified, then freshest", "ok"],
     R2: ["Dispute Guard", "Escalates ambiguity, never guesses", "warn"],
     R3: ["Expiry Guard", "Expired fact treated as missing", "muted"],
-    R4: ["Provenance Gate", "Denies weak or unranked provenance", "muted"],
-    L1: ["Transitive Path", "Sole-proof hop verified end to end", "ok"],
-    C1: ["Cluster Uniqueness", "Cross-system value conflict quarantined", "warn"],
-    C2: ["Weakest-Link Chain", "Winner cut off from anchor escalates", "warn"],
-    T1: ["Taxonomy Membership", "Categorical value must be a known term", "muted"],
+    R4: ["Provenance", "Denies weak or unranked provenance", "muted"],
+    L1: ["Path Proof", "Sole-proof hop verified end to end", "ok"],
+    C1: ["Uniqueness", "Cross-system value conflict quarantined", "warn"],
+    C2: ["Chain Link", "Winner cut off from anchor escalates", "warn"],
+    T1: ["Taxonomy", "Categorical value must be a known term", "muted"],
     I1: ["Idempotency", "Same input derives same output", "muted"],
-    HIER: ["Source Hierarchy", "ERP 3 > order/OTP 2 > CRM 1", "ok"],
-    M1: ["Multi-Valued Lineage", "Every distinct observed value publishes", "ok"],
+    HIER: ["Source Tier", "ERP 3 > order/OTP 2 > CRM 1", "ok"],
+    M1: ["Lineage", "Every distinct observed value publishes", "ok"],
+    S1: ["Phone Key", "Equal last-9 phone digits verify a link", "ok"],
+    S2: ["Email Near", "One typo on a long local part verifies", "ok"],
+    S3: ["Fuzzy Guard", "Names-only merge can never certify", "warn"],
   };
 
   const RULE_TONE = {
@@ -1412,20 +1425,18 @@
   async function loadPolicyCatalog() {
     if (state.policyCatalog || state.policyLoading) return;
     state.policyLoading = true;
-    // Snapshot what the user picked while the catalog was in flight. Adopting
-    // the server's active profile afterwards would silently revert it.
     const select = $("policy-select");
-    const pickedBeforeLoad = select ? select.value : "";
     try {
       const data = await api("/api/v1/pipeline/policies");
       state.policyCatalog = data;
       state.policyError = null;
       renderPolicySelector();
-      // Adopt the server's active profile so the selector and the Stage 03
-      // card agree after a reload -- but never over a choice the user already
-      // made in this session.
-      const wanted = pickedBeforeLoad || data.active_policy_id;
-      if (wanted) await applyPolicy(wanted, { silent: true });
+      // Apply what the selector now shows, read AFTER the render: a profile
+      // the user picked while this request was in flight must be applied, not
+      // overwritten by the default. Skip it if that profile already rendered.
+      const wanted = select ? select.value : data.active_policy_id;
+      const already = wanted && state.policy && state.policy.policy_id === wanted;
+      if (wanted && !already) await applyPolicy(wanted, { silent: true });
     } catch (error) {
       state.policyError = error.message;
       renderPolicySelector();
@@ -1446,9 +1457,14 @@
             `<option value="${escapeHtml(profile.policy_id)}">${escapeHtml(profile.label)}</option>`
         )
         .join("");
-      // Keep whatever is already chosen (the user may have picked a profile
-      // while this request was in flight); fall back to the server's active.
-      const wanted = current || catalog.active_policy_id || catalog.default_profile_id || catalog.default_policy_id;
+      // The user's own pick wins; otherwise adopt the server's active profile
+      // so the selector and the Stage 03 card agree after a reload.
+      const wanted =
+        state.policyChoice ||
+        catalog.active_policy_id ||
+        current ||
+        catalog.default_profile_id ||
+        catalog.default_policy_id;
       select.value = wanted && [...select.options].some((o) => o.value === wanted)
         ? wanted
         : catalog.profiles[0].policy_id;
@@ -1467,8 +1483,18 @@
 
   async function applyPolicy(profileId, opts) {
     const options = opts || {};
-    if (state.policyLoading && !options.silent) return;
-    state.policyLoading = true;
+    // Serialise switches: one arriving while another runs waits for it.
+    // Returning early instead is what left the selector on the profile the
+    // user picked while Stage 03, the telemetry strip and the OTP card kept
+    // the profile that was already running.
+    while (state.policyInFlight) {
+      await state.policyInFlight;
+    }
+    let settle;
+    const gate = new Promise((resolve) => {
+      settle = resolve;
+    });
+    state.policyInFlight = gate;
     state.policyError = null;
     try {
       const data = await api("/api/v1/pipeline/apply-policy", {
@@ -1490,10 +1516,14 @@
       }
     } catch (error) {
       state.policyError = error.message;
+      // The switch did not happen, so drop the pick: the selector must show
+      // the profile really in force, not the one that failed to load.
+      state.policyChoice = state.policy ? state.policy.policy_id : null;
       toast(`Policy switch failed: ${error.message}`, "err");
       renderPolicySelector();
     } finally {
-      state.policyLoading = false;
+      settle();
+      if (state.policyInFlight === gate) state.policyInFlight = null;
     }
   }
 
@@ -1529,20 +1559,20 @@
           const fired = reasons[code] || 0;
           const tone = RULE_TONE[copy[2]] || RULE_TONE.muted;
           // R2/C1 show what they stopped; other rules show how often they fired.
-          const isGuard = code === "R2" || code === "C1" || code === "C2";
+          const isGuard = code === "R2" || code === "C1" || code === "C2" || code === "S3";
           // HIER never emits an outcome row — it is the tier hierarchy the R1
           // winner selection walks. When retail_balanced is active the tiers
           // resolved every golden, so "Idle" would deny work that happened.
           if (code === "HIER") {
             if (fired > 0) {
-              return `<div class="p-1.5 rounded bg-surface-panel border border-border-subtle text-caption-micro font-code-sm flex items-center justify-between gap-2">
-            <span class="text-text-body leading-tight truncate">Rule ${escapeHtml(code)}: ${escapeHtml(copy[0])}</span>
+              return `<div class="p-1.5 rounded bg-surface-panel border border-border-subtle text-caption-micro font-code-sm flex items-center justify-between gap-1">
+            <span class="text-text-body leading-tight truncate" title="${escapeHtml(code)}: ${escapeHtml(copy[1] || copy[0])}">Rule ${escapeHtml(code)}: ${escapeHtml(copy[0])}</span>
             <span class="${tone} whitespace-nowrap shrink-0">${escapeHtml(`${num(fired)} Resolved`)}</span>
           </div>`;
             }
             const hierActive = data && data.policy_id === "retail_balanced";
-            return `<div class="p-1.5 rounded bg-surface-panel border border-border-subtle text-caption-micro font-code-sm flex items-center justify-between gap-2">
-            <span class="text-text-body leading-tight truncate">Rule ${escapeHtml(code)}: ${escapeHtml(copy[0])}</span>
+            return `<div class="p-1.5 rounded bg-surface-panel border border-border-subtle text-caption-micro font-code-sm flex items-center justify-between gap-1">
+            <span class="text-text-body leading-tight truncate" title="${escapeHtml(code)}: ${escapeHtml(copy[1] || copy[0])}">Rule ${escapeHtml(code)}: ${escapeHtml(copy[0])}</span>
             <span class="${hierActive ? RULE_TONE.ok : tone} whitespace-nowrap shrink-0">${escapeHtml(hierActive ? "Active" : "Idle")}</span>
           </div>`;
           }
@@ -1553,8 +1583,8 @@
             : fired > 0
               ? `${num(fired)} Fired`
               : "Idle";
-          return `<div class="p-1.5 rounded bg-surface-panel border border-border-subtle text-caption-micro font-code-sm flex items-center justify-between gap-2">
-            <span class="text-text-body leading-tight truncate">Rule ${escapeHtml(code)}: ${escapeHtml(copy[0])}</span>
+          return `<div class="p-1.5 rounded bg-surface-panel border border-border-subtle text-caption-micro font-code-sm flex items-center justify-between gap-1">
+            <span class="text-text-body leading-tight truncate" title="${escapeHtml(code)}: ${escapeHtml(copy[1] || copy[0])}">Rule ${escapeHtml(code)}: ${escapeHtml(copy[0])}</span>
             <span class="${tone} whitespace-nowrap shrink-0">${escapeHtml(value)}</span>
           </div>`;
         })
@@ -2136,7 +2166,9 @@
     if (policySelect) {
       policySelect.addEventListener("change", () => {
         const wanted = policySelect.value;
-        // Optimistic label: the server is authoritative and reverts on error.
+        // Remember it before any await: a catalog fetch or another switch
+        // still in flight must not revert this to the default profile.
+        state.policyChoice = wanted;
         applyPolicy(wanted).catch(() => {});
       });
     }
