@@ -162,7 +162,3 @@ prebuilt into `studio.css` (tokens in `tailwind.config.js`), while Google Fonts
 (Inter, JetBrains Mono) and Material Symbols still load from the network, so
 icons fall back to their text names offline. Vendor those fonts if the demo must
 survive a network loss.
-
-`web/legacy/` holds archived copies of the previous Friendly/Detail
-frontend (`index.html`, `app.js`, `drawers.js`, `chat.js`, `config.js`) for
-reference. It is not served by the new screen and is not maintained.

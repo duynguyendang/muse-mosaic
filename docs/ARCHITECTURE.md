@@ -85,7 +85,7 @@ access control, multi-tenancy, analytics dashboards, mobile/responsive UI.
 
 | Container | Runtime | Responsibility (one job) | Must never |
 |---|---|---|---|
-| `web/` (static files, served by `mosaic-api` at `/` in dev; separately deployable) | Any static host | Display only: Friendly View default (one answer card, three states, one reading order) + full v2.1 screen as one-click Detail View; same endpoints, same golden, same decision id | Call an engine directly, hold secrets, decide a publish |
+| `web/` (static files, served by `mosaic-api` at `/` in dev; separately deployable) | Any static host | Display only: the studio cockpit (`index.html` + `studio.js` + prebuilt `studio.css`); read live ledger numbers, never derive them in the browser | Call an engine directly, hold secrets, decide a publish |
 | `mosaic-api` (Python/FastAPI + uvicorn, `:8000` published) | `mosaic-api/` image | Orchestrate: ingest → match → graph → derive → structure → answer → steward loop; merge proposer outputs; enforce the publisher gate | Run Splink matching, run Datalog derivation, publish without a decision id, write a golden bypassing the ledger |
 | `matching-engine` (Python/FastAPI + DuckDB, `:8081` internal only) | `matching-engine/` image | Statistical matching only: blocking, comparisons, EM weights/probabilities, connected-component clusters via `POST /match` | Publish, choose a winner, decide authority, create taxonomy terms, write anywhere |
 | `trust-engine` (Go + pinned manglekit binary, `:8080` internal only) | `trust-engine/` image | Derivation only: authority, verified, event/time/TTL, link proof, cluster rules, taxonomy check via `POST /derive` | Assemble JSON, validate documents, write the ledger, serve a public port |
