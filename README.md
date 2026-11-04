@@ -106,7 +106,7 @@ cd mosaic-api && USE_MOCK_MUSE=true uvicorn main:app --reload --port 8000
 
 ## Key Verified Benchmarks
 
-Comprehensive verified benchmark results across 302 automated tests:
+Comprehensive verified benchmark results across 292 automated tests:
 
 - **Semantic Disambiguation (10,000 entities, 4,496 pairs):**
   - *Standard string rules:* 255/600 recovered, **116 false merges**.
