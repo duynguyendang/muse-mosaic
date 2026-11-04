@@ -34,6 +34,57 @@ def test_hidden_dataset_lists_f1_to_f6_trap(api_client):
     assert set(main["fields"]) >= {"email"}
 
 
+def test_catalog_keeps_serving_when_a_sample_is_not_pulled(api_client, monkeypatch):
+    """data/kaggle/ is gitignored: a not-yet-regenerated sample must drop out
+    of the catalog without taking the committed ones down with it."""
+    from routes import reference
+
+    monkeypatch.setitem(
+        reference._BUNDLED_DATASETS,
+        "ghost-sample",
+        {
+            "path": "ghost/never_pulled.json",
+            "name": "Ghost",
+            "notice": "never generated",
+            "templates": None,
+        },
+    )
+    response = api_client.get("/datasets/catalog")
+    assert response.status_code == 200, response.text
+    datasets = response.json()["datasets"]
+    ids = [entry["dataset_id"] for entry in datasets]
+    assert "ghost-sample" not in ids, "missing local sample must be skipped"
+    assert "olist" in ids, "committed sample must survive a missing sibling"
+    for entry in datasets:
+        assert entry["document_count"] >= 1
+        assert entry["sources"] and entry["entity_types"]
+    # The direct fetch keeps its 404 contract for the same missing file.
+    assert api_client.get("/datasets/ghost-sample").status_code == 404
+
+
+def test_kaggle_1k_sample_is_advertised_when_pulled(api_client):
+    """The bigger Kaggle sample is its own catalog entry with its real count;
+    until it is generated locally it simply is not listed."""
+    from pathlib import Path
+
+    pulled = (
+        Path(__file__).resolve().parents[1] / "data" / "kaggle" / "customer360_sample_1000.json"
+    ).is_file()
+    response = api_client.get("/datasets/catalog")
+    assert response.status_code == 200, response.text
+    datasets = response.json()["datasets"]
+    if not pulled:
+        assert "kaggle-1k" not in [entry["dataset_id"] for entry in datasets]
+        return
+    entry = next(entry for entry in datasets if entry["dataset_id"] == "kaggle-1k")
+    assert entry["document_count"] == 9426
+    assert set(entry["sources"]) == {"crm", "orders", "catalog"}
+    assert set(entry["entity_types"]) == {"user", "product"}
+    payload = api_client.get("/datasets/kaggle-1k")
+    assert payload.status_code == 200, payload.text
+    assert len(payload.json()["documents"]) == 9426
+
+
 def test_taxonomy_endpoint_serves_terms_and_aliases(api_client):
     response = api_client.get("/taxonomy/user")
     assert response.status_code == 200, response.text

@@ -39,6 +39,7 @@ already loaded in this session, or **upload** a new one.
   | id | dataset | docs | trust policy |
   |---|---|---|---|
   | `kaggle` | Kaggle Customer 360 | 2,554 | `data/kaggle/policies/` |
+  | `kaggle-1k` | Kaggle Customer 360 (1k) | 9,426 | `data/kaggle/policies/` |
   | `olist` | Kaggle Olist E-Commerce | 26 | `data/olist/policies/` |
 
   A dataset's own policy and expected structure are composed at run time from

@@ -137,6 +137,13 @@ _BUNDLED_DATASETS: dict[str, dict[str, Any]] = {
         # defaults in data/mock/templates apply.
         "templates": None,
     },
+    "kaggle-1k": {
+        "path": "kaggle/customer360_sample_1000.json",
+        "name": "Kaggle Customer 360 (1k)",
+        "notice": "Kaggle Customer 360 dataset (9,426 shards across 1,000 CRM accounts).",
+        # Same shape as the 200-row sample, same packaged defaults.
+        "templates": None,
+    },
     "olist": {
         "path": "olist/sample_olist.json",
         "name": "Kaggle Olist E-Commerce",
@@ -231,8 +238,21 @@ def _dataset_catalog_entry(dataset_id: str) -> dict[str, Any]:
 
 @router.get("/datasets/catalog")
 def dataset_catalog(request: Request) -> dict[str, Any]:
-    """Bundled benchmark datasets the UI can switch to (read-only reference)."""
-    return {"datasets": [_dataset_catalog_entry(dataset_id) for dataset_id in _BUNDLED_DATASETS]}
+    """Bundled benchmark datasets the UI can switch to (read-only reference).
+
+    Samples under data/kaggle/ are gitignored and regenerated on demand, so a
+    local-only sample that has not been pulled yet is skipped (404 per entry)
+    instead of failing the whole catalog.
+    """
+    datasets = []
+    for dataset_id in _BUNDLED_DATASETS:
+        try:
+            datasets.append(_dataset_catalog_entry(dataset_id))
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                continue
+            raise
+    return {"datasets": datasets}
 
 
 @router.get("/datasets/kaggle")
