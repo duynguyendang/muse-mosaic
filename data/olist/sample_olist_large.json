@@ -1,0 +1,3917 @@
+{
+ "documents": [
+  {
+   "document_id": "olist-1afe8a9c",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "45200",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "jequie",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-bb874c45",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "bb874c45df1a3c97842d52f31efee99a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-bb874c45-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "bb874c45df1a3c97842d52f31efee99a",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "8f71fe1e1b5bbb6773e7276b5c37ef65",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "95ec4458365c4d11f452ccf538377619",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-8f71fe1e",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "8f71fe1e1b5bbb6773e7276b5c37ef65",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "papelaria",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-24b0e2bd",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "45200",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "jequie",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-c306eca4",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00172711b30d52eea8b313a7f2cced02",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "c306eca42d32507b970739b5b6a5a33a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "canceled",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-1b4a75b3",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "26220",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "nova iguacu",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "RJ",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-a61d617f",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "a61d617fbe5bd006e40d3a0988fc844b",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-a61d617f-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "a61d617fbe5bd006e40d3a0988fc844b",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "6e1b14d3cbb5fb3a2c00351007127dfd",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "7a67c85e85bb2ce8582c35f2203ad736",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-6e1b14d3",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "6e1b14d3cbb5fb3a2c00351007127dfd",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cool_stuff",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-f6efe5d5",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "26220",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "nova iguacu",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "RJ",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-08204559",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004288347e5e88a27ded2bb23747066c",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "08204559bebd39e09ee52dcb56d8faa2",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-08204559-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "08204559bebd39e09ee52dcb56d8faa2",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "a2bd2eae20998a24c22b110334928b02",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "6cd68b3ed6d59aaa9fece558ad360c0a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-a2bd2eae",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "a2bd2eae20998a24c22b110334928b02",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "malas_acessorios",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-49cf243e",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "57055",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "maceio",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "AL",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-90ae229a",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "90ae229a4addcfead792e2564554f09c",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "shipped",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-90ae229a-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "90ae229a4addcfead792e2564554f09c",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "b0961721fd839e9982420e807758a2a6",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1f50f920176fa81dab994f9023523100",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-b0961721",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "b0961721fd839e9982420e807758a2a6",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "ferramentas_jardim",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-d95f60d7",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "57035",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "maceio",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "AL",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-9392c5e7",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "004b45ec5c64187465168251cd1c9c2f",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "9392c5e72885ad5aba87e6223ca9838d",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-9392c5e7-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "9392c5e72885ad5aba87e6223ca9838d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "a6ad77b15e566298a4e8ee2011ab1255",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1025f0e2d44d7041d6cf58b6550e0bfa",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-a6ad77b1",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "a6ad77b15e566298a4e8ee2011ab1255",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "moveis_decoracao",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-8ac44e9c",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0058f300f57d7b93c477a131a59b36c3",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "41370",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "salvador",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-81a93b2f",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0058f300f57d7b93c477a131a59b36c3",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "81a93b2fa39e104b865b2bc471c16008",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-81a93b2f-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "81a93b2fa39e104b865b2bc471c16008",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "4630761de87581e8b659dc77bb7eb4ee",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "dbc22125167c298ef99da25668e1011f",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-4630761d",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "4630761de87581e8b659dc77bb7eb4ee",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "malas_acessorios",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-f530197e",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0058f300f57d7b93c477a131a59b36c3",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "40731",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "salvador",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-2cfc79d9",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0058f300f57d7b93c477a131a59b36c3",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "2cfc79d9582e9135c0a9b61fa60e6b21",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "canceled",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-2cfc79d9-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "2cfc79d9582e9135c0a9b61fa60e6b21",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "6bd248f93425ceeb625a8a97e2404112",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "dbc22125167c298ef99da25668e1011f",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-6bd248f9",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "6bd248f93425ceeb625a8a97e2404112",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "papelaria",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-876356df",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00a39521eb40f7012db50455bf083460",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "72595",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "brasilia",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "DF",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-7d32c87a",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00a39521eb40f7012db50455bf083460",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "7d32c87acba91ed87ebd98310fe1c54d",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-7d32c87a-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "7d32c87acba91ed87ebd98310fe1c54d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "a42d9c825894f96fc6ed02610891454d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "4d6d651bd7684af3fffabd5f08d12e5a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-a42d9c82",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "a42d9c825894f96fc6ed02610891454d",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "esporte_lazer",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-cbb68c72",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00a39521eb40f7012db50455bf083460",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "72595",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "brasilia",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "DF",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-cea3e6c1",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00a39521eb40f7012db50455bf083460",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "cea3e6c11eb60acb9d8d4d51694832f8",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-cea3e6c1-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "cea3e6c11eb60acb9d8d4d51694832f8",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "f89cd865cac300a9bf1320dd8f0fa223",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "8b321bb669392f5163d04c59e235e066",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-f89cd865",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "f89cd865cac300a9bf1320dd8f0fa223",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "eletronicos",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-102fc096",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00cc12a6d8b578b8ebd21ea4e2ae8b27",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "03178",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao paulo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-d61b915b",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00cc12a6d8b578b8ebd21ea4e2ae8b27",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "d61b915b69851aec8a8865f36cfd793e",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-d61b915b-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "d61b915b69851aec8a8865f36cfd793e",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "48ee9be392f28ae3a64518a070f4d06a",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "4a3ca9315b744ce9f8e9374361493884",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-48ee9be3",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "48ee9be392f28ae3a64518a070f4d06a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cama_mesa_banho",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-c0a44bf3",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00cc12a6d8b578b8ebd21ea4e2ae8b27",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "03178",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao paulo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-64307ceb",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "00cc12a6d8b578b8ebd21ea4e2ae8b27",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "64307ceb91666760cf3ff463618302fd",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-64307ceb-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "64307ceb91666760cf3ff463618302fd",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "60d49071f68566b7254c39a7d4ea5c1c",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "d66c305afaec317ebee552073a674429",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-60d49071",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "60d49071f68566b7254c39a7d4ea5c1c",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "eletrodomesticos",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-71c72657",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011575986092c30523ecb71ff10cb473",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "30660",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "belo horizonte",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "MG",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-ed0a6265",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011575986092c30523ecb71ff10cb473",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "ed0a6265b5b0a292cd537214f401f1fc",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-ed0a6265-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "ed0a6265b5b0a292cd537214f401f1fc",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "818430a64bb4e935b35f1f4da32612eb",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "6d66611d7c44cc30ce351abc49a68421",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-818430a6",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "818430a64bb4e935b35f1f4da32612eb",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "instrumentos_musicais",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-bc4011fd",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011575986092c30523ecb71ff10cb473",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "30660",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "belo horizonte",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "MG",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-0f28d51f",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011575986092c30523ecb71ff10cb473",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "0f28d51fdd4828907bdc58b57f672e84",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-0f28d51f-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "0f28d51fdd4828907bdc58b57f672e84",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "098c663630a7a81f7d7f42a2ce0b02d7",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "f9d010e39375d9c91dce3f40b73a2f84",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-098c6636",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "098c663630a7a81f7d7f42a2ce0b02d7",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "brinquedos",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-3db63507",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011b4adcd54683b480c4d841250a987f",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "44200",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "santo amaro",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-93b35aff",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011b4adcd54683b480c4d841250a987f",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "93b35affb86435b71ca01a6dd1eab2b1",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-93b35aff-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "93b35affb86435b71ca01a6dd1eab2b1",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "ed2067a9c1f79553088a3c67b99a9f97",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "cbd996ad3c1b7dc71fd0e5f5df9087e2",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-ed2067a9",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "ed2067a9c1f79553088a3c67b99a9f97",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "alimentos",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-93b35aff-2",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "93b35affb86435b71ca01a6dd1eab2b1",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "ed2067a9c1f79553088a3c67b99a9f97",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "cbd996ad3c1b7dc71fd0e5f5df9087e2",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-ed2067a9",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "ed2067a9c1f79553088a3c67b99a9f97",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "alimentos",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-7e16c78f",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011b4adcd54683b480c4d841250a987f",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "44200",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "santo amaro",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-f05a68aa",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "011b4adcd54683b480c4d841250a987f",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "f05a68aaa0d8f89e758c7134d53fa22a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-f05a68aa-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "f05a68aaa0d8f89e758c7134d53fa22a",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "169e1fedd1319ca92e90e057e7123005",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "e9779976487b77c6d4ac45f75ec7afe9",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-169e1fed",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "169e1fedd1319ca92e90e057e7123005",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "esporte_lazer",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-e024c151",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012452d40dafae4df401bced74cdb490",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "03984",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao paulo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-ce2b4f28",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012452d40dafae4df401bced74cdb490",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "ce2b4f2836d78829e4796213d536101e",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-ce2b4f28-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "ce2b4f2836d78829e4796213d536101e",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "78540c45d4f971380710a35fa4ecc41b",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1da366cade6d8276e7d8beea7af5d4bf",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-78540c45",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "78540c45d4f971380710a35fa4ecc41b",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "moveis_escritorio",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-f8e05a04",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012452d40dafae4df401bced74cdb490",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "03220",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao paulo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-e49d0607",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012452d40dafae4df401bced74cdb490",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "e49d0607832db7c3b1343764225d8df6",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-e49d0607-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "e49d0607832db7c3b1343764225d8df6",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "bb50f2e236e5eea0100680137654686c",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "f7ba60f8c3f99e7ee4042fdef03b70c4",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-bb50f2e2",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "bb50f2e236e5eea0100680137654686c",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "beleza_saude",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-c276d4ce",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012a218df8995d3ec3bb221828360c86",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "06550",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "pirapora do bom jesus",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-e89e48d8",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012a218df8995d3ec3bb221828360c86",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "e89e48d863049f7ca8a49758ae99f58a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-e89e48d8-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "e89e48d863049f7ca8a49758ae99f58a",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "e64fc38d9e0040126742405519bdea19",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "7142540dd4c91e2237acb7e911c4eba2",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-e64fc38d",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "e64fc38d9e0040126742405519bdea19",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "automotivo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-e4bee874",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012a218df8995d3ec3bb221828360c86",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "06550",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "pirapora do bom jesus",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-207258d5",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "012a218df8995d3ec3bb221828360c86",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "207258d556f9b9784b54de837ae49286",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-207258d5-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "207258d556f9b9784b54de837ae49286",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "864413ca56c2bcea359a213956a922c0",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "4d0041cdbe51b4617d95c70b19decc74",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-864413ca",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "864413ca56c2bcea359a213956a922c0",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "automotivo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-450a869e",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013ef03e0f3f408dd9bf555e4edcdc0a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "13092",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "campinas",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-00cee8a4",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013ef03e0f3f408dd9bf555e4edcdc0a",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "00cee8a4dbb042385cbbd84699e78b2e",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-00cee8a4-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "00cee8a4dbb042385cbbd84699e78b2e",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "79e42c4fa2bde6e0c828d23c4fb7df35",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "6d66611d7c44cc30ce351abc49a68421",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-79e42c4f",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "79e42c4fa2bde6e0c828d23c4fb7df35",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "instrumentos_musicais",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-d4f243fb",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013ef03e0f3f408dd9bf555e4edcdc0a",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "13092",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "campinas",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-c94047ec",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013ef03e0f3f408dd9bf555e4edcdc0a",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "c94047ec162181b78322184f7a9aee43",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-c94047ec-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "c94047ec162181b78322184f7a9aee43",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "4099923da3407c3d162a829b0aba4b4e",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "734def04b237117a09321dd6d8f3f2a2",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-4099923d",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "4099923da3407c3d162a829b0aba4b4e",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "brinquedos",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-13e7480f",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013f4353d26bb05dc6652f1269458d8d",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "44065",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "feira de santana",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-9eead354",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013f4353d26bb05dc6652f1269458d8d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "9eead354475b8b8fde3811f26b2599fc",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-9eead354-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "9eead354475b8b8fde3811f26b2599fc",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "9e164b4afdecc7c67fb9b6f12c104e21",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "218d46b86c1881d022bce9c68a7d4b15",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-9e164b4a",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "9e164b4afdecc7c67fb9b6f12c104e21",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "esporte_lazer",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-9eead354-2",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "9eead354475b8b8fde3811f26b2599fc",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "9e164b4afdecc7c67fb9b6f12c104e21",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "218d46b86c1881d022bce9c68a7d4b15",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-9e164b4a",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "9e164b4afdecc7c67fb9b6f12c104e21",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "esporte_lazer",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-94074895",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013f4353d26bb05dc6652f1269458d8d",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "44065",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "feira de santana",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-ddc5df3b",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "013f4353d26bb05dc6652f1269458d8d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "ddc5df3b1c497720bae1692c170baec0",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-ddc5df3b-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "ddc5df3b1c497720bae1692c170baec0",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "d22625c4bd160a54f96629f139153c74",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "c3cfdc648177fdbbbb35635a37472c53",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-d22625c4",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "d22625c4bd160a54f96629f139153c74",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "esporte_lazer",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-0e94fdb0",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "015557c9912277312b9073947804a7ba",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "13870",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao joao da boa vista",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-48d9d778",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "015557c9912277312b9073947804a7ba",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "48d9d778ca005971949d2ccad7e99d70",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-48d9d778-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "48d9d778ca005971949d2ccad7e99d70",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "42a2c92a0979a949ca4ea89ec5c7b934",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "813348c996469b40f2e028d5429d3495",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-42a2c92a",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "42a2c92a0979a949ca4ea89ec5c7b934",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "utilidades_domesticas",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-4aeab499",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "015557c9912277312b9073947804a7ba",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "13870",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao joao da boa vista",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-482c052d",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "015557c9912277312b9073947804a7ba",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "482c052df6392e43296eba90754938fc",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-482c052d-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "482c052df6392e43296eba90754938fc",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "62953ad36e6c894ce69fc72d9a5246f3",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "4a3ca9315b744ce9f8e9374361493884",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-62953ad3",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "62953ad36e6c894ce69fc72d9a5246f3",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cama_mesa_banho",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-483468a5",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0178b244a5c281fb2ade54038dd4b161",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "12518",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "guaratingueta",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-a72698cb",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0178b244a5c281fb2ade54038dd4b161",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "a72698cb5818851e1f19815692cf256b",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-a72698cb-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "a72698cb5818851e1f19815692cf256b",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "99a4788cb24856965c36a24e339b6058",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "4a3ca9315b744ce9f8e9374361493884",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-99a4788c",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "99a4788cb24856965c36a24e339b6058",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cama_mesa_banho",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ea6ba2b2",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0178b244a5c281fb2ade54038dd4b161",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "14960",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "novo horizonte",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-94ca3861",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "0178b244a5c281fb2ade54038dd4b161",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "94ca38619d7e64f94facac403a99682d",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-94ca3861-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "94ca38619d7e64f94facac403a99682d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "05df88a280f9c6edca3b2f5f9b3e75ad",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "7ad32824caee82087b3e2e5f33b1bf32",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-05df88a2",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "05df88a280f9c6edca3b2f5f9b3e75ad",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cama_mesa_banho",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-94ca3861-2",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "94ca38619d7e64f94facac403a99682d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "32dfa38395ccd47d7b320470b0514fee",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1900267e848ceeba8fa32d80c1a5f5a8",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-32dfa383",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "32dfa38395ccd47d7b320470b0514fee",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cama_mesa_banho",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-94ca3861-3",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "94ca38619d7e64f94facac403a99682d",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "32dfa38395ccd47d7b320470b0514fee",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1900267e848ceeba8fa32d80c1a5f5a8",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-32dfa383",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "32dfa38395ccd47d7b320470b0514fee",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "cama_mesa_banho",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-306e7f5a",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "01886ef98f995e4f2dd75a1d04c97397",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "01240",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao paulo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-ce8d55aa",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "01886ef98f995e4f2dd75a1d04c97397",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "ce8d55aa1c206156fde37e062c716ea2",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-ce8d55aa-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "ce8d55aa1c206156fde37e062c716ea2",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "83b23a333b811855258c5ec9431f6d3e",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "1da3aeb70d7989d1e6d9b0e887f97c23",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-83b23a33",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "83b23a333b811855258c5ec9431f6d3e",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "beleza_saude",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-7f6a3aaa",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "01886ef98f995e4f2dd75a1d04c97397",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "01240",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "sao paulo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "SP",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-f17c68f9",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "customer_unique_id": {
+     "value": "01886ef98f995e4f2dd75a1d04c97397",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "f17c68f902fd50e36d9c37ccf4c85870",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-f17c68f9-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "order_id": {
+     "value": "f17c68f902fd50e36d9c37ccf4c85870",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "678f2ac714d00eef5ccc48a9b25b2fef",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "8b2492b7ff4468839593fafeed55bad9",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-678f2ac7",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": false,
+   "fields": {
+    "product_id": {
+     "value": "678f2ac714d00eef5ccc48a9b25b2fef",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "beleza_saude",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-9c6ea4e6",
+   "entity_type": "user",
+   "source": "olist-customers",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "customer_unique_id": {
+     "value": "060874c9cbadb6df3d73ddea97e55bf7",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_zip": {
+     "value": "45200",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_city": {
+     "value": "jequie",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "customer_state": {
+     "value": "BA",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-ord-88498659",
+   "entity_type": "user",
+   "source": "olist-orders",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "customer_unique_id": {
+     "value": "060874c9cbadb6df3d73ddea97e55bf7",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_id": {
+     "value": "88498659c4bfb68808d6b49a57a6ed17",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "order_status": {
+     "value": "delivered",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-item-88498659-1",
+   "entity_type": "user",
+   "source": "olist-items",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "order_id": {
+     "value": "88498659c4bfb68808d6b49a57a6ed17",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_id": {
+     "value": "24ef70f010919148b022e66b05862778",
+     "authority_rank": 2,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "seller_id": {
+     "value": "a938325a4b357fd23a6a4d5bb126408e",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  },
+  {
+   "document_id": "olist-prod-24ef70f0",
+   "entity_type": "user",
+   "source": "olist-products",
+   "synthetic": false,
+   "trap": true,
+   "fields": {
+    "product_id": {
+     "value": "24ef70f010919148b022e66b05862778",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    },
+    "product_category": {
+     "value": "automotivo",
+     "authority_rank": 1,
+     "event_time": "2026-11-05T06:05:38.957583+00:00",
+     "verified": true,
+     "ttl_seconds": 3600
+    }
+   }
+  }
+ ],
+ "meta": {
+  "source": "olistbr/brazilian-ecommerce (official olist/work-at-olist-data mirror)",
+  "main_unique_ids": [
+   "00172711b30d52eea8b313a7f2cced02",
+   "004288347e5e88a27ded2bb23747066c",
+   "004b45ec5c64187465168251cd1c9c2f",
+   "0058f300f57d7b93c477a131a59b36c3",
+   "00a39521eb40f7012db50455bf083460",
+   "00cc12a6d8b578b8ebd21ea4e2ae8b27",
+   "011575986092c30523ecb71ff10cb473",
+   "011b4adcd54683b480c4d841250a987f",
+   "012452d40dafae4df401bced74cdb490",
+   "012a218df8995d3ec3bb221828360c86",
+   "013ef03e0f3f408dd9bf555e4edcdc0a",
+   "013f4353d26bb05dc6652f1269458d8d",
+   "015557c9912277312b9073947804a7ba",
+   "0178b244a5c281fb2ade54038dd4b161",
+   "01886ef98f995e4f2dd75a1d04c97397"
+  ],
+  "trap_unique_id": "060874c9cbadb6df3d73ddea97e55bf7",
+  "dropped": {
+   "orders_missing_customer": 0,
+   "items_missing_order": 0,
+   "items_missing_product": 0
+  },
+  "mapping": {
+   "customer_unique_id": "verbatim customer_unique_id (person key per dataset docs)",
+   "customer_zip/city/state": "verbatim location fields",
+   "order_id": "verbatim order key (exact link proof)",
+   "product_id/seller_id": "verbatim item keys",
+   "product_category": "verbatim category name (raw Portuguese)"
+  },
+  "event_time_note": "import batch timestamp for TTL liveness; recency not asserted"
+ }
+}

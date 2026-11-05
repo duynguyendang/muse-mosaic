@@ -203,7 +203,7 @@ def main() -> int:
                 "idempotency_key": "kag-products",
                 "dataset": {"documents": product_docs},
             },
-            timeout=600,
+            timeout=3600,
         )
         response.raise_for_status()
         products = response.json()
@@ -221,7 +221,7 @@ def main() -> int:
                 "idempotency_key": "kag-users",
                 "dataset": {"documents": user_docs},
             },
-            timeout=600,
+            timeout=3600,
         )
         response.raise_for_status()
         users = response.json()

@@ -43,7 +43,7 @@ import dataclasses
 import io
 import sys
 import zipfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -73,6 +73,22 @@ DATASETS: dict[str, dict] = {
         "fields": ("title", "authors", "venue", "year"),
         "entity_type": "publication",
     },
+    # Kaggle synthetic-messy customers (syedtahahassan/messy-customer-data-10k-records-to-clean):
+    # 10,666 rows, 10,000 unique customer_ids, 666 duplicated ids appearing
+    # exactly twice. Gold pairs = same customer_id. All dup pairs are exact
+    # after normalisation (casing/spacing variants), so this measures recall
+    # behaviour on real-world dirty dirt, not semantic discrimination.
+    "messy-customers": {
+        "kind": "messy_csv",
+        # the pipeline's discriminating identifier for person records here is
+        # email (names come from a pool of 30), so the M arm bases on it
+        "muse_base": "email_exact",
+        "kaggle_dataset": "syedtahahassan/messy-customer-data-10k-records-to-clean",
+        "kaggle_file": "dirty_customers.csv",
+        "entity_type": "user",
+        "sources": ("kaggle-messy",),
+        "fields": ("full_name", "email"),
+    },
 }
 
 SIM_THRESHOLD = 0.9  # string-rules arm: title similarity at or above this merges
@@ -83,12 +99,84 @@ def _rows(zf: zipfile.ZipFile, name: str) -> list[dict]:
     return list(csv.DictReader(io.StringIO(raw)))
 
 
-def load(spec: dict) -> tuple[list[dict], dict[str, str], dict]:
-    """Fragments (one per table row), truth[doc_id] -> truth cluster key, stats.
+def _messy_csv_path(spec: dict) -> Path:
+    """Resolve (and fetch on first use) the raw messy-customers CSV."""
+    cached = (
+        Path.home()
+        / ".cache"
+        / "kagglehub"
+        / "datasets"
+        / spec["kaggle_dataset"]
+        / "versions"
+        / "1"
+        / spec["kaggle_file"]
+    )
+    if cached.is_file():
+        return cached
+    try:
+        import kagglehub
+    except ImportError:
+        raise SystemExit(
+            f"missing {cached}; run `pip install kagglehub` (or place {spec['kaggle_file']} there)"
+        ) from None
+    return Path(kagglehub.dataset_download(spec["kaggle_dataset"])) / spec["kaggle_file"]
 
-    Truth clusters come from union-find over every labelled pair with label=1,
-    across train+valid+test: that is the full published pair set.
+
+def _load_messy_customers(spec: dict) -> tuple[list[dict], dict[str, str], dict]:
+    """Single-table Kaggle messy customers: no tableA/tableB split exists.
+
+    Every row is one fragment; customer_id is the shared key, so the 666
+    duplicated ids are the gold pairs (one pair per duplicated id).
     """
+    path = _messy_csv_path(spec)
+    docs: list[dict] = []
+    truth: dict[str, str] = {}
+    rows = list(csv.DictReader(open(path, encoding="utf-8", errors="replace")))
+    for i, row in enumerate(rows):
+        name = (row.get("full_name") or "").strip()
+        if not name:
+            continue
+        fields = {"display_name": {"value": name}}
+        email = (row.get("email") or "").strip()
+        if email:
+            fields["email"] = {"value": email}
+        doc_id = f"MC-{i:05d}"
+        docs.append(
+            {
+                "document_id": doc_id,
+                "entity_type": spec["entity_type"],
+                "source": spec["sources"][0],
+                "synthetic": True,
+                "fields": fields,
+            }
+        )
+        truth[doc_id] = (row.get("customer_id") or "?").strip()
+    dup = set()
+    counts = Counter()
+    for value in truth.values():
+        counts[value] += 1
+    for value, count in counts.items():
+        if count == 2:
+            dup.add(value)
+    truth_clusters = sum(1 for c in counts.values() if c > 1)
+    stats = {
+        "rows_a": len(docs),
+        "rows_b": 0,
+        "documents": len(docs),
+        "pairs_labelled": len(dup),
+        "pairs_positive": len(dup),  # 666; transitive closure of a pair is one pair
+        "truth_clusters": truth_clusters,
+    }
+    return docs, truth, stats
+
+
+def load(spec: dict) -> tuple[list[dict], dict[str, str], dict]:
+    """Fragments (one per table row, or per CSV row for messy-customers)."""
+    if spec.get("kind") == "messy_csv":
+        return _load_messy_customers(spec)
+    # truth[doc_id] -> truth cluster key, stats.
+    # Truth clusters come from union-find over every labelled pair with
+    # label=1, across train+valid+test: the full published pair set.
     zf = zipfile.ZipFile(DATA / spec["zip"])
     prefix = spec["prefix"]
     table_a, table_b = _rows(zf, prefix + "tableA.csv"), _rows(zf, prefix + "tableB.csv")
@@ -207,6 +295,24 @@ def blocking_candidates(docs: list[dict], strategy: str) -> set[tuple[str, str]]
 
     def add(key: str, doc_id: str, bucket: dict[str, list[str]]) -> None:
         bucket.setdefault(key, []).append(doc_id)
+
+    if strategy == "email_exact":
+        # The identity-hint arm: exact email, placeholders excluded. On the
+        # messy-customers set this is the discriminating signal — names come
+        # from a pool of 30, emails are one-per-customer.
+        PLACEHOLDERS = {"", "n/a", "na", "-", "none", "null", "?"}
+        bucket: dict[str, list[str]] = {}
+        for doc in docs:
+            raw = doc.get("fields", {}).get("email")
+            value = (raw.get("value") if isinstance(raw, dict) else raw) or ""
+            value = value.strip().casefold()
+            if value not in PLACEHOLDERS:
+                add(value, doc["document_id"], bucket)
+        for members in bucket.values():
+            for i, a in enumerate(members):
+                for b in members[i + 1 :]:
+                    candidates.add((a, b))
+        return candidates
 
     if strategy in ("exact_raw", "exact_norm", "tokens_any", "tokens"):
         if strategy in ("exact_raw", "exact_norm"):
@@ -375,9 +481,14 @@ def build_settings(judge: str, min_confidence: str, max_pairs: int) -> Settings:
 async def run(name: str, args: argparse.Namespace) -> None:
     spec = DATASETS[name]
     docs, truth, stats = load(spec)
+    source_label = (
+        f"rows={stats['rows_a']:,}"
+        if spec.get("kind") == "messy_csv"
+        else f"rows A={stats['rows_a']:,} B={stats['rows_b']:,}"
+    )
     print(f"\n=== {name} ===")
     print(
-        f"rows A={stats['rows_a']:,} B={stats['rows_b']:,} -> documents={stats['documents']:,} | "
+        f"{source_label} -> documents={stats['documents']:,} | "
         f"labelled pairs={stats['pairs_labelled']:,} (positive={stats['pairs_positive']:,}) | "
         f"truth clusters={stats['truth_clusters']:,} | entity={spec['entity_type']}"
     )
@@ -385,6 +496,7 @@ async def run(name: str, args: argparse.Namespace) -> None:
     strategies = (
         ("A  exact, raw title", "exact_raw"),
         ("B  exact, normalised title", "exact_norm"),
+        ("E  exact email (identity hint)", "email_exact"),
         ("T0 token block, any shared token", "tokens_any"),
         ("T  token block + similarity >= 0.9", "tokens"),
     )
@@ -409,7 +521,7 @@ async def run(name: str, args: argparse.Namespace) -> None:
     # the way the pipeline works; the shortlist decides who is worth judging
     # and the judge adds the links it is sure of.
     entity_type = spec["entity_type"]
-    base_pairs = blocking_candidates(docs, "exact_norm")
+    base_pairs = blocking_candidates(docs, spec.get("muse_base", "exact_norm"))
     base = pipeline_clusters(docs, base_pairs, entity_type)
     settings = build_settings(args.judge, args.min_confidence, args.max_pairs)
     shortlist_stats: dict[str, Any] = {}
@@ -473,7 +585,8 @@ async def _amain(args: argparse.Namespace) -> int:
     missing = [
         name
         for name in (DATASETS if args.dataset == "all" else [args.dataset])
-        if not (DATA / DATASETS[name]["zip"]).is_file()
+        if DATASETS[name].get("kind") != "messy_csv"
+        and not (DATA / DATASETS[name]["zip"]).is_file()
     ]
     if missing:
         print(

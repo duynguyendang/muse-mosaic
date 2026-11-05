@@ -106,7 +106,7 @@ cd mosaic-api && USE_MOCK_MUSE=true uvicorn main:app --reload --port 8000
 
 ## Key Verified Benchmarks
 
-Comprehensive verified benchmark results across 333 automated tests:
+Comprehensive verified benchmark results across 362 automated tests:
 
 - **Semantic Disambiguation (10,000 entities, 4,496 pairs):**
   - *Standard string rules:* 255/600 recovered, **116 false merges**.
@@ -115,6 +115,9 @@ Comprehensive verified benchmark results across 333 automated tests:
   - *DBLP-ACM dirty:* **F1 23.9% → 85.8%** (oracle ceiling 99.6%).
   - *Amazon-Google:* **F1 15.2% → 50.4%** (oracle ceiling 96.9%).
   - Candidate recall of the pipeline's own blocking index: **93.9% / 99.2%** — blocking is not the weak point; judge visibility was, and it is now fixed.
+- **Kaggle messy customers (10,666 rows, 666 labelled duplicate pairs):**
+  - *Name-only blocking:* recall 100% but precision ~0% — the name pool has 30 distinct values, so it merges strangers (this is the failure the fail-closed design refuses to paper over).
+  - *Identity blocking (exact email):* **precision 100%**, recall 91.9% — every miss shares a placeholder/missing email and is withheld rather than guessed.
 - **Hard Names (Nicknames, Transpositions, Vietnamese Diacritics):**
   - **100% precision** across 479 labelled test pairs. Zero spouses or namesakes falsely merged.
 - **Fixpoint Convergence Speed:**
@@ -140,9 +143,9 @@ Comprehensive verified benchmark results across 333 automated tests:
 ├── trust-engine/      # High-performance Go service executing Manglekit Datalog Horn clauses
 ├── matching-engine/   # Splink + DuckDB candidate clustering service
 ├── web/               # Studio UI (HTML/Tailwind/JS), brand assets, and architecture slides
-├── data/              # Policy profiles (strict_bcbs239, retail_balanced, analytical_mesh), mock data
+├── data/              # Policy profiles (strict_bcbs239, retail_balanced, analytical_mesh), mock data, entity schema contracts (data/schemas/)
 ├── docs/              # ARCHITECTURE.md, TEST-REPORT.md, ROADMAP.md
-└── scripts/           # Scale and evaluation harnesses
+└── scripts/           # Scale and evaluation harnesses; zero-touch onboarding (onboard.py)
 ```
 
 ---

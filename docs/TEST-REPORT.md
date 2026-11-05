@@ -5,8 +5,8 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | | |
 | --- | --- |
-| Date | 2026-11-03 |
-| Commit | branch `muse-impact-ui` (Muse impact view); baseline `7721f95` |
+| Date | 2026-11-05 |
+| Commit | branch `main` @ `b74368d`, plus the uncommitted M0–M2 onboarding changes this run verifies |
 | Python | 3.12.3 |
 | pytest | 9.1.1 |
 | Go | 1.25.1 |
@@ -17,12 +17,12 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Python tests | `python3 -m pytest -q` | **302 passed, 0 failed**, 149.31 s |
+| Python tests | `python3 -m pytest -q` | **362 passed, 0 failed**, 104.42 s |
 | Lint | `ruff check mosaic-api matching-engine scripts tests shared` | **clean** |
-| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 86 files unchanged |
+| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 97 files unchanged |
 | Go format | `gofmt -l .` | **clean**, no output |
 | Go vet | `go vet ./...` | **clean**, no output |
-| Go tests | `go test -count=1 ./...` | **ok**, 0.209 s |
+| Go tests | `go test -count=1 ./...` | **ok**, 0.037 s |
 
 The suite is not a mock-only suite. `tests/conftest.py` builds the pinned
 `mkit` binary, starts the real trust-engine on a free port, and starts the
@@ -31,32 +31,40 @@ run needs no external network and no Meta API key.
 
 ```text
 $ python3 -m pytest -q
-........................................................................ [ 25%]
-........................................................................ [ 50%]
-........................................................................ [ 75%]
-.....................................................................    [100%]
-302 passed in 149.31s (0:02:29)
+........................................................................ [ 21%]
+........................................................................ [ 42%]
+........................................................................ [ 64%]
+........................................................................ [ 85%]
+...............................................                          [100%]
+362 passed in 104.42s (0:01:44)
 
 $ python3 -m ruff check mosaic-api matching-engine scripts tests shared
 All checks passed!
 
 $ python3 -m black --check mosaic-api matching-engine scripts tests shared
-All done! 86 files would be left unchanged.
+All done! 97 files would be left unchanged.
 
 $ cd trust-engine && gofmt -l . && go vet ./... && go test -count=1 ./...
-ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.209s
+ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.037s
 ```
 
 ## Suite inventory
 
-302 collected tests across 30 files (17 added on `g1-g2-slice`, all in `test_muse_candidates.py`).
+362 collected tests across 35 files. Since the 2026-11-03 snapshot (302):
+five new files — `test_onboarding.py` (16) and `test_spec_files.py` (11) from
+the M0–M2 onboarding work, `test_schema_contract.py` (10),
+`test_entity_judging.py` (19) and `test_eval_deepmatcher.py` (7) from the
+entity-contract / DeepMatcher slice; `test_muse_candidates.py` grew 48 → 55
+(unknown-entity 422, product-golden publication, report fold); the archived
+legacy frontend removal shrank `test_ui_wiring.py` 19 → 7.
 
 | Area | Tests | Files | What it proves |
 | --- | --- | --- | --- |
 | Contract, rules, trust gate | 88 | 9 | Facts and goldens carry provenance; user/product authority, freshness, TTL and conflict rules hold; S1/S2 semantic evidence and the S3 guard behave; split, rollback and replay are exact; killing the engine publishes nothing |
 | Taxonomy | 41 | 3 | Versioned vocabulary, exact-match mapping, steward Accept creates a new version and re-derives, evidence-verified extension accepts only what the data attests |
-| Muse and model layer | 82 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure; Copilot closed vocabulary |
-| Pipeline, API, jobs, UI | 91 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end |
+| Muse and model layer | 89 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure, report fold across entity types; Copilot closed vocabulary |
+| Pipeline, API, jobs, UI | 81 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end |
+| Entity contracts and onboarding | 63 | 5 | Specs ship as validated data; the onboarding compiler derives a bundle or refuses; unknown entity types fail closed; the DeepMatcher harness pins metric maths and raw counts |
 
 Per file:
 
@@ -64,9 +72,9 @@ Per file:
 | --- | --- | --- |
 | `test_contract.py` | 35 | Fact/golden schema, provenance, policy and taxonomy rejection, DDL, mock-data shape |
 | `test_taxonomy_proposals.py` | 34 | Evidence checks (ground, attest, not-a-variant, relate, unique), digit-safe skeleton, version lineage, atomic writes, idempotency |
-| `test_muse_candidates.py` | 48 | Shortlist scoring and caps, no global cap, verdict cache (reuse, invalidation, 1,200-key chunking), parallel judge, partial and total failure, merge limits |
+| `test_muse_candidates.py` | 55 | Shortlist scoring and caps, no global cap, verdict cache (reuse, invalidation, 1,200-key chunking), parallel judge, partial and total failure, merge limits |
 | `test_rules_user.py` | 21 | G-01..G-20 user survivorship through the live engine |
-| `test_ui_wiring.py` | 19 | DOM ids referenced by `studio.js` exist in `index.html`; file split guards |
+| `test_ui_wiring.py` | 7 | DOM ids referenced by `studio.js` exist in `index.html`; file split guards |
 | `test_semantic_rules.py` | 15 | S1 `semantic_phone`, S2 `semantic_email`, S3 guard, against the live engine |
 | `test_policy_copilot.py` | 14 | Closed vocabulary, deterministic compile, engine verdict, refusal with a reason |
 | `test_jobs.py` | 10 | Enqueue, run, replay, resume, retry, cancel, budgets |
@@ -78,12 +86,17 @@ Per file:
 | `test_rules_product.py` | 7 | P-01..P-06 product category through the live engine |
 | `test_export.py` | 7 | Export shape, lineage per field, policy/taxonomy versions, verify page |
 | `test_build.py` | 7 | End-to-end `/build`, `/upload`, `/graph`, `/downstream`, Accept |
-| `test_reference.py` | 6 | Read-only reference endpoints and demo kill switch |
+| `test_reference.py` | 8 | Read-only reference endpoints and demo kill switch |
 | `test_taxonomy_accept.py` | 4 | Steward-only new term, new version, re-derive |
 | `test_meta_tooling.py` | 4 | Wonder and Prompt Guard are conditional and honestly stubbed |
 | `test_auth.py` | 4 | Token gates every write; reads stay open |
 | `test_analyser.py` | 4 | Orphan, stale and duplicate findings become steward items; overdue scan |
 | `test_taxonomy.py` | 3 | Versioned vocabulary and exact synonym mapping |
+| `test_entity_judging.py` | 19 | Per-entity judging, grouping prompt, admission contract |
+| `test_onboarding.py` | 16 | Profiling, mapping refusals, taxonomy bootstrap, policy derivation, all-or-nothing bundles |
+| `test_spec_files.py` | 11 | Shipped specs load from data; invalid specs fail closed; a new entity is a data drop |
+| `test_schema_contract.py` | 10 | Roles, normalizers, prompt compiler, privacy gate, verdict cache keys |
+| `test_eval_deepmatcher.py` | 7 | Metric maths, raw-data counts, truth construction for the ground-truth harness |
 | `test_structure.py` | 3 | Whole-document validation; mismatch withholds the golden |
 | `test_olist_brazilian.py` | 3 | Real Olist data end to end on an isolated stack |
 | `test_matching_engine.py` | 3 | Health, `/match` contract, proposer-only behaviour |
@@ -104,12 +117,16 @@ Per file:
 | Fail closed when the engine is down | `test_kill_service.py`, `test_flows.py`, `test_jobs.py` | verified |
 | Split, rollback and replay are exact | `test_split.py`, `test_idempotency.py` | verified |
 | Splink proposes only; malformed output fails closed | `test_splink.py` (8), `test_matching_engine.py` (3) | verified |
-| Candidate matching scales without a global cap | `test_muse_candidates.py` (48) | verified |
+| Candidate matching scales without a global cap | `test_muse_candidates.py` (55) | verified |
 | Verdict cache never changes a decision, prompt edits invalidate | `test_muse_candidates.py` | verified |
 | Taxonomy extension accepts only attested, related terms | `test_taxonomy_proposals.py` (34) | verified |
 | Copilot cannot write policy or Datalog | `test_policy_copilot.py` (14) | verified |
 | Conditional Meta tools are not simulated | `test_meta_tooling.py` (4) | verified |
-| UI references only existing DOM ids | `test_ui_wiring.py` (19) | verified |
+| UI references only existing DOM ids | `test_ui_wiring.py` (7) | verified |
+| Entity schema contracts ship as validated data; a bad spec never half-loads | `test_spec_files.py` (11) | verified |
+| Unknown entity types fail closed (422 / raise), never silently judged | `test_muse_candidates.py` (55), `test_schema_contract.py` (10) | verified |
+| The onboarding compiler derives a bundle or refuses; nothing is half-derived | `test_onboarding.py` (16) | verified |
+| A merged product golden never publishes guessed identity | `test_muse_candidates.py` (55) | verified |
 
 ## Measured benchmarks
 
@@ -134,15 +151,62 @@ the Muse arms; the numbers below are the ones recorded in `README.md`.
 | `eval_taxonomy_gap.py`, Kaggle 389 products | Rules / Muse + evidence | 389 unified, 0 wrong, 0 held | measured (live engine) |
 | `eval_taxonomy_gap.py`, semantic 88 records | Muse + evidence | 58 unified, 0 fragmented, 0 wrong | measured (live engine, pre-digit-fix caveat) |
 
+### Ground-truth accuracy (labelled pair sets, `eval_deepmatcher.py`)
+
+`eval_deepmatcher.py` scores blocking and judge arms on labelled pair sets —
+nothing sampled, truth from union-find over the published pairs. Mock rows are
+from the 2026-11-05 rerun; the live Muse rows are the recorded live run quoted
+in `README.md` (commits `3997f60`..`b74368d`).
+
+| Benchmark | Arm | Result | Status |
+| --- | --- | --- | --- |
+| Amazon-Google (4,589 docs, 1,167 positive pairs) | String rules (T) | F1 15.2% | measured (mock, 2026-11-05) |
+| Amazon-Google | Token candidate recall | 93.9% | measured (mock, 2026-11-05) |
+| Amazon-Google | Oracle over token candidates | F1 96.9% | measured (mock, 2026-11-05) |
+| Amazon-Google | Muse on top of B | F1 50.4% | measured (live, recorded run) |
+| DBLP-ACM dirty (4,910 docs, 2,220 positive pairs) | String rules (T) | F1 23.9% | measured (mock, 2026-11-05) |
+| DBLP-ACM dirty | Token candidate recall | 99.2% | measured (mock, 2026-11-05) |
+| DBLP-ACM dirty | Oracle over token candidates | F1 99.6% | measured (mock, 2026-11-05) |
+| DBLP-ACM dirty | Muse on top of B | F1 85.8% | measured (live, recorded run) |
+| Kaggle messy-customers (10,666 rows, 666 gold pairs) | Exact name, raw / normalised | recall 100% but precision 0.1% / 0.0% — 50 / 20 impure mega-clusters | measured (mock, 2026-11-05) |
+| Kaggle messy-customers | Token block | 0 candidates: every name in the 30-name pool is hot | measured (mock, 2026-11-05) |
+| Kaggle messy-customers | Exact email (identity hint) | precision **100%**, recall 91.9% (612/666), F1 **95.8%**, 0 impure clusters | measured (mock, 2026-11-05) |
+| Kaggle messy-customers | M arm on identifier base (mock) | identical to the E arm; the judge is never called — there is no middle band to decide | measured (mock, 2026-11-05) |
+
+Reading the messy-customers rows: the name pool is 30 distinct values across
+10,666 rows, so name-only matching merges strangers (precision ~0) and token
+blocking yields nothing — exactly the failure the fail-closed design refuses to
+paper over. Exact email recovers every gold pair that carries one (612/666);
+the 54 misses all share a placeholder or missing email (N/A, `-`, none, null,
+`?`) and are correctly withheld rather than guessed. This set measures recall
+behaviour on real-world dirty dirt, not semantic discrimination — every gold
+pair is exact after normalisation.
+
+### Scale runs (end-to-end stacks, 2026-11-05)
+
+Full three-service stacks (real trust-engine + Splink 5.0.0 + mosaic-api),
+mock proposer, fresh scratch ledger per run.
+
+| Run | Result | Status |
+| --- | --- | --- |
+| Kaggle Customer 360, 5,000-row sample (43,377 docs: 42,907 user, 470 product), `scripts/kaggle_e2e.py` | Users: 1,772 s, 4,928 clusters / 71,918 candidate pairs, **4,791 goldens published** (email 4,791, display_name 4,757, address 4,775, phone 4,775), 4,823 steward items, overall verdict `escalated` (137 clusters withheld); downstream OTP check on a golden: pass. Products: 8 s, 39 clusters / 8,804 pairs, 0 goldens — every category escalates T1 (no product taxonomy seeded), 548 steward items | measured (mock proposer, 2026-11-05) |
+| Kaggle Customer 360, frozen 1,000-row sample | previously recorded: 9,426 docs, 170 clusters from 7,781 pairs, 163 goldens (source: `docs/internal/` write-up, git-ignored) | measured (mock proposer, recorded run) |
+| Olist large frozen sample (130 docs, 15 repeat-customer clusters + 1 trap), `OLIST_SAMPLE=data/olist/sample_olist_large.json pytest tests/test_olist_brazilian.py` | 3/3 pass in 29.13 s — verbatim values, L1 exact-order proofs, trap never merged | measured (live engine, 2026-11-05) |
+| Olist frozen 26-doc sample (default) | 3/3 pass in 9.42 s | measured (live engine, 2026-11-05) |
+
 Reproduce:
 
 ```bash
+python3 scripts/eval_deepmatcher.py --dataset all --judge mock
+python3 scripts/eval_deepmatcher.py --dataset messy-customers --judge live
 python3 scripts/eval_muse_scale.py --people 10000 --judge mock
 python3 scripts/eval_muse_scale.py --people 10000 --judge live   # needs .env
 python3 scripts/eval_muse_scale.py --people 100000 --judge mock
 python3 scripts/eval_hard_names.py --judge mock|live
 python3 scripts/eval_muse_candidates.py
 python3 scripts/eval_taxonomy_gap.py --dataset semantic --arms A B C D
+python3 scripts/kaggle_e2e.py --sample data/kaggle/customer360_sample_5000.json
+OLIST_SAMPLE=data/olist/sample_olist_large.json python3 -m pytest tests/test_olist_brazilian.py
 ```
 
 ## Not verified
@@ -151,11 +215,26 @@ Stated here so the passing suite is not read as a broader claim:
 
 - **The 100k Muse arm has not been run.** The 100k table is rules and oracle
   only. Budgeting ~6,600 judge calls is a product decision, not a test result.
-- **Generalisation to another schema or script is not verified.** Candidate
-  matching reads `display_name` / `address` / `phone` / `email` and runs only for
-  `entity_type == "user"`. A 10k Vietnamese-name set with realistic surname
-  distribution returns 0 candidate pairs because every token is hot. Taxonomy
-  verification is Latin-only (`skeleton()` keeps `[a-z0-9]`).
+- **Schema generalisation is verified only on these datasets.** Since M0–M2
+  the entity contract is data (`data/schemas/*.json`), Muse runs per entity
+  type, and the onboarding compiler derives working bundles for the DeepMatcher
+  product/publication sets and the Kaggle person sets (deterministic replay,
+  engine-validated policies). Still not verified: a brand-new entity type
+  driven end-to-end through `/build` on live data, and taxonomy verification
+  beyond Latin (`skeleton()` keeps `[a-z0-9]`).
+- **The new Kaggle runs are mock-proposer runs.** The Customer-360 5k e2e and
+  the messy-customers arms run with `USE_MOCK_MUSE=true`
+  (`proposer_mode=mock`) — the same methodology as the documented 1k Kaggle
+  run. They measure pipeline plumbing, fail-closed behaviour and blocking
+  recall at scale, not model accuracy. Live-Muse evidence stays the DeepMatcher
+  and hard-names rows above.
+- **The messy-customers live Muse arm is deliberately unrun.** All 666 gold
+  pairs are exact after normalisation, so there is no middle band for a judge
+  to decide; live calls would add nothing measurable. The 54 gold pairs with
+  placeholder emails are unmergeable from this data by construction.
+- **Kaggle products publish nothing in these runs (0 goldens, expected).** No
+  product taxonomy is seeded for the 5k run, so T1 escalates every category —
+  fail-closed behaviour, not a pass.
 - **The taxonomy semantic-set numbers predate the digit fix.** Rerun
   `eval_taxonomy_gap.py --dataset semantic --arms A B C D` before quoting them;
   the script now also prints `vocab`.

@@ -22,6 +22,23 @@ per-dataset mapping, entity-type registry, phonetic / n-gram blocking,
 calibration on a second dataset. Vietnamese 10k candidate recall: 0/500 ->
 481/500 with `rarest_pair`; the live Muse arm has not been rerun under it.
 
+**M0–M2 (zero-touch onboarding slice) landed on `main` (2026-11-05).** Entity
+schema contracts are versioned data (`data/schemas/*.json`, loaded and
+fail-closed validated at startup), policy and expected-structure loaders are
+generic (no `("user","product")` hard-code; `jobs.py` dataset hacks removed),
+and the Go trust-engine discovers entity policy dirs the same way (it no
+longer auto-loads staged dataset policies; they compose via `POLICY_DIR`).
+`scripts/onboard.py` derives a self-contained bundle from just **sources +
+expected result** — schema mapping (deterministic aliases first, then a
+mock/live proposer that may only *propose*; anything identity-shaped that
+maps nowhere refuses loudly), a bootstrap taxonomy from observed values, and
+an engine-validated policy (observed mode ranks; strict conflicts) — and the
+build then runs against it via `--bundle`. DeepMatcher Amazon-Google and
+DBLP-ACM (4,589 / 4,910 raw rows, zero model calls under the mock judge)
+derive and run end-to-end with deterministic replay. Not yet: an HTTP
+onboarding endpoint, shadow/canary promotion (M3/M4), gold-pair score cards
+and the release gate (M5).
+
 Working today:
 
 - Splink exact-identifier blocking, a Muse semantic judge on shortlisted pairs,
