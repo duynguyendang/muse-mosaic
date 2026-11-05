@@ -125,7 +125,11 @@ class Settings:
     # Judge budget for candidate matching. 0 = no cap: at 10k-100k clusters the
     # shortlist stays bounded by per_cluster, and the cap only hid pairs.
     muse_candidate_max_pairs: int = 0
-    muse_candidate_per_cluster: int = 3
+    # Candidate-matching budget. 0 (default) = no per_cluster override: each
+    # entity type's admission policy decides how much it may be judged
+    # (product/publication 5, person 3). Set a positive number to cap every
+    # entity type from above.
+    muse_candidate_per_cluster: int = 0
     muse_judge_concurrency: int = 8  # parallel judge batches per build
     muse_verdict_cache: bool = True  # reuse verdicts for identical name+address pairs
     # "token" (default, single name tokens) or "rarest_pair" (also token pairs + address).
@@ -192,9 +196,9 @@ class Settings:
             )
             or 0,
             muse_candidate_per_cluster=_parse_optional_int(
-                get("MUSE_CANDIDATE_PER_CLUSTER"), "MUSE_CANDIDATE_PER_CLUSTER", minimum=1
+                get("MUSE_CANDIDATE_PER_CLUSTER"), "MUSE_CANDIDATE_PER_CLUSTER", minimum=0
             )
-            or 3,
+            or 0,
             muse_judge_concurrency=_parse_optional_int(
                 get("MUSE_JUDGE_CONCURRENCY"), "MUSE_JUDGE_CONCURRENCY", minimum=1
             )

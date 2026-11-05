@@ -1062,7 +1062,7 @@ async def propose_and_merge(
     pairs = shortlist(
         clusters,
         max_pairs=settings.muse_candidate_max_pairs or None,
-        per_cluster=settings.muse_candidate_per_cluster,
+        per_cluster=settings.muse_candidate_per_cluster or None,
         blocking=settings.muse_blocking_mode,
         max_block=settings.muse_blocking_max_block or None,
         stats=info,
