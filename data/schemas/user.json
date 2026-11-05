@@ -1,0 +1,41 @@
+{
+  "schema_version": "sch-user-v1",
+  "entity_type": "user",
+  "entity_noun": "person",
+  "link_proof_type": "fuzzy_name_address",
+  "admission": {
+    "min_label_score": 0.8,
+    "min_label_with_discriminator": 0.6,
+    "min_discriminator_score": 0.8,
+    "per_cluster_cap": 3,
+    "split_bucket_at": 8,
+    "require_house_number_guard": true
+  },
+  "fields": [
+    {
+      "canonical_name": "display_name",
+      "source_aliases": ["full_name", "customer_name", "user_name"],
+      "role": "primary_label",
+      "normalizer": "text_fold"
+    },
+    {
+      "canonical_name": "address",
+      "source_aliases": ["address_line", "street_address", "shipping_address"],
+      "role": "hard_discriminator",
+      "normalizer": "text_fold",
+      "judge_instruction": "Must plausibly match; different house numbers or streets mean different people."
+    },
+    {
+      "canonical_name": "phone",
+      "source_aliases": ["mobile", "telephone", "cell"],
+      "role": "private_identifier",
+      "normalizer": "phone_e164"
+    },
+    {
+      "canonical_name": "email",
+      "source_aliases": ["email_address", "e_mail"],
+      "role": "private_identifier",
+      "normalizer": "email_lower"
+    }
+  ]
+}

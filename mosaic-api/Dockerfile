@@ -15,6 +15,7 @@ COPY --chown=app:app mosaic-api/ ./
 COPY --chown=app:app shared/ ./shared/
 COPY --chown=app:app web ./web
 COPY --chown=app:app data/mock ./data/mock
+COPY --chown=app:app data/schemas ./data/schemas
 COPY --chown=app:app trust-engine/policies ./policies
 COPY --chown=app:app mosaic-api/entrypoint.sh /usr/local/bin/entrypoint.sh
 

@@ -406,9 +406,9 @@ def shortlist(
     *,
     max_pairs: int | None = None,
     per_cluster: int | None = None,
-    min_name: float = 0.8,
-    min_name_with_address: float = 0.6,
-    min_address: float = 0.8,
+    min_name: float | None = None,
+    min_name_with_address: float | None = None,
+    min_address: float | None = None,
     blocking: str = "token",
     max_block: int | None = None,
     stats: dict[str, Any] | None = None,
@@ -420,15 +420,24 @@ def shortlist(
     ``None`` (the default) judges every candidate, because a global cap of 200
     left 99%+ of the candidates unjudged at 100k clusters.
 
-    Admission is declared per entity type (``EntitySchemaSpec.admission``).
-    A person pair must clear ``min_name`` and be corroborated by an address or
-    an identifier hint, because shared namesakes are the trap. A product or a
-    paper has no address to corroborate with, so it is admitted from its much
-    lower ``min_label_score`` and the judge -- not a string threshold --
-    decides the middle band; measured true pairs sit at 0.69 / 0.75 median on
+    Admission is declared per entity type (``EntitySchemaSpec.admission``) and
+    is the single source of truth: every floor, cap and discriminator threshold
+    is read from the entity's spec. The ``min_*`` parameters are explicit
+    *overrides* (escape hatch for tuning experiments); when ``None`` — the
+    default — the spec applies, so editing a spec never drifts from what the
+    code enforces. A person pair must clear ``min_label_score`` and be
+    corroborated by an address or an identifier hint, because shared namesakes
+    are the trap. A product or a paper is admitted from its much lower
+    ``min_label_score`` and the judge -- not a string threshold -- decides the
+    middle band; measured true pairs sit at 0.69 / 0.75 median on
     Amazon-Google / DBLP-ACM, so a person-strength floor would discard a third
-    of the truth. Pairs whose entity types differ are never scored at all:
-    a person and a product are not in competition for the same cluster.
+    of the truth. A pair is corroborated when its name clears
+    ``min_label_with_discriminator`` AND its declared discriminator scores at
+    least ``min_discriminator_score``: the address for a person (a person's
+    hard discriminator), otherwise the anchor field (the maker for a product,
+    the venue for a publication). Pairs whose entity types differ are never
+    scored at all: a person and a product are not in competition for the same
+    cluster.
 
     ``per_cluster``, when given, is the operator's global bound and wins
     outright. When it is ``None`` each cluster falls back to its own schema's
@@ -446,15 +455,33 @@ def shortlist(
     limit = max_block or COMMON_TOKEN_CLUSTERS
     entity_of = [cluster.get("entity_type") or "user" for cluster in clusters]
     admission_of = [get_schema_spec(entity).admission for entity in entity_of]
-    # Person floors come from the caller (defaults equal sch-user-v1); every
-    # other type uses its declared label floor -- 0.4 for product/publication.
+    # The spec is the default for every threshold; a caller may override any
+    # of the three (tuning experiments), never the converse.
     floor_of = [
-        min_name if entity == "user" else admission_of[i].min_label_score
-        for i, entity in enumerate(entity_of)
+        min_name if min_name is not None else admission.min_label_score
+        for admission in admission_of
+    ]
+    half_floor_of = [
+        (
+            min_name_with_address
+            if min_name_with_address is not None
+            else admission.min_label_with_discriminator
+        )
+        for admission in admission_of
+    ]
+    disc_floor_of = [
+        min_address if min_address is not None else admission.min_discriminator_score
+        for admission in admission_of
+    ]
+    # Which profile slot corroborates a mid-band name: the address when the
+    # entity has no anchor (a person), else the anchor field (maker / venue).
+    anchor_of = [get_schema_spec(entity).anchor_group for entity in entity_of]
+    disc_field_of = [
+        anchor.canonical_name if anchor is not None else "address" for anchor in anchor_of
     ]
     cap_of = [
-        per_cluster if per_cluster is not None else admission_of[i].per_cluster_cap
-        for i in range(len(clusters))
+        per_cluster if per_cluster is not None else admission.per_cluster_cap
+        for admission in admission_of
     ]
     profiles = [cluster_profile(c) for c in clusters]
     idents = [cluster_identifiers(c) for c in clusters]
@@ -508,11 +535,19 @@ def shortlist(
                         continue
                     name = _best(profiles[a]["names"], profiles[b]["names"])
                     address = _best(profiles[a]["addresses"], profiles[b]["addresses"])
+                    discriminator = (
+                        address
+                        if disc_field_of[a] == "address"
+                        else _best(
+                            profiles[a].get(disc_field_of[a], []),
+                            profiles[b].get(disc_field_of[b], []),
+                        )
+                    )
                     evidence = identifier_evidence(idents[a], idents[b])
                     hints = identifier_hints(idents[a], idents[b])
                     admitted = (
                         name >= floor_of[a]
-                        or (name >= min_name_with_address and address >= min_address)
+                        or (name >= half_floor_of[a] and discriminator >= disc_floor_of[a])
                         or bool(hints)
                     )
                     if admitted:

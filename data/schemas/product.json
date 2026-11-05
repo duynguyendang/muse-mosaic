@@ -1,0 +1,55 @@
+{
+  "schema_version": "sch-product-v1",
+  "entity_type": "product",
+  "entity_noun": "product",
+  "link_proof_type": "fuzzy_name_address",
+  "admission": {
+    "min_label_score": 0.4,
+    "min_label_with_discriminator": 0.6,
+    "min_discriminator_score": 0.8,
+    "per_cluster_cap": 5,
+    "split_bucket_at": 8,
+    "require_house_number_guard": false
+  },
+  "fields": [
+    {
+      "canonical_name": "name",
+      "source_aliases": ["title", "product_name", "item_name", "prod_title"],
+      "role": "primary_label",
+      "normalizer": "text_fold"
+    },
+    {
+      "canonical_name": "manufacturer",
+      "source_aliases": ["brand", "maker", "vendor"],
+      "role": "anchor_group",
+      "normalizer": "root_brand_token",
+      "judge_instruction": "Maker/brand of the product. Missing on one side is acceptable, but two different makers mean different products."
+    },
+    {
+      "canonical_name": "edition_hints",
+      "source_aliases": ["name", "title"],
+      "role": "hard_discriminator",
+      "normalizer": "edition_tokens",
+      "judge_instruction": "Extracted edition, platform (Mac vs Win), version, or license tier (Upgrade vs Full, 1-User vs 5-User). If both sides carry conflicting edition/platform/tier tokens, they are DIFFERENT products."
+    },
+    {
+      "canonical_name": "price",
+      "source_aliases": ["list_price", "msrp", "cost"],
+      "role": "corroborating",
+      "normalizer": "preserve_punct",
+      "judge_instruction": "Price value. Large divergences (e.g. >3x difference) often indicate Upgrade vs Full version or single vs bundle."
+    },
+    {
+      "canonical_name": "year",
+      "source_aliases": ["release_year"],
+      "role": "corroborating",
+      "normalizer": "preserve_punct"
+    },
+    {
+      "canonical_name": "category",
+      "source_aliases": ["product_type", "department"],
+      "role": "corroborating",
+      "normalizer": "text_fold"
+    }
+  ]
+}

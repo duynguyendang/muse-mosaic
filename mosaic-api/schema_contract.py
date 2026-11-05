@@ -30,10 +30,13 @@ prompt can never reuse a verdict computed under the old contract.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Literal
+from pathlib import Path
+from typing import Literal, get_args
 
 RoleType = Literal[
     "primary_label",
@@ -236,177 +239,217 @@ def apply_normalizer(value: str, mode: NormalizerType) -> str:
 
 
 # ---------------------------------------------------------------------------
-# The shipped specs
+# The shipped specs (as data)
 #
-# `user` and `product` each ship a /build policy plus a golden template, so a
-# document list in those types is judgeable end-to-end. `publication` is
-# registered so the DeepMatcher benchmark (scripts/eval_deepmatcher.py) can
+# Each entity's CONTRACT is a versioned JSON file under data/schemas/ — a new
+# entity type is a data drop, not a code edit (G1). Python keeps only the
+# machinery: normalizers, the prompt compiler, the privacy gate, and the
+# loader that validates every spec in the directory and fails closed on any
+# defect (a bad spec never half-loads; importing this module raises).
+#
+# `user` and `product` ship a /build policy plus a golden template, so a
+# document list in those types is judgeable end-to-end. `publication` ships a
+# spec so the DeepMatcher benchmark (scripts/eval_deepmatcher.py) can
 # measure the arm; no publication policy ships yet, so a publication dataset
 # never reaches clustering in /build and Muse there is unreachable by design.
 # ---------------------------------------------------------------------------
 
-USER_SPEC = EntitySchemaSpec(
-    schema_version="sch-user-v1",
-    entity_type="user",
-    entity_noun="person",
-    # The engine already knows this proof: names alone never verify it, which
-    # is exactly what we want for a merge a model proposed. New entity types
-    # may declare their own once the trust-engine learns to check it.
-    link_proof_type="fuzzy_name_address",
-    admission=AdmissionPolicy(
-        min_label_score=0.8,
-        min_label_with_discriminator=0.6,
-        min_discriminator_score=0.8,
-        per_cluster_cap=3,
-        split_bucket_at=8,
-        require_house_number_guard=True,
-    ),
-    fields=(
-        FieldMapping(
-            canonical_name="display_name",
-            source_aliases=("full_name", "customer_name", "user_name"),
-            role="primary_label",
-            normalizer="text_fold",
-        ),
-        FieldMapping(
-            canonical_name="address",
-            source_aliases=("address_line", "street_address", "shipping_address"),
-            role="hard_discriminator",
-            normalizer="text_fold",
-            judge_instruction=(
-                "Must plausibly match; different house numbers or streets mean " "different people."
-            ),
-        ),
-        FieldMapping(
-            canonical_name="phone",
-            source_aliases=("mobile", "telephone", "cell"),
-            role="private_identifier",
-            normalizer="phone_e164",
-        ),
-        FieldMapping(
-            canonical_name="email",
-            source_aliases=("email_address", "e_mail"),
-            role="private_identifier",
-            normalizer="email_lower",
-        ),
-    ),
-)
 
-PRODUCT_SPEC = EntitySchemaSpec(
-    schema_version="sch-product-v1",
-    entity_type="product",
-    entity_noun="product",
-    link_proof_type="fuzzy_name_address",
-    admission=AdmissionPolicy(
-        min_label_score=0.4,
-        min_label_with_discriminator=0.6,
-        min_discriminator_score=0.8,
-        per_cluster_cap=5,
-        split_bucket_at=8,
-    ),
-    fields=(
-        FieldMapping(
-            canonical_name="name",
-            source_aliases=("title", "product_name", "item_name", "prod_title"),
-            role="primary_label",
-            normalizer="text_fold",
-        ),
-        FieldMapping(
-            canonical_name="manufacturer",
-            source_aliases=("brand", "maker", "vendor"),
-            role="anchor_group",
-            normalizer="root_brand_token",
-            judge_instruction=(
-                "Maker/brand of the product. Missing on one side is acceptable, "
-                "but two different makers mean different products."
-            ),
-        ),
-        FieldMapping(
-            canonical_name="edition_hints",
-            source_aliases=("name", "title"),
-            role="hard_discriminator",
-            normalizer="edition_tokens",
-            judge_instruction=(
-                "Extracted edition, platform (Mac vs Win), version, or license "
-                "tier (Upgrade vs Full, 1-User vs 5-User). If both sides carry "
-                "conflicting edition/platform/tier tokens, they are DIFFERENT "
-                "products."
-            ),
-        ),
-        FieldMapping(
-            canonical_name="price",
-            source_aliases=("list_price", "msrp", "cost"),
-            role="corroborating",
-            normalizer="preserve_punct",
-            judge_instruction=(
-                "Price value. Large divergences (e.g. >3x difference) often "
-                "indicate Upgrade vs Full version or single vs bundle."
-            ),
-        ),
-        FieldMapping(
-            canonical_name="year",
-            source_aliases=("release_year",),
-            role="corroborating",
-            normalizer="preserve_punct",
-        ),
-        FieldMapping(
-            canonical_name="category",
-            source_aliases=("product_type", "department"),
-            role="corroborating",
-            normalizer="text_fold",
-        ),
-    ),
-)
+class SchemaContractError(RuntimeError):
+    """A spec file is missing, unreadable or incoherent. Fail closed."""
 
-PUBLICATION_SPEC = EntitySchemaSpec(
-    schema_version="sch-publication-v1",
-    entity_type="publication",
-    entity_noun="paper",
-    link_proof_type="fuzzy_name_address",
-    admission=AdmissionPolicy(
-        min_label_score=0.4,
-        min_label_with_discriminator=0.6,
-        min_discriminator_score=0.8,
-        per_cluster_cap=5,
-        split_bucket_at=8,
-    ),
-    fields=(
-        FieldMapping(
-            canonical_name="title",
-            source_aliases=("name", "paper_title"),
-            role="primary_label",
-            normalizer="text_fold",
-        ),
-        FieldMapping(
-            canonical_name="venue",
-            source_aliases=("journal", "conference", "booktitle"),
-            role="anchor_group",
-            normalizer="preserve_punct",
-        ),
-        FieldMapping(
-            canonical_name="year",
-            source_aliases=("pub_year",),
-            role="hard_discriminator",
-            normalizer="preserve_punct",
-            judge_instruction=(
-                "Publication year. A 1-year shift can occur between workshop and "
-                "journal, but multi-year gaps indicate different papers."
-            ),
-        ),
-        FieldMapping(
-            canonical_name="authors",
-            source_aliases=("author_list", "creator"),
-            role="corroborating",
-            normalizer="text_fold",
-        ),
-    ),
-)
 
-DEFAULT_SCHEMA_SPECS: dict[str, EntitySchemaSpec] = {
-    USER_SPEC.entity_type: USER_SPEC,
-    PRODUCT_SPEC.entity_type: PRODUCT_SPEC,
-    PUBLICATION_SPEC.entity_type: PUBLICATION_SPEC,
-}
+_TOKEN_SLUG = re.compile(r"^[a-z][a-z0-9_]*$")
+_VERSION_SLUG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_ROLE_SET = frozenset(get_args(RoleType))
+_NORMALIZER_SET = frozenset(get_args(NormalizerType))
+
+
+def specs_dir() -> Path:
+    """Locate the specs directory: SPECS_DIR env, repo data/schemas, or image copy."""
+    override = os.environ.get("SPECS_DIR", "").strip()
+    if override:
+        candidate = Path(override)
+        if candidate.is_dir():
+            return candidate
+        raise SchemaContractError(f"SPECS_DIR {override!r} is not a directory")
+    here = Path(__file__).resolve().parent
+    candidates = [here.parent / "data" / "schemas", here / "data" / "schemas"]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    raise SchemaContractError(
+        "schemas directory not found (looked in SPECS_DIR and repo data/schemas)"
+    )
+
+
+def _mapping_from(raw_field: object, path: Path) -> FieldMapping:
+    if not isinstance(raw_field, dict):
+        raise SchemaContractError(f"{path}: each field must be a JSON object")
+    name = raw_field.get("canonical_name")
+    if not isinstance(name, str) or not _TOKEN_SLUG.fullmatch(name):
+        raise SchemaContractError(f"{path}: canonical_name {name!r} is not a lower-case slug")
+    raw_aliases = raw_field.get("source_aliases")
+    if not isinstance(raw_aliases, list) or not all(
+        isinstance(a, str) and a.strip() for a in raw_aliases
+    ):
+        raise SchemaContractError(
+            f"{path}: field {name!r} needs source_aliases as a list of strings"
+        )
+    role = raw_field.get("role")
+    if role not in _ROLE_SET:
+        raise SchemaContractError(f"{path}: field {name!r} has unknown role {role!r}")
+    normalizer = raw_field.get("normalizer")
+    if normalizer not in _NORMALIZER_SET:
+        raise SchemaContractError(f"{path}: field {name!r} has unknown normalizer {normalizer!r}")
+    instruction = raw_field.get("judge_instruction")
+    if instruction is not None and not isinstance(instruction, str):
+        raise SchemaContractError(f"{path}: field {name!r} judge_instruction must be a string")
+    if normalizer in PROJECTION_NORMALIZERS and not raw_aliases:
+        raise SchemaContractError(
+            f"{path}: field {name!r} is a projection and declares no source_aliases to derive from"
+        )
+    return FieldMapping(
+        canonical_name=name,
+        source_aliases=tuple(raw_aliases),
+        role=role,  # type: ignore[arg-type]
+        normalizer=normalizer,  # type: ignore[arg-type]
+        judge_instruction=instruction,
+    )
+
+
+def _admission_from(raw_admission: object, path: Path) -> AdmissionPolicy:
+    if not isinstance(raw_admission, dict):
+        raise SchemaContractError(f"{path}: admission must be a JSON object")
+
+    def _score(key: str) -> float:
+        value = raw_admission.get(key)
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise SchemaContractError(f"{path}: admission.{key} must be a number")
+        if not 0.0 <= float(value) <= 1.0:
+            raise SchemaContractError(f"{path}: admission.{key} must lie in [0, 1]")
+        return float(value)
+
+    def _positive_int(key: str) -> int:
+        value = raw_admission.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise SchemaContractError(f"{path}: admission.{key} must be an integer >= 1")
+        return value
+
+    guard = raw_admission.get("require_house_number_guard", False)
+    if not isinstance(guard, bool):
+        raise SchemaContractError(f"{path}: admission.require_house_number_guard must be a boolean")
+    return AdmissionPolicy(
+        min_label_score=_score("min_label_score"),
+        min_label_with_discriminator=_score("min_label_with_discriminator"),
+        min_discriminator_score=_score("min_discriminator_score"),
+        per_cluster_cap=_positive_int("per_cluster_cap"),
+        split_bucket_at=_positive_int("split_bucket_at"),
+        require_house_number_guard=guard,
+    )
+
+
+def _parse_spec(path: Path) -> EntitySchemaSpec:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SchemaContractError(f"{path}: cannot read spec: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise SchemaContractError(f"{path}: spec must be a JSON object")
+
+    entity_type = raw.get("entity_type")
+    filename = path.stem
+    if entity_type != filename:
+        raise SchemaContractError(
+            f"{path}: entity_type {entity_type!r} must match the filename stem {filename!r}"
+        )
+    if not _TOKEN_SLUG.fullmatch(str(entity_type)):
+        raise SchemaContractError(f"{path}: entity_type {entity_type!r} is not a lower-case slug")
+    schema_version = raw.get("schema_version")
+    if not isinstance(schema_version, str) or not _VERSION_SLUG.fullmatch(schema_version):
+        raise SchemaContractError(f"{path}: schema_version {schema_version!r} is not a safe slug")
+    entity_noun = raw.get("entity_noun")
+    if not isinstance(entity_noun, str) or not entity_noun.strip():
+        raise SchemaContractError(f"{path}: entity_noun must be a non-empty string")
+    link_proof_type = raw.get("link_proof_type")
+    if not isinstance(link_proof_type, str) or not _VERSION_SLUG.fullmatch(link_proof_type):
+        raise SchemaContractError(f"{path}: link_proof_type {link_proof_type!r} is not a safe slug")
+
+    raw_fields = raw.get("fields")
+    if not isinstance(raw_fields, list) or not raw_fields:
+        raise SchemaContractError(f"{path}: fields must be a non-empty list")
+    fields = tuple(_mapping_from(item, path) for item in raw_fields)
+
+    names = [f.canonical_name for f in fields]
+    if len(set(names)) != len(names):
+        raise SchemaContractError(f"{path}: duplicate canonical_name in fields")
+    labels = [f for f in fields if f.role == "primary_label"]
+    if len(labels) != 1:
+        raise SchemaContractError(
+            f"{path}: exactly one primary_label is required, got {len(labels)}"
+        )
+    projections = {f.canonical_name for f in fields if f.is_projection}
+    seen_aliases: dict[str, str] = {}
+    for field in fields:
+        if field.is_projection:
+            continue  # a projection shares names with its source by design
+        for alias in field.source_aliases:
+            key = _key(alias)
+            owner = seen_aliases.setdefault(key, field.canonical_name)
+            if owner != field.canonical_name:
+                raise SchemaContractError(
+                    f"{path}: alias {alias!r} is claimed by both {owner!r} and {field.canonical_name!r}"
+                )
+    if projections and not any(f.role == "primary_label" for f in fields):
+        raise SchemaContractError(f"{path}: a projection needs a primary_label to derive from")
+
+    return EntitySchemaSpec(
+        schema_version=schema_version,
+        entity_type=entity_type,
+        entity_noun=entity_noun.strip(),
+        link_proof_type=link_proof_type,
+        admission=_admission_from(raw.get("admission"), path),
+        fields=fields,
+    )
+
+
+def load_specs(directory: str | Path | None = None) -> dict[str, EntitySchemaSpec]:
+    """Load and validate every spec in a directory. Fail closed on any defect."""
+    base = Path(directory) if directory is not None else specs_dir()
+    paths = sorted(base.glob("*.json"))
+    if not paths:
+        raise SchemaContractError(f"no schema specs in {base}")
+    specs: dict[str, EntitySchemaSpec] = {}
+    versions: dict[str, Path] = {}
+    for path in paths:
+        spec = _parse_spec(path)
+        owner = versions.get(spec.schema_version)
+        if owner is not None and owner != path:
+            raise SchemaContractError(
+                f"{path}: schema_version {spec.schema_version!r} already used by {owner}"
+            )
+        versions[spec.schema_version] = path
+        specs[spec.entity_type] = spec
+    return specs
+
+
+DEFAULT_SCHEMA_SPECS = load_specs()
+
+
+def _required(name: str) -> EntitySchemaSpec:
+    try:
+        return DEFAULT_SCHEMA_SPECS[name]
+    except KeyError:
+        raise SchemaContractError(
+            f"the {name!r} spec is missing from the specs directory; "
+            f"registered: {', '.join(sorted(DEFAULT_SCHEMA_SPECS))}"
+        ) from None
+
+
+# The shipped specs, by entity (muse_candidates imports these names).
+USER_SPEC = _required("user")
+PRODUCT_SPEC = _required("product")
+PUBLICATION_SPEC = _required("publication")
 
 
 def get_schema_spec(entity_type: str | None) -> EntitySchemaSpec:
@@ -441,6 +484,29 @@ _ROLE_EXPLANATION: dict[RoleType, str] = {
 }
 
 
+def _field_role_lines(spec: EntitySchemaSpec) -> list[str]:
+    """One prompt line per judge-visible field (the shared contract section)."""
+    lines: list[str] = []
+    for mapping in spec.visible_to_judge():
+        line = f"- {mapping.canonical_name} ({_ROLE_EXPLANATION[mapping.role]})"
+        if mapping.judge_instruction:
+            line += f": {mapping.judge_instruction}"
+        lines.append(line)
+    return lines
+
+
+def _discriminator_paragraph(spec: EntitySchemaSpec) -> str | None:
+    discriminator = spec.fields_by_role("hard_discriminator")
+    if not discriminator:
+        return None
+    names = ", ".join(m.canonical_name for m in discriminator)
+    return (
+        f"A conflict on {names} means the answer is 'different': "
+        f"similar {spec.entity_noun}s still differ when their "
+        f"{discriminator[0].role.replace('_', ' ')} values disagree."
+    )
+
+
 def compile_judge_prompt(spec: EntitySchemaSpec) -> str:
     """The question for this entity, generated from its spec.
 
@@ -455,19 +521,10 @@ def compile_judge_prompt(spec: EntitySchemaSpec) -> str:
         "",
         "Field roles in the input JSON:",
     ]
-    for mapping in spec.visible_to_judge():
-        line = f"- {mapping.canonical_name} ({_ROLE_EXPLANATION[mapping.role]})"
-        if mapping.judge_instruction:
-            line += f": {mapping.judge_instruction}"
-        lines.append(line)
-    discriminator = spec.fields_by_role("hard_discriminator")
+    lines += _field_role_lines(spec)
+    discriminator = _discriminator_paragraph(spec)
     if discriminator:
-        names = ", ".join(m.canonical_name for m in discriminator)
-        lines.append(
-            f"A conflict on {names} means the answer is 'different': "
-            f"similar {spec.entity_noun}s still differ when their "
-            f"{discriminator[0].role.replace('_', ' ')} values disagree."
-        )
+        lines.append(discriminator)
     lines += [
         "",
         f"Say 'same' only when the records plausibly describe one {spec.entity_noun}. "
@@ -475,5 +532,88 @@ def compile_judge_prompt(spec: EntitySchemaSpec) -> str:
         "label alone never makes two records the same.",
         "Use nothing that is not in the input. Give one short reason and name "
         "the field that decided it.",
+    ]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Grouping proposer (C6b): the bucket-level question
+# ---------------------------------------------------------------------------
+
+GROUPING_SCHEMA: dict = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["groups", "unresolved"],
+    "properties": {
+        "groups": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["members", "confidence", "evidence"],
+                "properties": {
+                    "members": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 2,
+                    },
+                    "confidence": {"type": "string", "enum": ["high", "medium"]},
+                    "evidence": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["field", "note"],
+                            "properties": {
+                                "field": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "unresolved": {"type": "array", "items": {"type": "string"}},
+    },
+}
+
+
+def compile_grouping_prompt(spec: EntitySchemaSpec) -> str:
+    """The bucket-partitioning question for this entity (C6b).
+
+    Same contract as :func:`compile_judge_prompt`: deterministic, compiled
+    only from judge-visible fields, and hashed into cache keys by callers, so
+    a contract change can never reuse a partition made under an old one. The
+    model *proposes* a partition; a deterministic validator drops members
+    that violate hard guards, and the trust engine still refuses any link
+    it cannot verify. Model confidence routes the dispatch (skip the
+    pairwise check at ``high``); it never grants publish rights.
+    """
+    lines = [
+        f"You decide how a small bucket of {spec.entity_type} records partitions"
+        f" into distinct real-world {spec.entity_noun}s, using only the fields given.",
+        "",
+        "Field roles in the input JSON:",
+    ]
+    lines += _field_role_lines(spec)
+    discriminator = spec.fields_by_role("hard_discriminator")
+    if discriminator:
+        names = ", ".join(m.canonical_name for m in discriminator)
+        lines.append(
+            f"A conflict on {names} means the records are different "
+            f"{spec.entity_noun}s: keep them in separate groups."
+        )
+    lines += [
+        "",
+        "Return JSON only, matching the required schema exactly.",
+        f"- groups: arrays of record_id values of 2 or more records that plausibly "
+        f"describe the same {spec.entity_noun}. Every record_id appears at most once "
+        "across all groups.",
+        "- evidence: one short note per group naming the decisive field.",
+        "- confidence: 'high' only when the records are overwhelmingly the same "
+        "entity; otherwise 'medium'.",
+        "- unresolved: record_ids you cannot place with confidence.",
+        "A shared label alone never makes two records the same. "
+        "Use nothing that is not in the input.",
     ]
     return "\n".join(lines)

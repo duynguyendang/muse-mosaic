@@ -1,0 +1,41 @@
+{
+  "schema_version": "sch-publication-v1",
+  "entity_type": "publication",
+  "entity_noun": "paper",
+  "link_proof_type": "fuzzy_name_address",
+  "admission": {
+    "min_label_score": 0.4,
+    "min_label_with_discriminator": 0.6,
+    "min_discriminator_score": 0.8,
+    "per_cluster_cap": 5,
+    "split_bucket_at": 8,
+    "require_house_number_guard": false
+  },
+  "fields": [
+    {
+      "canonical_name": "title",
+      "source_aliases": ["name", "paper_title"],
+      "role": "primary_label",
+      "normalizer": "text_fold"
+    },
+    {
+      "canonical_name": "venue",
+      "source_aliases": ["journal", "conference", "booktitle"],
+      "role": "anchor_group",
+      "normalizer": "preserve_punct"
+    },
+    {
+      "canonical_name": "year",
+      "source_aliases": ["pub_year"],
+      "role": "hard_discriminator",
+      "normalizer": "preserve_punct",
+      "judge_instruction": "Publication year. A 1-year shift can occur between workshop and journal, but multi-year gaps indicate different papers."
+    },
+    {
+      "canonical_name": "authors",
+      "source_aliases": ["author_list", "creator"],
+      "role": "corroborating",
+      "normalizer": "text_fold"
+    }
+  ]
+}
