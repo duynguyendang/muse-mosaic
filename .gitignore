@@ -35,6 +35,9 @@ trust-engine/trust-engine
 # Regenerate locally with scripts/kaggle_customer360_sample.py. Staged
 # per-run policies under data/kaggle/ are likewise local-only artifacts.
 data/kaggle/
+# DeepMatcher ground-truth benchmarks (fetched on demand from the Wisconsin
+# host; research data, never committed). See scripts/eval_deepmatcher.py.
+data/deepmatcher/
 # Internal (never published)
 /docs/internal/
 demo_output/
