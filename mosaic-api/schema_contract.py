@@ -237,6 +237,12 @@ def apply_normalizer(value: str, mode: NormalizerType) -> str:
 
 # ---------------------------------------------------------------------------
 # The shipped specs
+#
+# `user` and `product` each ship a /build policy plus a golden template, so a
+# document list in those types is judgeable end-to-end. `publication` is
+# registered so the DeepMatcher benchmark (scripts/eval_deepmatcher.py) can
+# measure the arm; no publication policy ships yet, so a publication dataset
+# never reaches clustering in /build and Muse there is unreachable by design.
 # ---------------------------------------------------------------------------
 
 USER_SPEC = EntitySchemaSpec(
@@ -404,12 +410,23 @@ DEFAULT_SCHEMA_SPECS: dict[str, EntitySchemaSpec] = {
 
 
 def get_schema_spec(entity_type: str | None) -> EntitySchemaSpec:
-    """The spec for one entity type. Unknown types fall back to the person spec.
+    """The spec for one entity type.
 
-    Falling back (rather than raising) keeps an unregistered type on the
-    conservative, most-tested contract instead of crashing a build.
+    ``None`` (a document or cluster that never declared an entity type, e.g. a
+    legacy fixture) falls back to the person contract. Any other unregistered
+    string RAISES: otherwise a misspelled or new type would be quietly judged
+    as a person -- empty profile, 0 candidates, no error -- which is the exact
+    silent-wrong-answer failure the trust engine is built to prevent.
     """
-    return DEFAULT_SCHEMA_SPECS.get(entity_type or "user", USER_SPEC)
+    if entity_type is None:
+        return USER_SPEC
+    spec = DEFAULT_SCHEMA_SPECS.get(entity_type)
+    if spec is None:
+        raise ValueError(
+            f"no schema registered for entity type {entity_type!r}; "
+            f"registered: {', '.join(sorted(DEFAULT_SCHEMA_SPECS))}"
+        )
+    return spec
 
 
 # ---------------------------------------------------------------------------

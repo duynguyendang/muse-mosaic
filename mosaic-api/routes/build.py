@@ -676,6 +676,19 @@ async def _build_clusters(
     for document in documents:
         by_entity.setdefault(document.get("entity_type", "user"), []).append(document)
 
+    unsupported = sorted({entity_type for entity_type in by_entity if entity_type not in policies})
+    if unsupported:
+        # Fail closed for unknown types: silently dropping documents would
+        # build an empty 200 instead of telling the caller they sent data
+        # this engine cannot handle.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unsupported entity type(s): {', '.join(unsupported)}; "
+                f"supported: {', '.join(sorted(policies))}"
+            ),
+        )
+
     clusters: list[dict[str, Any]] = []
     for entity_type, docs in sorted(by_entity.items()):
         policy = policies.get(entity_type)

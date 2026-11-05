@@ -22,6 +22,7 @@ import asyncio
 import dataclasses
 
 import muse_candidates as mc
+import pytest
 from config import Settings
 
 
@@ -118,12 +119,11 @@ def test_person_profile_is_still_only_names_and_addresses():
     assert "e@x.com" not in str(profile) and "0900" not in str(profile)
 
 
-def test_unknown_entity_type_falls_back_to_the_person_fields():
+def test_unknown_entity_type_fails_closed():
+    """An unregistered type must raise, never be silently judged as a person."""
     doc = {"document_id": "x", "entity_type": "vehicle", "fields": {"name": {"value": "abc"}}}
-    profile = mc.cluster_profile(
-        {"cluster_id": "c", "entity_type": "vehicle", "member_docs": [doc]}
-    )
-    assert set(profile) == {"names", "addresses"}  # "name" is not a person role
+    with pytest.raises(ValueError, match="no schema registered"):
+        mc.cluster_profile({"cluster_id": "c", "entity_type": "vehicle", "member_docs": [doc]})
 
 
 # --- 2. the right question, and the middle band gets through ---------------
@@ -137,8 +137,9 @@ def test_each_entity_gets_its_own_question():
     assert "SAME product" in product_prompt and "person" not in product_prompt
     assert "SAME paper" in publication_prompt and "person" not in publication_prompt
     assert product_prompt != publication_prompt
-    # an unregistered type must not be asked a question we never validated
-    assert mc.system_prompt_for("vehicle") is mc.SYSTEM_PROMPT
+    # an unregistered type must never be silently asked the person question
+    with pytest.raises(ValueError, match="no schema registered"):
+        mc.system_prompt_for("vehicle")
 
 
 def test_a_product_is_never_keyed_to_a_person_verdict():

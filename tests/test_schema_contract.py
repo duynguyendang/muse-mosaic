@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 
 import muse_candidates as mc
+import pytest
 from config import Settings
 from schema_contract import (
     DEFAULT_SCHEMA_SPECS,
@@ -261,17 +262,15 @@ def test_cache_key_carries_the_schema_version(monkeypatch):
     key_b = mc._pair_key(settings, pair(second.entity_type))
     assert key_a != key_b
 
-    # ...and with the prompt live again, an identical contract still keys the
-    # same: nothing but model/schema/prompt/input may move a cache key.
-    monkeypatch.undo()
-    assert mc._pair_key(settings, pair(first.entity_type)) == mc._pair_key(
-        settings, pair(first.entity_type)
-    )
+    # same contract, same prompt, same model, same input -> same key.
+    again = mc._pair_key(settings, pair(first.entity_type))
+    assert again == key_a
 
 
-def test_shipped_specs_are_registered_and_fall_back_safely():
+def test_shipped_specs_are_registered_and_unregistered_fails_closed():
     assert set(DEFAULT_SCHEMA_SPECS) == {"user", "product", "publication"}
-    assert get_schema_spec("vehicle") is USER_SPEC
+    with pytest.raises(ValueError, match="no schema registered"):
+        get_schema_spec("vehicle")
     assert get_schema_spec(None) is USER_SPEC
     assert PUBLICATION_SPEC.entity_noun == "paper"
     # the compiler is deterministic: the same spec always asks the same question
