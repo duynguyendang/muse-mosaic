@@ -311,6 +311,7 @@ async def execute_full_build(
     *,
     hooks=None,
     engine_killed: bool = False,
+    autonomy_frozen: bool = False,
 ) -> dict[str, Any]:
     """Full pipeline shared by POST /build and jobs: match, cluster, derive."""
     from routes.build import _build_clusters, _BuildContext, _match_documents
@@ -329,6 +330,7 @@ async def execute_full_build(
         expected_structures=expected_structures,
         request=request,
         engine_killed=engine_killed,
+        autonomy_frozen=autonomy_frozen,
     )
     for document in documents:
         document["content_hash"] = document.get("content_hash") or document["document_id"]
@@ -350,6 +352,7 @@ async def execute_full_build(
         taxonomies=taxonomies,
         documents=documents,
         splink_out=splink_out,
+        autonomy_frozen=autonomy_frozen,
     )
     return await execute_build(ctx, clusters, hooks=hooks)
 

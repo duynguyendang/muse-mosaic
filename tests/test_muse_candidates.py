@@ -159,6 +159,9 @@ def _client(te_url, matching_engine, tmp_path, enabled):
         database_path=str(Path(tmp_path) / "m.db"),
         enable_background_tasks=False,
         muse_candidate_matching=enabled,
+        # the pipeline tests exercise the auto-apply path: the outcome of
+        # MUSE_CANDIDATE_MATCHING with an explicit autonomy grant
+        autonomy_mode="auto",
     )
     return TestClient(create_app(settings))
 
@@ -959,7 +962,9 @@ def test_build_clusters_links_another_schema_through_taxonomy_aliases():
         ),
         _raw_doc("c", "full_name", "Zed Quux", "address_line", "5 Oak Rd", "mobile", "0900111222"),
     ]
-    settings = dataclasses.replace(Settings(), use_mock_muse=True, muse_candidate_matching=True)
+    settings = dataclasses.replace(
+        Settings(), use_mock_muse=True, muse_candidate_matching=True, autonomy_mode="auto"
+    )
     out: dict = {}
     clusters = asyncio.run(_build_clusters(settings, load_policies(), load_taxonomies(), docs, out))
     # a+c share a phone under the alias `mobile` (exact blocking sees it only after

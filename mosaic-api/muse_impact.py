@@ -46,7 +46,14 @@ def _grouping(settings: Settings, info: dict[str, Any] | None) -> dict[str, Any]
     # neither erase the run that succeeded nor be reported as if it helped.
     runs = list((info.get("by_entity") or {}).values()) or [info]
     ran = any(not run.get("skipped_reason") for run in runs)
-    status = ("mock" if mock else "live") if ran else "skipped"
+    # When every run is observation-only (off/shadow/suggest), say so instead of
+    # "live" — the model judged, but nothing merged from its verdicts.
+    if runs and all(
+        (run.get("autonomy") or {}).get("mode") in ("off", "shadow", "suggest") for run in runs
+    ):
+        status = "shadow"
+    else:
+        status = ("mock" if mock else "live") if ran else "skipped"
     before, after = info.get("clusters_in"), info.get("clusters_out", info.get("clusters_in"))
     return {
         "status": status,

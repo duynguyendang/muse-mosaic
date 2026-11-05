@@ -403,7 +403,9 @@ def _through_build(*docs):
     from routes.build import _build_clusters
     from taxonomies import load_taxonomies
 
-    settings = dataclasses.replace(Settings(), use_mock_muse=True, muse_candidate_matching=True)
+    settings = dataclasses.replace(
+        Settings(), use_mock_muse=True, muse_candidate_matching=True, autonomy_mode="auto"
+    )
     out: dict = {}
     clusters = asyncio.run(
         _build_clusters(settings, load_policies(), load_taxonomies(), list(docs), out)

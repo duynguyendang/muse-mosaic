@@ -14,6 +14,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
+import autonomy
 import ledger
 import muse_candidates
 import muse_impact
@@ -38,6 +39,7 @@ from publisher import (
     taxonomy_steward_items,
     utcnow_iso,
 )
+from schema_contract import DEFAULT_SCHEMA_SPECS
 from schemas import (
     BuildRequest,
     DeriveRequest,
@@ -71,6 +73,7 @@ class _BuildContext:
     splink_status: str = "unavailable"
     taxonomy_version: str = ""
     engine_killed: bool = False
+    autonomy_frozen: bool = False
 
 
 def _json_safe(value: Any) -> Any:
@@ -523,6 +526,30 @@ async def _build_one_cluster(
     return goldens, conflicts, stewards, verdict, proposal_info
 
 
+def _autonomy_block(
+    ctx: _BuildContext, goldens: list[dict[str, Any]], stewards: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Autonomy report: modes in play, breakers tripped, audit samples.
+
+    Breakers grade the build's own per-entity Muse runs — no model calls.
+    The batch is *labelled*, never silently degraded; when a breaker fires the
+    report says so and the operator decides (jobs stop further clusters, the
+    sync path labels only — documented in docs/ROADMAP.md M3).
+    """
+    by_entity = (ctx.splink_out.get("muse_candidates") or {}).get("by_entity") or {}
+    entity_types = sorted(
+        {getattr(d, "entity_type", None) or "user" for d in ctx.request.dataset.documents}
+    )
+    return {
+        "frozen": bool(getattr(ctx, "autonomy_frozen", False)),
+        "modes": autonomy.resolve_modes(ctx.settings, entity_types),
+        "breakers": autonomy.evaluate_breakers(by_entity),
+        "audit_samples": autonomy.report_audit(
+            goldens, stewards, rate=ctx.settings.autonomy_audit_rate
+        ),
+    }
+
+
 def _build_summary(
     ctx: _BuildContext,
     goldens: list[dict[str, Any]],
@@ -567,6 +594,7 @@ def _build_summary(
             ctx.splink_out.get("muse_candidates"),
             ctx.splink_out.get("taxonomy_extension"),
         ),
+        "autonomy": _autonomy_block(ctx, goldens, stewards),
     }
 
 
@@ -665,6 +693,7 @@ async def _build_clusters(
     taxonomies: dict | None,
     documents: list[dict[str, Any]],
     splink_out: dict[str, Any],
+    autonomy_frozen: bool = False,
 ) -> list[dict[str, Any]]:
     """MATCH: Splink candidates + Muse Linker claims -> proposed clusters.
 
@@ -683,13 +712,24 @@ async def _build_clusters(
     if unsupported:
         # Fail closed for unknown types: silently dropping documents would
         # build an empty 200 instead of telling the caller they sent data
-        # this engine cannot handle.
+        # this engine cannot handle. Distinguish the two ways a build can be
+        # unsupported: a type nobody registered (a typo, a new type awaiting a
+        # contract) and a type the contract knows but no policy ships for.
+        unregistered = [t for t in unsupported if t not in DEFAULT_SCHEMA_SPECS]
+        registered_no_policy = [t for t in unsupported if t in DEFAULT_SCHEMA_SPECS]
+        parts: list[str] = []
+        if unregistered:
+            parts.append(
+                f"unregistered entity type(s): {', '.join(unregistered)} "
+                f"(registered: {', '.join(sorted(DEFAULT_SCHEMA_SPECS))})"
+            )
+        if registered_no_policy:
+            parts.append(
+                f"entity type(s) with no policy shipped: {', '.join(registered_no_policy)}"
+            )
         raise HTTPException(
             status_code=422,
-            detail=(
-                f"unsupported entity type(s): {', '.join(unsupported)}; "
-                f"supported: {', '.join(sorted(policies))}"
-            ),
+            detail=("; ".join(parts) + f"; supported: {', '.join(sorted(policies))}"),
         )
 
     clusters: list[dict[str, Any]] = []
@@ -712,9 +752,21 @@ async def _build_clusters(
         # entity_type literal this used to test is no longer a reason to keep
         # products and papers away from the judge.
         if settings.muse_candidate_matching:
-            entity_clusters, info = await muse_candidates.propose_and_merge(
-                settings, entity_clusters
-            )
+            frozen = autonomy_frozen or settings.autonomy_kill_switch
+            mode = autonomy.effective_mode(settings, entity_type, frozen=frozen)
+            if mode == "off":
+                entity_clusters, info = autonomy.off_scan(
+                    entity_clusters, mode="off", frozen=frozen
+                )
+            elif mode in ("shadow", "suggest"):
+                entity_clusters, info = await autonomy.shadow_scan(
+                    settings, entity_clusters, mode=mode, frozen=frozen
+                )
+            else:  # auto
+                entity_clusters, info = await muse_candidates.propose_and_merge(
+                    settings, entity_clusters
+                )
+                info["autonomy"] = {"mode": "auto", "frozen": frozen}
             _record_muse_run(splink_out, entity_type, info)
         clusters.extend(entity_clusters)
     return clusters
@@ -899,4 +951,5 @@ async def build(request: Request) -> dict[str, Any]:
         getattr(request.app.state, "expected_structures", {}) or {},
         build_request,
         engine_killed=getattr(request.app.state, "engine_killed", False),
+        autonomy_frozen=getattr(request.app.state, "autonomy_frozen", False),
     )

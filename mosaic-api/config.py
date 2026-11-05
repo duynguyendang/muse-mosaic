@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -57,6 +57,31 @@ class ConfigurationError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
+_AUTONOMY_LEGACY = {"manual": "off", "supervised": "suggest"}
+_AUTONOMY_MODES = ("off", "shadow", "suggest", "auto")
+
+
+def _normalize_autonomy_mode(raw: str, name: str) -> str:
+    value = (raw or "").strip().lower()
+    value = _AUTONOMY_LEGACY.get(value, value)
+    if value not in _AUTONOMY_MODES:
+        raise ConfigurationError(f"{name} must be off, shadow, suggest or auto, got {raw!r}")
+    return value
+
+
+def _parse_autonomy_modes(source) -> dict[str, str]:
+    """AUTONOMY_MODE_<ENTITY> -> {"entity": normalized-mode}."""
+    out: dict[str, str] = {}
+    for name, raw in source.items():
+        if not name.upper().startswith("AUTONOMY_MODE_"):
+            continue
+        entity = name[len("AUTONOMY_MODE_") :].strip().lower()
+        if not entity:
+            continue
+        out[entity] = _normalize_autonomy_mode(raw, name.upper())
+    return out
+
+
 def _parse_bool(raw: str, name: str) -> bool:
     value = raw.strip().lower()
     if value in _TRUE:
@@ -64,6 +89,19 @@ def _parse_bool(raw: str, name: str) -> bool:
     if value in _FALSE:
         return False
     raise ConfigurationError(f"{name} must be a boolean (true/false), got {raw!r}")
+
+
+def _parse_float(raw: str, name: str, minimum: float, maximum: float) -> float:
+    value = raw.strip()
+    if not value:
+        return float(minimum)
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be a number, got {raw!r}") from exc
+    if not minimum <= parsed <= maximum:
+        raise ConfigurationError(f"{name} must be between {minimum} and {maximum}, got {parsed}")
+    return parsed
 
 
 def _parse_optional_int(raw: str, name: str, minimum: int = 0) -> int:
@@ -111,7 +149,24 @@ class Settings:
     database_path: str = "./data/mosaic.db"
     mock_data_dir: Path = DEFAULT_MOCK_DATA_DIR
     static_dir: Path = STATIC_DIR
-    autonomy_mode: str = "manual"
+    # Autonomy ladder (M3). Per entity type, never one global switch:
+    #   off      - Muse is not applied at all for the entity
+    #   shadow   - Muse judges and records; nothing merges from its verdicts
+    #   suggest  - like shadow, and the build reports how many merges it would
+    #              have applied (review-queue wiring is the G4 milestone)
+    #   auto     - Muse-merged clusters are applied (MUSE_CANDIDATE_MATCHING)
+    # AUTONOMY_MODE_<ENTITY> overrides the build-wide mode for one entity type
+    # (e.g. AUTONOMY_MODE_PRODUCT=auto). Legacy values manual -> off and
+    # supervised -> suggest are accepted and normalised.
+    autonomy_mode: str = "off"
+    autonomy_modes: dict[str, str] = field(default_factory=dict)
+    # Freeze every auto-apply without stopping reads (the M3 kill switch).
+    # Runtime toggle at /api/v1/autonomy/freeze; AUTONOMY_KILL_SWITCH=true
+    # starts frozen; a restart always recovers the same way the engine kill
+    # switch recovers.
+    autonomy_kill_switch: bool = False
+    # Fraction of decisions sampled for audit (deterministic hash sampling).
+    autonomy_audit_rate: float = 0.01
     # Opt-in: let Muse propose near-match cluster merges that exact identifiers
     # miss (see muse_candidates.py). Off by default: it changes cluster counts.
     muse_candidate_matching: bool = False
@@ -211,7 +266,17 @@ class Settings:
                 get("MUSE_BLOCKING_MAX_BLOCK"), "MUSE_BLOCKING_MAX_BLOCK", minimum=0
             )
             or 0,
-            autonomy_mode=(get("AUTONOMY_MODE") or "manual").strip().lower(),
+            autonomy_mode=_normalize_autonomy_mode(get("AUTONOMY_MODE") or "off", "AUTONOMY_MODE"),
+            autonomy_modes=_parse_autonomy_modes(source),
+            autonomy_kill_switch=_parse_bool(
+                get("AUTONOMY_KILL_SWITCH") or "false", "AUTONOMY_KILL_SWITCH"
+            ),
+            autonomy_audit_rate=_parse_float(
+                get("AUTONOMY_AUDIT_RATE") or "0.01",
+                "AUTONOMY_AUDIT_RATE",
+                minimum=0.0,
+                maximum=1.0,
+            ),
             job_max_attempts=_parse_optional_int(
                 get("JOB_MAX_ATTEMPTS"), "JOB_MAX_ATTEMPTS", minimum=1
             )
@@ -274,10 +339,14 @@ class Settings:
                 "MUSE_CANDIDATE_MIN_CONFIDENCE must be high or medium, "
                 f"got {self.muse_candidate_min_confidence!r}"
             )
-        if self.autonomy_mode not in ("manual", "supervised"):
-            raise ConfigurationError(
-                f"AUTONOMY_MODE must be manual or supervised, got {self.autonomy_mode!r}"
-            )
+        for name, value in (("AUTONOMY_MODE", self.autonomy_mode), *self.autonomy_modes.items()):
+            if value not in _AUTONOMY_MODES:
+                label = (
+                    "AUTONOMY_MODE" if name == "AUTONOMY_MODE" else f"AUTONOMY_MODE_{name.upper()}"
+                )
+                raise ConfigurationError(
+                    f"{label} must be off, shadow, suggest or auto, got {value!r}"
+                )
         if not self.use_mock_muse:
             missing = [
                 name

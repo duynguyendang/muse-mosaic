@@ -28,6 +28,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from policies import PolicyError, load_policies
+from routes import autonomy as autonomy_routes
 from routes import build as build_routes
 from routes import demo as demo_routes
 from routes import downstream as downstream_routes
@@ -100,6 +101,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Demo-only engine kill switch (Act 5). Process-local, defaults off, a
     # restart always recovers. See routes/demo.py.
     app.state.engine_killed = False
+    # Autonomy freeze (M3). Process-local, defaults off; a restart recovers.
+    app.state.autonomy_frozen = False
     # Active policy profile for the dashboard; starts at the default.
     from policy_profiles import default_profile_id
 
@@ -116,6 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise RuntimeError(f"cannot start without taxonomies: {exc}") from exc
     for routes_module in (
         health_routes,
+        autonomy_routes,
         entities_routes,
         reference_routes,
         demo_routes,
