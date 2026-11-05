@@ -40,7 +40,13 @@ def _grouping(settings: Settings, info: dict[str, Any] | None) -> dict[str, Any]
         }
     skipped = info.get("skipped_reason")
     mock = info.get("mode") == "mock"
-    status = "skipped" if skipped else ("mock" if mock else "live")
+    # Muse runs once per entity type and reports each run under ``by_entity``:
+    # the build's status is what actually happened overall, while the per-entity
+    # reasons stay visible in ``skipped_reason``. One entity type failing must
+    # neither erase the run that succeeded nor be reported as if it helped.
+    runs = list((info.get("by_entity") or {}).values()) or [info]
+    ran = any(not run.get("skipped_reason") for run in runs)
+    status = ("mock" if mock else "live") if ran else "skipped"
     before, after = info.get("clusters_in"), info.get("clusters_out", info.get("clusters_in"))
     return {
         "status": status,

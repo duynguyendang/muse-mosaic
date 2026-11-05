@@ -690,15 +690,120 @@ async def _build_clusters(
             tax = None
         docs = muse_candidates.canonicalize_documents(docs, tax)
         entity_clusters = _cluster_entity_docs(entity_type, docs, policy, splink_out)
-        # Opt-in: Muse proposes near-matches the exact identifiers missed. Only
-        # user records carry the name/address it judges on.
-        if settings.muse_candidate_matching and entity_type == "user":
+        # Opt-in: Muse proposes near-matches the exact identifiers missed. It
+        # runs for EVERY entity type that reached clustering: each one carries
+        # its own schema contract (fields, admission gate, question), so the
+        # entity_type literal this used to test is no longer a reason to keep
+        # products and papers away from the judge.
+        if settings.muse_candidate_matching:
             entity_clusters, info = await muse_candidates.propose_and_merge(
                 settings, entity_clusters
             )
-            splink_out["muse_candidates"] = info
+            _record_muse_run(splink_out, entity_type, info)
         clusters.extend(entity_clusters)
     return clusters
+
+
+# What the build report adds up across the entity types Muse ran for. Every
+# key is a count one run produced; sums are what the report means by "in this
+# build".
+_MUSE_TOTAL_KEYS = (
+    "clusters_in",
+    "clusters_out",
+    "candidate_pairs",
+    "kept_pairs",
+    "skipped_per_cluster",
+    "skipped_max_pairs",
+    "shortlisted",
+    "judged",
+    "merged",
+    "cache_hits",
+    "judge_calls",
+    "judge_failures",
+    "tokens",
+    "elapsed_s",
+    "block_keys",
+    "hot_keys_skipped",
+    "split_buckets",
+    "merges_total",
+    "records_regrouped",
+)
+_MUSE_LIST_KEYS = ("merges", "declined")
+
+
+def _copy_value(value: Any) -> Any:
+    """Copy a value the fold must not mutate in place (dict/list)."""
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, list):
+        return list(value)
+    return value
+
+
+def _record_muse_run(splink_out: dict[str, Any], entity_type: str, info: dict[str, Any]) -> None:
+    """Fold one entity type's Muse run into the build's single report slot.
+
+    ``muse_candidates`` is read as ONE dict by the build report and by the
+    impact view, and Muse now runs once per entity type. Assigning each run in
+    turn would leave only the last one -- sorted order makes that the last
+    alphabetically -- so a person run would silently erase a product run that
+    had already spent real tokens.
+
+    The fold carries a *copy* of the incoming mutable values, so adding runs up
+    can never rewrite a run's own report (an earlier version stored the shares
+    by reference, which is how the first entity's ``tiers`` ended up showing
+    the combined total). Keys this code does not know how to combine are
+    carried through (a later run reported them, so the report keeps them), and
+    ``warning`` / ``skipped_reason`` are rebuilt from every run, so the entity
+    that failed is named even for a single-entity build. ``by_entity`` keeps
+    each run's uncombined report.
+    """
+    existing = splink_out.get("muse_candidates") or {}
+    by_entity = {**(existing.get("by_entity") or {}), entity_type: info}
+
+    total: dict[str, Any] = {}
+    if existing:
+        # Seed from the previous report with copies: summation below rewrites
+        # entries in place, and those objects belong to the run that made them.
+        for key, value in existing.items():
+            if key != "by_entity":
+                total[key] = _copy_value(value)
+        for key, value in info.items():
+            if key == "by_entity":
+                continue
+            if key in _MUSE_TOTAL_KEYS:
+                total[key] = total.get(key, 0) + value
+            elif key in _MUSE_LIST_KEYS:
+                total[key] = list(total.get(key) or []) + (value or [])
+            elif key == "tiers":
+                merged = dict(total.get("tiers") or {})
+                for tier, count in (value or {}).items():
+                    merged[tier] = merged.get(tier, 0) + count
+                total["tiers"] = merged
+            elif key in ("warning", "skipped_reason"):
+                pass  # rebuilt from every run below
+            else:
+                total[key] = value  # a key we cannot fold: a later run reported it
+    else:
+        total = {key: _copy_value(value) for key, value in info.items() if key != "by_entity"}
+
+    # each run caps its own list at the report limit; the total obeys it too
+    for key, limit in (
+        ("merges", muse_candidates.MAX_REPORTED_MERGES),
+        ("declined", muse_candidates.MAX_REPORTED_DECLINED),
+    ):
+        if key in total:
+            total[key] = total[key][:limit]
+    warnings = [str(warning) for run in by_entity.values() if (warning := run.get("warning"))]
+    total["warning"] = " | ".join(dict.fromkeys(warnings)) or None
+    reasons = [
+        f"{name}: {run['skipped_reason']}"
+        for name, run in by_entity.items()
+        if run.get("skipped_reason")
+    ]
+    total["skipped_reason"] = "; ".join(reasons) or None
+    total["by_entity"] = by_entity
+    splink_out["muse_candidates"] = total
 
 
 def _splink_link_claims(

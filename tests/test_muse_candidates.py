@@ -245,6 +245,60 @@ def test_on_merges_the_person_and_the_engine_will_not_certify_it(te_url, matchin
     ), "the unrelated customer must still be certified"
 
 
+@pytest.mark.usefixtures("te_url")
+def test_product_records_reach_muse_through_a_real_build(te_url, matching_engine, tmp_path):
+    """The gate is gone at the HTTP boundary, not only inside the helper.
+
+    Two products, two sources, no shared exact identifier -- the product
+    policy blocks on ``category`` and these deliberately disagree on it, so
+    only the judge can join them. This is the path the ``entity_type == "user"``
+    test used to close: a full /build must still answer 200 with the product
+    run reported, whether or not the engine later trusts the link.
+    """
+    base = {
+        "authority_rank": 1,
+        "event_time": "2026-10-27T09:00:00+07:00",
+        "verified": True,
+        "ttl_seconds": 3600,
+    }
+
+    def product_doc(doc_id, source, **fields):
+        return {
+            "synthetic": True,
+            "document_id": doc_id,
+            "entity_type": "product",
+            "source": source,
+            "fields": {name: {"value": value, **base} for name, value in fields.items()},
+        }
+
+    docs = [
+        product_doc(
+            "p1", "pim", name="QuickBooks 2007", manufacturer="Intuit", category="accounting"
+        ),
+        product_doc(
+            "p2",
+            "marketplace",
+            name="quickbooks 2007",
+            manufacturer="Intuit",
+            category="business software",
+        ),
+    ]
+    with _client(te_url, matching_engine, tmp_path, True) as client:
+        response = client.post(
+            "/build",
+            json={
+                "work_id": "w-product",
+                "idempotency_key": "product-on",
+                "dataset": {"documents": docs},
+            },
+        )
+    assert response.status_code == 200, response.text
+    info = response.json()["muse_candidates"]
+    assert info["enabled"] and info["merged"] == 1, info
+    assert info["clusters_out"] == 1
+    assert set(info["by_entity"]) == {"product"}
+
+
 # --- identifier hints, tiers and normalised blocking -----------------------
 
 
@@ -905,3 +959,93 @@ def test_declined_report_explains_why_a_pair_was_not_joined():
         "house numbers differ and no phone or email backs the link",
         "judged same, but below the confidence needed to join",
     ]
+
+
+def test_impact_labels_a_build_where_only_one_entity_ran():
+    """Muse now runs per entity type: one failure must not erase the others.
+
+    The impact view answers "did the model help, and where". If the product
+    run failed and the person run succeeded, calling the whole build "skipped"
+    hides work that really happened -- and the reverse would claim help that
+    never arrived.
+    """
+    import muse_impact
+
+    outage = "Muse unavailable[rate_limit]: 429"
+    info = {
+        "mode": "mock",
+        "clusters_in": 4,
+        "candidate_pairs": 2,
+        "judged": 2,
+        "merged": 1,
+        "skipped_reason": f"product: {outage}",
+        "by_entity": {
+            "product": {"mode": "mock", "skipped_reason": outage, "merged": 0},
+            "user": {"mode": "mock", "skipped_reason": None, "merged": 1},
+        },
+    }
+    grouping = muse_impact.build(Settings(), info, None)["grouping"]
+    assert grouping["status"] == "mock"  # a person merge did happen in this build
+    assert outage in grouping["skipped_reason"]  # and the failure is still visible
+
+    # every entity skipped is still "skipped", not a model that helped
+    all_skipped = {**info, "by_entity": {"product": info["by_entity"]["product"]}}
+    assert muse_impact.build(Settings(), all_skipped, None)["grouping"]["status"] == "skipped"
+
+
+def test_each_entity_reports_its_own_tiers_not_the_combined_total():
+    """Regression: ``by_entity`` must carry each run's report, not the sums.
+
+    ``_record_muse_run`` seeds the build-wide total from the first run and adds
+    the rest on top. Seeding with the first run's objects let the addition
+    rewrite that run's own ``tiers`` dict, so the product report ended up
+    showing the product AND person counts and the caller's dict changed too.
+    """
+    from routes.build import _record_muse_run
+
+    out: dict = {}
+    run1 = {"mode": "mock", "merged": 2, "tiers": {"semantic_only": 2}, "skipped_reason": None}
+    run2 = {
+        "mode": "mock",
+        "merged": 5,
+        "tiers": {"semantic_only": 3, "semantic_verified": 2},
+        "skipped_reason": None,
+    }
+    _record_muse_run(out, "product", run1)
+    _record_muse_run(out, "user", run2)
+
+    report = out["muse_candidates"]
+    assert report["merged"] == 7
+    assert report["tiers"] == {"semantic_only": 5, "semantic_verified": 2}
+    assert report["by_entity"]["product"]["tiers"] == {"semantic_only": 2}
+    assert report["by_entity"]["user"]["tiers"] == {"semantic_only": 3, "semantic_verified": 2}
+    assert run1["tiers"] == {"semantic_only": 2}  # the caller's object is untouched
+
+
+def test_skipped_reason_names_the_entity_even_when_only_one_ran():
+    """The first-run path used to keep the bare reason: the entity that failed
+    was only named once a second entity had also run."""
+    from routes.build import _record_muse_run
+
+    one: dict = {}
+    reason = "Muse unavailable[rate_limit]: 429"
+    _record_muse_run(one, "product", {"mode": "mock", "skipped_reason": reason, "merged": 0})
+    assert one["muse_candidates"]["skipped_reason"] == "product: Muse unavailable[rate_limit]: 429"
+
+
+def test_a_key_the_fold_does_not_know_survives_it():
+    """Regression: keys outside the known scalar/list sets were silently
+    dropped when a later run reported them (``blocking`` never made it into a
+    mixed build). Unknown keys now carry through, last one wins."""
+    from routes.build import _record_muse_run
+
+    out: dict = {}
+    _record_muse_run(out, "product", {"mode": "mock", "merged": 1, "skipped_reason": None})
+    _record_muse_run(
+        out,
+        "user",
+        {"mode": "mock", "merged": 1, "skipped_reason": None, "blocking": "rarest_pair"},
+    )
+    assert out["muse_candidates"]["blocking"] == "rarest_pair"
+    # and a known scalar is still combined, not replaced
+    assert out["muse_candidates"]["merged"] == 2
