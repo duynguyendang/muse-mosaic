@@ -151,13 +151,20 @@ func loadPolicies(policyDir string) (map[string]map[string]Policy, map[string]st
 	policies := make(map[string]map[string]Policy)
 	activeVersion := make(map[string]string)
 
-	for _, entityType := range []string{entityTypeUser, entityTypeProduct} {
+	entityTypes, err := entityDirs(policyDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(entityTypes) == 0 {
+		return nil, nil, fmt.Errorf("no policy JSON for any entity type under %s", policyDir)
+	}
+	for _, entityType := range entityTypes {
 		files, err := filepath.Glob(filepath.Join(policyDir, entityType, "*.json"))
 		if err != nil {
 			return nil, nil, fmt.Errorf("glob policies for %s: %w", entityType, err)
 		}
 		if len(files) == 0 {
-			return nil, nil, fmt.Errorf("no policy JSON found for entity_type %q under %s", entityType, policyDir)
+			continue // entityDirs already filtered this; stay fail-closed
 		}
 		sort.Strings(files)
 
@@ -190,42 +197,36 @@ func loadPolicies(policyDir string) (map[string]map[string]Policy, map[string]st
 		activeVersion[entityType] = versions[len(versions)-1]
 	}
 
-	// Also discover staged auxiliary policies (data/<dataset>/policies) so
-	// datasets targeting specific staged policies can derive without changing
-	// the active repo policy versions. Any bundled dataset may stage its own
-	// versioned policy next to its sample file (e.g. data/kaggle/policies,
-	// data/olist/policies).
-	for _, entityType := range []string{entityTypeUser, entityTypeProduct} {
-		auxCandidates := []string{
-			filepath.Join("data", "*", "policies", entityType, "*.json"),
-			filepath.Join(policyDir, "../../data", "*", "policies", entityType, "*.json"),
-		}
-		for _, pattern := range auxCandidates {
-			auxFiles, _ := filepath.Glob(pattern)
-			for _, path := range auxFiles {
-				raw, err := os.ReadFile(path)
-				if err != nil {
-					continue
-				}
-				var policy Policy
-				if err := json.Unmarshal(raw, &policy); err != nil {
-					continue
-				}
-				// Staged policies get the same validation as the active ones;
-				// an invalid file is skipped, so requests naming it fail
-				// closed with an unknown-policy error instead of deriving
-				// from an unchecked matrix.
-				if err := validatePolicy(entityType, policy); err != nil {
-					continue
-				}
-				if _, exists := policies[entityType][policy.PolicyVersion]; !exists {
-					policies[entityType][policy.PolicyVersion] = policy
-				}
-			}
-		}
-	}
-
 	return policies, activeVersion, nil
+}
+
+var entitySlug = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// entityDirs lists the policy root's immediate subdirectories that look like
+// entity types (lower-case slug, at least one .json under it). No entity is
+// privileged: user, product and publication are peers.
+func entityDirs(policyDir string) ([]string, error) {
+	entries, err := os.ReadDir(policyDir)
+	if err != nil {
+		return nil, fmt.Errorf("read policy dir %s: %w", policyDir, err)
+	}
+	var out []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !entitySlug.MatchString(name) {
+			continue
+		}
+		files, err := filepath.Glob(filepath.Join(policyDir, name, "*.json"))
+		if err != nil || len(files) == 0 {
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // NewEngine loads every policy JSON for the v1 entity types plus every
@@ -421,11 +422,15 @@ func validatePolicy(directoryEntityType string, policy Policy) error {
 	return nil
 }
 
-// PolicyVersions returns the policy version selected for /health, per type.
-func (e *Engine) PolicyVersions() (userVersion, productVersion string) {
+// PolicyVersions returns the active policy version per entity type.
+func (e *Engine) PolicyVersions() map[string]string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.activeVersion[entityTypeUser], e.activeVersion[entityTypeProduct]
+	out := make(map[string]string, len(e.activeVersion))
+	for entityType, version := range e.activeVersion {
+		out[entityType] = version
+	}
+	return out
 }
 
 // ValidateDerive enforces the shape needed before any derivation. Unknown

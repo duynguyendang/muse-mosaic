@@ -32,6 +32,38 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
+_COMPOSED_DIR: Path | None = None
+
+
+def _composed_policy_dir() -> Path:
+    """Scratch policy tree for the engine: repo defaults + staged profiles.
+
+    Tests compose explicitly instead of relying on any auto-discovery: the
+    engine only serves directories it was pointed at. Same lexical convention
+    as production: the staged file sorts last and wins per entity type.
+    """
+    global _COMPOSED_DIR
+    if _COMPOSED_DIR is not None:
+        return _COMPOSED_DIR
+    import shutil
+    import tempfile
+
+    base = Path(tempfile.mkdtemp(prefix="mosaic-policies-"))
+    for entity in ("user", "product"):
+        dest = base / entity
+        dest.mkdir(parents=True)
+        for source_dir in (TE_DIR / "policies" / entity,):
+            for path in source_dir.glob("*"):
+                shutil.copy(path, dest / path.name)
+        for profile in ("retail-balanced", "analytical-mesh"):
+            staged = ROOT / "data" / profile / "policies" / entity
+            if staged.is_dir():
+                for path in staged.glob("*"):
+                    shutil.copy(path, dest / path.name)
+    _COMPOSED_DIR = base
+    return base
+
+
 def _wait_for_port(port: int, timeout: float = 30.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -98,10 +130,11 @@ def trust_engine_binary(tmp_path_factory) -> Path:
 class TrustEngine:
     """A managed trust-engine subprocess."""
 
-    def __init__(self, binary: Path, mkit: Path):
+    def __init__(self, binary: Path, mkit: Path, policy_dir: Path | None = None):
         self.binary = binary
         self.mkit = mkit
         self.port = _free_port()
+        self.policy_dir = policy_dir
         self.process: subprocess.Popen | None = None
 
     @property
@@ -109,11 +142,12 @@ class TrustEngine:
         return f"http://127.0.0.1:{self.port}/derive"
 
     def start(self) -> TrustEngine:
+        policy_dir = self.policy_dir if self.policy_dir is not None else _composed_policy_dir()
         env = dict(
             os.environ,
             MANGLEKIT_BIN=str(self.mkit),
             PORT=str(self.port),
-            POLICY_DIR=str(TE_DIR / "policies"),
+            POLICY_DIR=str(policy_dir),
         )
         env.setdefault("TAXONOMY_DIR", str(ROOT / "data" / "mock" / "taxonomy"))
         self.process = subprocess.Popen(

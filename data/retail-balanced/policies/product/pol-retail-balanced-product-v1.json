@@ -36,10 +36,5 @@
     "blocking": [
       "category"
     ]
-  },
-  "description": "Retail Balanced product: cross-system conflicts quarantine, in-feed duplicates collapse, product_id/seller_id multivalued.",
-  "multivalued_attributes": [
-    "product_id",
-    "seller_id"
-  ]
+  }
 }

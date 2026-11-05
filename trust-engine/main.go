@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -28,11 +29,9 @@ func main() {
 		logger.Error("cannot load trust-engine policies", "error", err)
 		os.Exit(1)
 	}
-	userVersion, productVersion := engine.PolicyVersions()
 	logger.Info(
 		"trust-engine policies loaded",
-		"policy_version_user", userVersion,
-		"policy_version_product", productVersion,
+		"policy_versions", formatPolicyVersions(engine.PolicyVersions()),
 		"adapter", AdapterState,
 	)
 
@@ -68,11 +67,9 @@ func main() {
 				logger.Error("policy reload on SIGHUP failed; previous policies kept", "error", err)
 				continue
 			}
-			userVersion, productVersion := engine.PolicyVersions()
 			logger.Info(
 				"policies reloaded on SIGHUP",
-				"policy_version_user", userVersion,
-				"policy_version_product", productVersion,
+				"policy_versions", formatPolicyVersions(engine.PolicyVersions()),
 			)
 		}
 	}()
@@ -100,13 +97,27 @@ func main() {
 	}
 }
 
+func formatPolicyVersions(versions map[string]string) string {
+	keys := make([]string, 0, len(versions))
+	for key := range versions {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+versions[key])
+	}
+	return strings.Join(parts, ",")
+}
+
 type healthResponse struct {
-	Status               string `json:"status"`
-	Service              string `json:"service"`
-	PolicyVersionUser    string `json:"policy_version_user"`
-	PolicyVersionProduct string `json:"policy_version_product"`
-	Adapter              string `json:"adapter"`
-	ManglekitVersion     string `json:"manglekit_version"`
+	Status               string            `json:"status"`
+	Service              string            `json:"service"`
+	PolicyVersionUser    string            `json:"policy_version_user"`
+	PolicyVersionProduct string            `json:"policy_version_product"`
+	PolicyVersions       map[string]string `json:"policy_versions"`
+	Adapter              string            `json:"adapter"`
+	ManglekitVersion     string            `json:"manglekit_version"`
 }
 
 type failClosedResponse struct {
@@ -121,12 +132,13 @@ type failClosedResponse struct {
 }
 
 func (e *Engine) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	userVersion, productVersion := e.PolicyVersions()
+	versions := e.PolicyVersions()
 	writeJSON(w, http.StatusOK, healthResponse{
 		Status:               "ok",
 		Service:              "trust-engine",
-		PolicyVersionUser:    userVersion,
-		PolicyVersionProduct: productVersion,
+		PolicyVersionUser:    versions[entityTypeUser],
+		PolicyVersionProduct: versions[entityTypeProduct],
+		PolicyVersions:       versions,
 		Adapter:              AdapterState,
 		ManglekitVersion:     ManglekitVersion,
 	})

@@ -36,6 +36,5 @@
     "blocking": [
       "category"
     ]
-  },
-  "description": "BCBS 239 zero-leakage product profile."
+  }
 }

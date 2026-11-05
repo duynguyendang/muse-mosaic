@@ -61,9 +61,5 @@
       "phone",
       "order_id"
     ]
-  },
-  "description": "Enterprise Commercial (Retail Balanced): source hierarchy ERP3 > order/OTP 2 > CRM 1; quarantines only same-tier conflicts; order_id is multivalued so never uniqueness-constrained.",
-  "multivalued_attributes": [
-    "order_id"
-  ]
+  }
 }

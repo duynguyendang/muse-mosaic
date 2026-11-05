@@ -62,6 +62,5 @@
       "phone",
       "order_id"
     ]
-  },
-  "description": "BCBS 239 zero-leakage: any winner disagreement quarantines (C1). Current default behaviour."
+  }
 }

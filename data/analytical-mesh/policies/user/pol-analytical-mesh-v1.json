@@ -53,6 +53,5 @@
       "phone",
       "order_id"
     ]
-  },
-  "description": "Analytical Mesh: multi-value lineage, every distinct observed value publishes, zero quarantine by construction (no esc/den rules). Consumers must treat output as observed claims, not attested truth."
+  }
 }
