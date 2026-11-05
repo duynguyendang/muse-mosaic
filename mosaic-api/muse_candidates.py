@@ -28,7 +28,6 @@ import asyncio
 import hashlib
 import json
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
@@ -37,46 +36,78 @@ from typing import Any, Literal
 
 from config import Settings
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from schema_contract import (
+    DEFAULT_SCHEMA_SPECS,
+    PRODUCT_SPEC,
+    PUBLICATION_SPEC,
+    USER_SPEC,
+    EntitySchemaSpec,
+    apply_normalizer,
+    compile_judge_prompt,
+    get_schema_spec,
+)
 
-PROOF = "fuzzy_name_address"
+# The link proof each shipped spec declares lives in schema_contract
+# (``link_proof_type``); there is no second copy of that string here.
 JUDGE_BATCH = 20
 MAX_MERGED_DOCS = 20  # never let chained merges build a giant cluster
 COMMON_TOKEN_CLUSTERS = 50  # tokens in more clusters than this block nothing
 BLOCKING_MODES = ("token", "rarest_pair")
 ZERO_CANDIDATE_WARN_CLUSTERS = 200  # fewer clusters than this: zero candidates is unremarkable
 
+# The shipped default bucket threshold, kept for callers that only need the
+# number. Which threshold applies to a bucket -- and which field splits it,
+# and how far the admission gate opens -- is read from the entity's
+# EntitySchemaSpec in schema_contract, never from a table here.
+SPLIT_BUCKET_AT = USER_SPEC.admission.split_bucket_at
+
 
 def _has_cjk(text: str) -> bool:
     return any("぀" <= ch <= "鿿" or "가" <= ch <= "힯" for ch in text)
 
 
-IDENTITY_ROLES = ("display_name", "address", "phone", "email")
+def _alias_key(value: str) -> str:
+    """Alias comparison key: case- and separator-insensitive."""
+    return value.strip().lower().replace(" ", "_")
 
 
 def canonicalize_documents(
-    documents: list[dict[str, Any]], taxonomy: Any | None
+    documents: list[dict[str, Any]],
+    taxonomy: Any | None = None,
+    specs: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Rename raw field names to the canonical identity roles via taxonomy aliases.
+    """Rename raw field names to each entity type's canonical names.
 
-    ``full_name`` / ``address_line`` / ``mobile`` become ``display_name`` /
-    ``address`` / ``phone``, so exact blocking, the candidate shortlist and the
-    judge all see the same names. Only the four identity roles are renamed;
-    the first non-empty value wins and a canonical field is never overwritten.
-    Documents with nothing to rename are returned as-is (no copy). Never raises.
+    Two alias sources, the dynamic one applied last so it wins: the entity's
+    ``EntitySchemaSpec`` (``title`` -> ``name`` for a product, ``full_name`` ->
+    ``display_name`` for a person) and ``taxonomy.attribute_aliases``, which a
+    steward can change at runtime. Every entity type declared in ``specs`` is
+    mapped -- not just the four identity roles -- and each document is mapped
+    with the spec for ITS entity type, so a product's ``title`` and a paper's
+    ``name`` never collide.
+
+    Only alias-shaped keys are renamed: the first non-empty value wins, a
+    canonical field is never overwritten, and a field that loses the race is
+    kept rather than dropped. Documents with nothing to rename come back as
+    the same object (no copy). Never raises.
     """
-    if taxonomy is None:
-        return documents
-    lookup: dict[str, str] = {}
-    for role in IDENTITY_ROLES:
-        for alias in taxonomy.attribute_aliases.get(role, []):
-            lookup[alias.strip().lower().replace(" ", "_")] = role
+    specs = specs or DEFAULT_SCHEMA_SPECS
+    tax_lookup: dict[str, str] = {}
+    if taxonomy is not None:
+        for canonical, aliases in (taxonomy.attribute_aliases or {}).items():
+            for alias in aliases or []:
+                tax_lookup[_alias_key(alias)] = canonical
+    fallback = specs.get("user") or USER_SPEC
     out: list[dict[str, Any]] = []
     for document in documents:
+        spec = specs.get(document.get("entity_type") or "user") or fallback
+        lookup = {**spec.rename_map(), **tax_lookup}  # taxonomy overrides spec
+        canonical_names = {mapping.canonical_name for mapping in spec.fields}
         fields = document.get("fields") or {}
         renames = {
-            raw: lookup[raw.strip().lower().replace(" ", "_")]
+            raw: lookup[_alias_key(raw)]
             for raw in fields
-            if raw not in IDENTITY_ROLES and raw.strip().lower().replace(" ", "_") in lookup
+            if raw not in canonical_names and _alias_key(raw) in lookup
         }
         if not renames:
             out.append(document)
@@ -107,6 +138,30 @@ SYSTEM_PROMPT = (
     "never enough on its own: the names must still be compatible. "
     "Use nothing that is not in the input. Give one short reason."
 )
+
+# The person question is FROZEN, verbatim: it is hashed into every verdict
+# cache key that exists today, and its wording is itself the privacy contract
+# (a phone or email is only ever a HINT, never proof). Every other entity's
+# question is compiled from its EntitySchemaSpec by schema_contract, so a new
+# entity type is a data drop rather than a new prompt string in this file.
+PRODUCT_PROMPT = compile_judge_prompt(PRODUCT_SPEC)
+PUBLICATION_PROMPT = compile_judge_prompt(PUBLICATION_SPEC)
+
+# schema_version -> prompt text shipped for that version. A spec version not
+# listed here gets its question compiled on demand from the spec.
+FROZEN_PROMPTS: dict[str, str] = {USER_SPEC.schema_version: SYSTEM_PROMPT}
+
+
+def system_prompt_for(entity_type: str | None) -> str:
+    """The question to ask about one pair, taken from that entity's spec.
+
+    Unknown entity types fall back to the person contract: the conservative,
+    most-tested one, never a prompt we never validated.
+    """
+    spec = get_schema_spec(entity_type)
+    frozen = FROZEN_PROMPTS.get(spec.schema_version)
+    return frozen if frozen is not None else compile_judge_prompt(spec)
+
 
 JUDGE_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -151,6 +206,7 @@ class CandidatePair:
     right_profile: dict[str, list[str]] = field(default_factory=dict)
     hints: list[str] = field(default_factory=list)
     evidence: list[dict[str, str]] = field(default_factory=list)
+    entity_type: str = "user"  # which prompt and admission gate this pair is judged under
 
 
 # --------------------------------------------------------------------------
@@ -159,9 +215,14 @@ class CandidatePair:
 
 
 def _norm(text: str) -> str:
-    folded = unicodedata.normalize("NFKD", text.casefold())
-    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
-    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", folded)).strip()
+    """Matching normalisation: accents stripped, punctuation to space.
+
+    Delegated to the contract's ``text_fold`` so the matcher and the judge can
+    never drift on what "the same text" means. Anything a human reads as a
+    value (a price, a venue) is normalised with ``preserve_punct`` instead --
+    see schema_contract.apply_normalizer.
+    """
+    return apply_normalizer(text, "text_fold")
 
 
 def _field_value(document: dict[str, Any], name: str) -> str | None:
@@ -170,16 +231,53 @@ def _field_value(document: dict[str, Any], name: str) -> str | None:
     return str(value) if value else None
 
 
-def cluster_profile(cluster: dict[str, Any]) -> dict[str, list[str]]:
-    """Normalised names and addresses of one cluster. Nothing else leaves."""
-    names: set[str] = set()
-    addresses: set[str] = set()
+def cluster_profile(
+    cluster: dict[str, Any], spec: EntitySchemaSpec | None = None
+) -> dict[str, list[str]]:
+    """Exactly what this entity's schema says may leave the process.
+
+    The primary label lands under ``"names"``, the address under
+    ``"addresses"`` (only a person spec declares an address, so every other
+    type keeps an empty list and the payload shape stays uniform), and every
+    other visible field under its own canonical name, normalised by the
+    normalizer that field declares -- ``preserve_punct`` keeps a price of
+    ``$19.99`` readable, ``edition_tokens`` derives edition/platform/tier
+    hints from the title.
+
+    The privacy boundary is ``spec.visible_to_judge()``: a ``private_
+    identifier`` is never read here, for any entity type, so phone and email
+    are structurally unable to reach the model rather than merely omitted.
+    """
+    spec = spec or get_schema_spec(cluster.get("entity_type"))
+    label_field = spec.primary_label.canonical_name
+    collected: dict[str, set[str]] = {}
     for document in cluster["member_docs"]:
-        if (name := _field_value(document, "display_name")) and _norm(name):
-            names.add(_norm(name))
-        if (address := _field_value(document, "address")) and _norm(address):
-            addresses.add(_norm(address))
-    return {"names": sorted(names), "addresses": sorted(addresses)}
+        for mapping in spec.visible_to_judge():
+            # A projection (edition_hints) derives from the field its aliases
+            # name; every other field is read by canonical name, because
+            # alias resolution is canonicalize_documents' job.
+            sources = mapping.source_aliases if mapping.is_projection else (mapping.canonical_name,)
+            bucket = collected.setdefault(mapping.canonical_name, set())
+            for source in sources:
+                value = _field_value(document, source)
+                if not value:
+                    continue
+                normalised = apply_normalizer(value, mapping.normalizer)
+                if not normalised:
+                    continue
+                if mapping.normalizer == "edition_tokens":
+                    bucket.update(normalised.split())
+                else:
+                    bucket.add(normalised)
+    profile: dict[str, list[str]] = {
+        "names": sorted(collected.get(label_field, set())),
+        "addresses": sorted(collected.get("address", set())),
+    }
+    for canonical in sorted(collected):
+        if canonical in (label_field, "address") or not collected[canonical]:
+            continue
+        profile[canonical] = sorted(collected[canonical])
+    return profile
 
 
 def phone_key(value: str) -> str:
@@ -254,6 +352,50 @@ def _best(left: list[str], right: list[str]) -> float:
     return max((_ratio(x, y) for x in left for y in right), default=0.0)
 
 
+def _split_bucket(
+    members: list[int], clusters: list[dict[str, Any]], profiles: list[dict[str, list[str]]]
+) -> list[list[int]]:
+    """Split an oversized token bucket on the entity's declared anchor.
+
+    A bucket of dozens of documents must not be judged as one block: merged
+    transitively, one wrong verdict would bridge every member into a single
+    entity. The anchor comes from the entity's schema (``anchor_group``: the
+    maker for a product, the venue for a publication) and is already
+    normalised into the profile, so ``Adobe`` and ``Adobe Systems Inc`` share
+    one subgroup while ``Microsoft`` separates -- because ``root_brand_token``
+    strips the corporate suffixes that do not change the brand.
+
+    A member WITHOUT the anchor is a wildcard and joins every sub-group: an
+    absent value is not evidence of a different entity, and dropping it
+    quietly costs matches (splitting on name tokens instead kept only
+    47.6% / 41.4% of the golden pairs on the two DeepMatcher sets, against
+    89.5% / 73.5% for this rule). Because each sub-group already contains the
+    whole wildcard set, missing members meet each other inside the first
+    sub-group, so they are NOT emitted again as a trailing group -- that would
+    only re-evaluate pairs the wildcard already produced.
+
+    Buckets at or below the spec's ``split_bucket_at``, and entities that
+    declare no anchor at all (a person: the address is already the judge's own
+    discriminator, and house_number_conflict is the code-level guard), come
+    back untouched.
+    """
+    spec = get_schema_spec(clusters[members[0]].get("entity_type"))
+    anchor = spec.anchor_group
+    if anchor is None or len(members) <= spec.admission.split_bucket_at:
+        return [members]
+    key = anchor.canonical_name
+    present = [m for m in members if profiles[m].get(key)]
+    if not present:
+        return [members]
+    missing = [m for m in members if not profiles[m].get(key)]
+    subgroups: dict[tuple[str, ...], list[int]] = {}
+    for member in present:
+        subgroups.setdefault(tuple(profiles[member][key]), []).append(member)
+    if not missing:
+        return [list(group) for group in subgroups.values()]
+    return [group + missing for group in subgroups.values()]
+
+
 # --------------------------------------------------------------------------
 # 1. Shortlist (no model)
 # --------------------------------------------------------------------------
@@ -263,7 +405,7 @@ def shortlist(
     clusters: list[dict[str, Any]],
     *,
     max_pairs: int | None = None,
-    per_cluster: int = 3,
+    per_cluster: int | None = None,
     min_name: float = 0.8,
     min_name_with_address: float = 0.6,
     min_address: float = 0.8,
@@ -278,6 +420,20 @@ def shortlist(
     ``None`` (the default) judges every candidate, because a global cap of 200
     left 99%+ of the candidates unjudged at 100k clusters.
 
+    Admission is declared per entity type (``EntitySchemaSpec.admission``).
+    A person pair must clear ``min_name`` and be corroborated by an address or
+    an identifier hint, because shared namesakes are the trap. A product or a
+    paper has no address to corroborate with, so it is admitted from its much
+    lower ``min_label_score`` and the judge -- not a string threshold --
+    decides the middle band; measured true pairs sit at 0.69 / 0.75 median on
+    Amazon-Google / DBLP-ACM, so a person-strength floor would discard a third
+    of the truth. Pairs whose entity types differ are never scored at all:
+    a person and a product are not in competition for the same cluster.
+
+    ``per_cluster``, when given, is the operator's global bound and wins
+    outright. When it is ``None`` each cluster falls back to its own schema's
+    ``per_cluster_cap``.
+
     ``blocking="token"`` (default) indexes single name tokens only, so a token
     shared by more than ``max_block`` clusters blocks nothing. That is what
     empties the shortlist for names built from a few very common words (most
@@ -288,6 +444,18 @@ def shortlist(
     if blocking not in BLOCKING_MODES:
         raise ValueError(f"blocking must be one of {BLOCKING_MODES}, got {blocking!r}")
     limit = max_block or COMMON_TOKEN_CLUSTERS
+    entity_of = [cluster.get("entity_type") or "user" for cluster in clusters]
+    admission_of = [get_schema_spec(entity).admission for entity in entity_of]
+    # Person floors come from the caller (defaults equal sch-user-v1); every
+    # other type uses its declared label floor -- 0.4 for product/publication.
+    floor_of = [
+        min_name if entity == "user" else admission_of[i].min_label_score
+        for i, entity in enumerate(entity_of)
+    ]
+    cap_of = [
+        per_cluster if per_cluster is not None else admission_of[i].per_cluster_cap
+        for i in range(len(clusters))
+    ]
     profiles = [cluster_profile(c) for c in clusters]
     idents = [cluster_identifiers(c) for c in clusters]
     index: dict[str, set[int]] = {}
@@ -316,6 +484,7 @@ def shortlist(
     scored: list[CandidatePair] = []
     hot_keys = 0
     block_keys = 0
+    split_buckets = 0
     for members in index.values():
         if len(members) < 2:
             continue
@@ -323,26 +492,44 @@ def shortlist(
             hot_keys += 1
             continue
         block_keys += 1
-        ordered = sorted(members)
-        for a_pos, a in enumerate(ordered):
-            for b in ordered[a_pos + 1 :]:
-                if (a, b) in seen:
-                    continue
-                seen.add((a, b))
-                name = _best(profiles[a]["names"], profiles[b]["names"])
-                address = _best(profiles[a]["addresses"], profiles[b]["addresses"])
-                evidence = identifier_evidence(idents[a], idents[b])
-                hints = identifier_hints(idents[a], idents[b])
-                if (
-                    name >= min_name
-                    or (name >= min_name_with_address and address >= min_address)
-                    or hints
-                ):
-                    scored.append(
-                        CandidatePair(
-                            "", a, b, name, address, profiles[a], profiles[b], hints, evidence
-                        )
+        groups = _split_bucket(sorted(members), clusters, profiles)
+        if len(groups) > 1:
+            split_buckets += 1
+        for group in groups:
+            for a_pos, a in enumerate(group):
+                for b in group[a_pos + 1 :]:
+                    if (a, b) in seen:
+                        continue
+                    seen.add((a, b))
+                    if entity_of[a] != entity_of[b]:
+                        # Different entity types are never scored against each
+                        # other: a product and a paper share no cluster, and a
+                        # shared token is not evidence otherwise.
+                        continue
+                    name = _best(profiles[a]["names"], profiles[b]["names"])
+                    address = _best(profiles[a]["addresses"], profiles[b]["addresses"])
+                    evidence = identifier_evidence(idents[a], idents[b])
+                    hints = identifier_hints(idents[a], idents[b])
+                    admitted = (
+                        name >= floor_of[a]
+                        or (name >= min_name_with_address and address >= min_address)
+                        or bool(hints)
                     )
+                    if admitted:
+                        scored.append(
+                            CandidatePair(
+                                "",
+                                a,
+                                b,
+                                name,
+                                address,
+                                profiles[a],
+                                profiles[b],
+                                hints,
+                                evidence,
+                                entity_of[a],
+                            )
+                        )
 
     scored.sort(key=lambda p: (-(p.name_score + p.address_score + len(p.hints)), p.left, p.right))
     kept: list[CandidatePair] = []
@@ -350,7 +537,10 @@ def shortlist(
     skipped_per_cluster = 0
     skipped_max_pairs = 0
     for pair in scored:
-        if load.get(pair.left, 0) >= per_cluster or load.get(pair.right, 0) >= per_cluster:
+        if (
+            load.get(pair.left, 0) >= cap_of[pair.left]
+            or load.get(pair.right, 0) >= cap_of[pair.right]
+        ):
             skipped_per_cluster += 1
             continue
         load[pair.left] = load.get(pair.left, 0) + 1
@@ -368,6 +558,7 @@ def shortlist(
         stats["blocking"] = blocking
         stats["block_keys"] = block_keys
         stats["hot_keys_skipped"] = hot_keys
+        stats["split_buckets"] = split_buckets
         # A silent zero is the failure that matters: say so instead of "nothing to merge".
         if not scored and len(clusters) >= ZERO_CANDIDATE_WARN_CLUSTERS:
             named = sum(1 for p in profiles if p["names"])
@@ -389,23 +580,70 @@ def shortlist(
 
 
 def mock_judge(pairs: list[CandidatePair]) -> list[Verdict]:
-    """Deterministic stand-in. Not a model: strict string thresholds."""
+    """Deterministic stand-in. Not a model: strict string thresholds.
+
+    A person pair needs a name AND an address (or an identifier hint) to agree,
+    because the namesake trap is real. A product or publication pair has no
+    address, so it is judged on the name together with the entity's declared
+    anchor (``anchor_group``: the maker or the venue) -- the first thing a
+    human reads. The middle band (a good name with an anchor the threshold
+    cannot reconcile) comes back ``unsure`` and never merges: that band is
+    precisely what the live model is asked to decide, and a threshold must not
+    pretend otherwise.
+    """
     out: list[Verdict] = []
     for p in pairs:
-        if p.name_score >= 0.85 and (p.address_score >= 0.85 or p.hints):
+        if p.entity_type == "user":
+            if p.name_score >= 0.85 and (p.address_score >= 0.85 or p.hints):
+                out.append(
+                    Verdict(
+                        pair_id=p.pair_id,
+                        verdict="same",
+                        confidence="high",
+                        reason=(
+                            f"name {p.name_score:.2f} matches with "
+                            + (
+                                "a near-identical " + "/".join(p.hints)
+                                if p.hints
+                                else f"address {p.address_score:.2f}"
+                            )
+                        ),
+                    )
+                )
+            elif p.name_score >= 0.85:
+                out.append(
+                    Verdict(
+                        pair_id=p.pair_id,
+                        verdict="unsure",
+                        confidence="low",
+                        reason="name matches but the address does not confirm it",
+                    )
+                )
+            else:
+                out.append(
+                    Verdict(
+                        pair_id=p.pair_id,
+                        verdict="different",
+                        confidence="medium",
+                        reason="names are not close enough",
+                    )
+                )
+            continue
+        spec = get_schema_spec(p.entity_type)
+        anchor = spec.anchor_group
+        strong_field = anchor.canonical_name if anchor else None
+        strong = bool(
+            strong_field
+            and p.left_profile.get(strong_field)
+            and set(p.left_profile[strong_field]) & set(p.right_profile.get(strong_field, []))
+        )
+        if p.name_score >= 0.85 and (strong or p.hints):
             out.append(
                 Verdict(
                     pair_id=p.pair_id,
                     verdict="same",
                     confidence="high",
-                    reason=(
-                        f"name {p.name_score:.2f} matches with "
-                        + (
-                            "a near-identical " + "/".join(p.hints)
-                            if p.hints
-                            else f"address {p.address_score:.2f}"
-                        )
-                    ),
+                    reason=f"name {p.name_score:.2f} with the same {strong_field}",
                 )
             )
         elif p.name_score >= 0.85:
@@ -414,7 +652,19 @@ def mock_judge(pairs: list[CandidatePair]) -> list[Verdict]:
                     pair_id=p.pair_id,
                     verdict="unsure",
                     confidence="low",
-                    reason="name matches but the address does not confirm it",
+                    reason=f"name matches but the {strong_field} does not confirm it",
+                )
+            )
+        elif p.name_score >= spec.admission.min_label_score:
+            out.append(
+                Verdict(
+                    pair_id=p.pair_id,
+                    verdict="unsure",
+                    confidence="low",
+                    reason=(
+                        f"name {p.name_score:.2f} is in the band a threshold cannot "
+                        "decide; a model would read the remaining fields"
+                    ),
                 )
             )
         else:
@@ -441,15 +691,20 @@ CREATE TABLE IF NOT EXISTS muse_verdicts (
 
 
 def _pair_key(settings: Settings, pair: CandidatePair) -> str:
-    """Stable key for a verdict: model, prompt and the exact model input.
+    """Stable key for a verdict: model, schema contract, prompt, and input.
 
-    The prompt text is hashed into the key, so editing SYSTEM_PROMPT invalidates
-    every cached verdict instead of silently reusing an old judgement.
+    Both ``schema_version`` and the hash of the prompt this pair was actually
+    asked under belong in the key: changing a role, a normalizer or a question
+    must invalidate every verdict computed under the old contract, instead of
+    silently reusing a judgement the new contract would never have made.
     """
+    spec = get_schema_spec(getattr(pair, "entity_type", "user"))
+    prompt = system_prompt_for(spec.entity_type)
     payload = json.dumps(
         [
             settings.muse_model_id,
-            hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12],
+            spec.schema_version,
+            hashlib.sha256(prompt.encode()).hexdigest()[:12],
             pair.left_profile,
             pair.right_profile,
             sorted(pair.hints),
@@ -498,42 +753,53 @@ def _cache_put(connection, items: list[tuple[str, Verdict]]) -> None:
 async def _judge_batch(
     settings: Settings, batch: list[CandidatePair], semaphore: asyncio.Semaphore
 ) -> tuple[list[Verdict], int]:
-    """Judge one batch. Returns (verdicts, tokens used)."""
+    """Judge one batch. Returns (verdicts, tokens used).
+
+    A batch can mix entity types, and each type is asked its own question
+    (the cache key is computed from that question too), so it is split by
+    prompt before anything leaves the process.
+    """
     from meta_client import chat_json
 
-    payload = [
-        {
-            "pair_id": p.pair_id,
-            "a": p.left_profile,
-            "b": p.right_profile,
-            "identifier_hints": p.hints,
-        }
-        for p in batch
-    ]
-    async with semaphore:
-        parsed, usage = await chat_json(
-            settings,
-            model=settings.muse_model_id,
-            system=SYSTEM_PROMPT,
-            user="Pairs:\n" + _dump(payload),
-            schema_name="mosaic_candidate_verdicts",
-            schema=JUDGE_SCHEMA,
-            reasoning_effort="low",
-            prompt_cache_key="mosaic-candidate-judge-v1",
-        )
-    sent = {p.pair_id for p in batch}
-    got: set[str] = set()
+    by_prompt: dict[str, list[CandidatePair]] = {}
+    for pair in batch:
+        by_prompt.setdefault(system_prompt_for(pair.entity_type), []).append(pair)
+
     out: list[Verdict] = []
-    for item in parsed.get("verdicts", []):
-        verdict = Verdict.model_validate(item)
-        if verdict.pair_id not in sent:
-            raise ValueError(f"verdict for unknown pair {verdict.pair_id!r}")
-        if verdict.pair_id in got:
-            raise ValueError(f"duplicate verdict for {verdict.pair_id!r}")
-        got.add(verdict.pair_id)
-        out.append(verdict)
-    # A pair the model skipped simply gets no verdict, so it never merges.
-    tokens = int(usage.get("total_tokens", 0) or 0)
+    tokens = 0
+    for prompt, group in by_prompt.items():
+        payload = [
+            {
+                "pair_id": p.pair_id,
+                "a": p.left_profile,
+                "b": p.right_profile,
+                "identifier_hints": p.hints,
+            }
+            for p in group
+        ]
+        async with semaphore:
+            parsed, usage = await chat_json(
+                settings,
+                model=settings.muse_model_id,
+                system=prompt,
+                user="Pairs:\n" + _dump(payload),
+                schema_name="mosaic_candidate_verdicts",
+                schema=JUDGE_SCHEMA,
+                reasoning_effort="low",
+                prompt_cache_key="mosaic-candidate-judge-v1",
+            )
+        sent = {p.pair_id for p in group}
+        got: set[str] = set()
+        for item in parsed.get("verdicts", []):
+            verdict = Verdict.model_validate(item)
+            if verdict.pair_id not in sent:
+                raise ValueError(f"verdict for unknown pair {verdict.pair_id!r}")
+            if verdict.pair_id in got:
+                raise ValueError(f"duplicate verdict for {verdict.pair_id!r}")
+            got.add(verdict.pair_id)
+            out.append(verdict)
+        # A pair the model skipped simply gets no verdict, so it never merges.
+        tokens += int(usage.get("total_tokens", 0) or 0)
     return out, tokens
 
 
@@ -634,13 +900,27 @@ def select_merges(
         raise ValueError(f"min_confidence must be medium or high, got {min_confidence!r}")
     floor = CONFIDENCE_RANK[min_confidence]
     by_id = {p.pair_id: p for p in pairs}
+
+    def guarded(pair: CandidatePair) -> bool:
+        """The house-number guard applies where the schema declares it.
+
+        It is a person rule: a model reads "116" vs "110" as a typo. Products
+        and papers declare ``require_house_number_guard=False`` -- they have no
+        street to disagree about, and their profile carries no address anyway.
+        """
+        if not get_schema_spec(
+            getattr(pair, "entity_type", "user")
+        ).admission.require_house_number_guard:
+            return True
+        return not house_number_conflict(pair)
+
     return [
         (by_id[v.pair_id], v)
         for v in verdicts
         if v.verdict == "same"
         and CONFIDENCE_RANK.get(v.confidence, -1) >= floor  # unknown confidence never merges
         and v.pair_id in by_id
-        and not house_number_conflict(by_id[v.pair_id])
+        and guarded(by_id[v.pair_id])
     ]
 
 
@@ -744,8 +1024,11 @@ def apply_merges(
 
 
 def _representative(cluster: dict[str, Any]) -> str:
+    """The document that names this cluster in a link: prefer one carrying a label."""
+    spec = get_schema_spec(cluster.get("entity_type"))
+    label_fields = tuple(mapping.canonical_name for mapping in spec.fields_by_role("primary_label"))
     for document in sorted(cluster["member_docs"], key=lambda d: d["document_id"]):
-        if _field_value(document, "display_name"):
+        if any(_field_value(document, field_name) for field_name in label_fields):
             return document["document_id"]
     return sorted(cluster["member_docs"], key=lambda d: d["document_id"])[0]["document_id"]
 
@@ -799,7 +1082,13 @@ async def propose_and_merge(
         info["elapsed_s"] = round(perf_counter() - started, 1)
         return clusters, info
     except Exception as exc:  # noqa: BLE001 - a model outage must never block or loosen a build
-        info["skipped_reason"] = f"Muse unavailable: {type(exc).__name__}"
+        # The type alone hides why (429 vs 413 vs breaker), which turns a
+        # 9-minute run into an unexplained zero. The message stays appended;
+        # callers still match on "Muse unavailable".
+        kind = getattr(exc, "kind", None)
+        info["skipped_reason"] = (
+            f"Muse unavailable: {type(exc).__name__}" + (f"[{kind}]" if kind else "") + f": {exc}"
+        )
         info["elapsed_s"] = round(perf_counter() - started, 1)
         return clusters, info
     info["judged"] = len(verdicts)
@@ -871,11 +1160,24 @@ MAX_REPORTED_MERGES = 100
 
 
 def _side(by_id: dict[str, dict[str, Any]], doc_id: str) -> dict[str, Any]:
+    """One side of a reported merge, labelled by that entity's schema.
+
+    This used to read ``display_name`` unconditionally, so every product and
+    publication merge was reported with an empty name -- a report a person
+    cannot check. The primary label comes from the spec; an address is only
+    reported for an entity whose schema declares one.
+    """
     doc = by_id.get(doc_id, {})
+    spec = get_schema_spec(doc.get("entity_type"))
+    label: str | None = None
+    for mapping in spec.fields_by_role("primary_label"):
+        label = _field_value(doc, mapping.canonical_name)
+        if label:
+            break
     return {
         "document_id": doc_id,
-        "name": _field_value(doc, "display_name"),
-        "address": _field_value(doc, "address"),
+        "name": label,
+        "address": _field_value(doc, "address") if spec.field_named("address") else None,
     }
 
 
@@ -917,7 +1219,9 @@ def link_claims(
 ) -> list[dict[str, Any]]:
     """Link claims for a Muse-merged cluster.
 
-    Always a ``fuzzy_name_address`` claim (names alone: never verifies). Plus one
+    The name-style claim carries the proof type the entity's schema declares
+    (``link_proof_type``; every shipped spec uses ``fuzzy_name_address``, so a
+    names-only link never verifies -- names alone are not proof). Plus one
     ``semantic_phone`` / ``semantic_email`` claim per code-found identifier pair;
     the engine verifies those against its own features (policy rules S1/S2).
     """
@@ -935,10 +1239,16 @@ def link_claims(
         return ids[0] if ids else None
 
     claims: list[dict[str, Any]] = []
+    # The proof type is declared by the entity's schema. Every shipped spec
+    # uses the proof the trust-engine already knows how to refuse-to-certify;
+    # a new entity may declare its own once the engine verifies it.
+    link_proof = get_schema_spec(cluster.get("entity_type")).link_proof_type
     for link in cluster.get("muse_links", []):
         a, b = first_fact(link["doc_a"]), first_fact(link["doc_b"])
         if a and b:
-            claims.append({"from_fact_id": a, "to_fact_id": b, "proof": PROOF, "proposer": "Muse"})
+            claims.append(
+                {"from_fact_id": a, "to_fact_id": b, "proof": link_proof, "proposer": "Muse"}
+            )
         for item in link.get("evidence", []):
             attribute = "phone" if item["proof"] == "semantic_phone" else "email"
             fa, fb = fact_of(item["doc_a"], attribute), fact_of(item["doc_b"], attribute)
