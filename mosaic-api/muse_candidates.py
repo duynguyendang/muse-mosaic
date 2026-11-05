@@ -155,8 +155,10 @@ FROZEN_PROMPTS: dict[str, str] = {USER_SPEC.schema_version: SYSTEM_PROMPT}
 def system_prompt_for(entity_type: str | None) -> str:
     """The question to ask about one pair, taken from that entity's spec.
 
-    Unknown entity types fall back to the person contract: the conservative,
-    most-tested one, never a prompt we never validated.
+    ``None`` (a record that never declared an entity type, e.g. a legacy
+    fixture) falls back to the person contract — the conservative, most-tested
+    one. Any other unregistered string RAISES: a misspelled or brand-new type
+    must fail loud, never be silently judged with the person question.
     """
     spec = get_schema_spec(entity_type)
     frozen = FROZEN_PROMPTS.get(spec.schema_version)

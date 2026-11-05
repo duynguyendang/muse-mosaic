@@ -6,7 +6,7 @@ set, so unlike the Kaggle samples there is a real truth to measure against:
 nothing here is synthesised and nothing is sampled.
 
   amazon-google    1,363 + 3,226 rows, 11,460 labelled pairs, 1,167 positives
-  dblp-acm-dirty   2,616 + 2,294 rows, 12,360 labelled pairs, 2,220 positives
+  dblp-acm-dirty   2,616 + 2,294 rows, 12,363 labelled pairs, 2,220 positives
 
 Each row of tableA/tableB becomes one Mosaic fragment (entity_type product,
 source = the table it came from); the labelled pairs give the truth clusters
