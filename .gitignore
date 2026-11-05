@@ -41,3 +41,6 @@ data/deepmatcher/
 # Internal (never published)
 /docs/internal/
 demo_output/
+
+# Onboarding bundle output (staging area for derived policy/taxonomy)
+data/onboarding/
