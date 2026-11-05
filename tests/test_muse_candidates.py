@@ -246,6 +246,94 @@ def test_on_merges_the_person_and_the_engine_will_not_certify_it(te_url, matchin
 
 
 @pytest.mark.usefixtures("te_url")
+def test_build_rejects_an_unknown_entity_type_loudly(te_url, matching_engine, tmp_path):
+    """An unsupported type must fail closed, never be silently dropped."""
+    base = {
+        "authority_rank": 1,
+        "event_time": "2026-10-27T09:00:00+07:00",
+        "verified": True,
+        "ttl_seconds": 3600,
+    }
+    docs = [
+        {
+            "synthetic": True,
+            "document_id": "v1",
+            "entity_type": "vehicle",
+            "source": "src",
+            "fields": {"name": {"value": "Nope", **base}},
+        }
+    ]
+    with _client(te_url, matching_engine, tmp_path, True) as client:
+        response = client.post(
+            "/build",
+            json={
+                "work_id": "w-vehicle",
+                "idempotency_key": "vehicle-1",
+                "dataset": {"documents": docs},
+            },
+        )
+    assert response.status_code == 422, response.text
+    assert "vehicle" in response.text
+    assert "user" in response.text and "product" in response.text  # lists supported types
+
+
+@pytest.mark.usefixtures("te_url")
+def test_merged_product_golden_carries_only_publishable_attributes(
+    te_url, matching_engine, tmp_path
+):
+    """A merged product golden must never publish guessed identity.
+
+    The product policy publishes ``category`` and nothing else -- not by
+    benign omission but because a wrong product golden poisons every shop
+    affiliation that reads it. Muse may merge the two records; the publisher
+    may only emit fields the policy allows, never a guessed name or maker.
+    """
+    base = {
+        "authority_rank": 1,
+        "event_time": "2026-10-27T09:00:00+07:00",
+        "verified": True,
+        "ttl_seconds": 3600,
+    }
+
+    def product_doc(doc_id, source, **fields):
+        return {
+            "synthetic": True,
+            "document_id": doc_id,
+            "entity_type": "product",
+            "source": source,
+            "fields": {name: {"value": value, **base} for name, value in fields.items()},
+        }
+
+    docs = [
+        product_doc(
+            "p1", "pim", name="QuickBooks 2007", manufacturer="Intuit", category="accounting"
+        ),
+        product_doc(
+            "p2",
+            "marketplace",
+            name="quickbooks 2007",
+            manufacturer="Intuit",
+            category="accounting",
+        ),
+    ]
+    with _client(te_url, matching_engine, tmp_path, True) as client:
+        response = client.post(
+            "/build",
+            json={
+                "work_id": "w-product-win",
+                "idempotency_key": "product-win",
+                "dataset": {"documents": docs},
+            },
+        )
+    assert response.status_code == 200, response.text
+    for golden in response.json()["goldens"]:
+        attrs = golden.get("attributes", {})
+        # The guessed identity (a name or maker we merely merged) never publishes.
+        assert "name" not in attrs, attrs
+        assert "manufacturer" not in attrs, attrs
+
+
+@pytest.mark.usefixtures("te_url")
 def test_product_records_reach_muse_through_a_real_build(te_url, matching_engine, tmp_path):
     """The gate is gone at the HTTP boundary, not only inside the helper.
 

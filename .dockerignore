@@ -13,6 +13,7 @@ docs
 tests
 data/*.db
 data/*.db-*
+data/deepmatcher/
 README.md
 docker-compose.yml
 .dockerignore
