@@ -106,7 +106,7 @@ cd mosaic-api && USE_MOCK_MUSE=true uvicorn main:app --reload --port 8000
 
 ## Key Verified Benchmarks
 
-Comprehensive verified benchmark results across 362 automated tests:
+Comprehensive verified benchmark results across 381 automated tests:
 
 - **Semantic Disambiguation (10,000 entities, 4,496 pairs):**
   - *Standard string rules:* 255/600 recovered, **116 false merges**.
@@ -115,6 +115,7 @@ Comprehensive verified benchmark results across 362 automated tests:
   - *DBLP-ACM dirty:* **F1 23.9% → 85.8%** (oracle ceiling 99.6%).
   - *Amazon-Google:* **F1 15.2% → 50.4%** (oracle ceiling 96.9%).
   - Candidate recall of the pipeline's own blocking index: **93.9% / 99.2%** — blocking is not the weak point; judge visibility was, and it is now fixed.
+  - *Rules → Muse (mock arm, 2026-11-05):* impure clusters 360 → 244 (Amazon-Google), 62 → 44 (DBLP-ACM); the precision floor for auto-apply is witnessed by the live arm only — per-dataset calibration lives in `scripts/eval_calibration.py` and `docs/TEST-REPORT.md`.
 - **Kaggle messy customers (10,666 rows, 666 labelled duplicate pairs):**
   - *Name-only blocking:* recall 100% but precision ~0% — the name pool has 30 distinct values, so it merges strangers (this is the failure the fail-closed design refuses to paper over).
   - *Identity blocking (exact email):* **precision 100%**, recall 91.9% — every miss shares a placeholder/missing email and is withheld rather than guessed.
@@ -156,3 +157,4 @@ Comprehensive verified benchmark results across 362 automated tests:
 2. **No Model Publishes Directly:** Muse proposals are untrusted claims until verified by the Datalog solver.
 3. **Fail-Closed by Design:** Any missing rule, unknown policy, or data inconsistency produces `No trusted value` rather than a guess.
 4. **Exact Deterministic Replay:** Every decision carries its derivation tree, rule name, and policy version for full regulatory auditability.
+5. **Autonomy Is Opt-In Per Entity** (M3): the default is `AUTONOMY_MODE=off` — Muse never applies without an explicit grant per entity type. `shadow`/`suggest` only observe; `auto` applies; a process-local kill switch (`POST /api/v1/autonomy/freeze`) freezes every auto-apply without stopping reads; every batch reports modes, circuit breakers and a deterministic 1% audit sample (withheld decisions always included).

@@ -22,6 +22,20 @@ per-dataset mapping, entity-type registry, phonetic / n-gram blocking,
 calibration on a second dataset. Vietnamese 10k candidate recall: 0/500 ->
 481/500 with `rarest_pair`; the live Muse arm has not been rerun under it.
 
+**M3 (autonomy controller v1) landed on `main` (2026-11-05).** The ladder is
+real per entity type: `AUTONOMY_MODE` (build-wide) and
+`AUTONOMY_MODE_<ENTITY>` choose off/shadow/suggest/auto; **the default is
+`off`** (fail-closed). `shadow`/`suggest` judge and report without merging;
+`auto` applies as before. A process-local kill switch
+(`/api/v1/autonomy/freeze`) demotes auto -> shadow without stopping reads;
+breakers (zero candidates at scale, judge failure > 10%, entity run failed)
+label the batch; a deterministic 1% audit sample plus all withheld decisions
+is reported. Integration tests pin the default, shadow, freeze and deliberate
+off paths end to end. Not landed: the live precision floor (needs an approved
+live run; the mock judge over-merges and is not a witness — see
+`scripts/eval_calibration.py`), and the review queue for merge proposals
+(G4 proper) — `suggest` currently only reports the would-merge count.
+
 **M0–M2 (zero-touch onboarding slice) landed on `main` (2026-11-05).** Entity
 schema contracts are versioned data (`data/schemas/*.json`, loaded and
 fail-closed validated at startup), policy and expected-structure loaders are

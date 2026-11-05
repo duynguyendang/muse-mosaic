@@ -6,7 +6,7 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 | | |
 | --- | --- |
 | Date | 2026-11-05 |
-| Commit | branch `main` @ `b74368d`, plus the uncommitted M0–M2 onboarding changes this run verifies |
+| Commit | branch `main` (M0–M2 + M3 autonomy controller verified by this run) |
 | Python | 3.12.3 |
 | pytest | 9.1.1 |
 | Go | 1.25.1 |
@@ -17,9 +17,9 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Python tests | `python3 -m pytest -q` | **362 passed, 0 failed**, 104.42 s |
+| Python tests | `python3 -m pytest -q` | **381 passed, 0 failed**, 107.50 s |
 | Lint | `ruff check mosaic-api matching-engine scripts tests shared` | **clean** |
-| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 97 files unchanged |
+| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 101 files unchanged |
 | Go format | `gofmt -l .` | **clean**, no output |
 | Go vet | `go vet ./...` | **clean**, no output |
 | Go tests | `go test -count=1 ./...` | **ok**, 0.037 s |
@@ -36,7 +36,7 @@ $ python3 -m pytest -q
 ........................................................................ [ 64%]
 ........................................................................ [ 85%]
 ...............................................                          [100%]
-362 passed in 104.42s (0:01:44)
+381 passed in 107.50s (0:01:48)
 
 $ python3 -m ruff check mosaic-api matching-engine scripts tests shared
 All checks passed!
@@ -50,12 +50,13 @@ ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.037s
 
 ## Suite inventory
 
-362 collected tests across 35 files. Since the 2026-11-03 snapshot (302):
-five new files — `test_onboarding.py` (16) and `test_spec_files.py` (11) from
+381 collected tests across 36 files. Since the 2026-11-03 snapshot (302):
+six new files — `test_onboarding.py` (16) and `test_spec_files.py` (11) from
 the M0–M2 onboarding work, `test_schema_contract.py` (10),
 `test_entity_judging.py` (19) and `test_eval_deepmatcher.py` (7) from the
-entity-contract / DeepMatcher slice; `test_muse_candidates.py` grew 48 → 55
-(unknown-entity 422, product-golden publication, report fold); the archived
+entity-contract / DeepMatcher slice, and `test_autonomy.py` (19) from the M3
+autonomy controller; `test_muse_candidates.py` grew 48 → 55 (unknown-entity
+422, product-golden publication, report fold); the archived
 legacy frontend removal shrank `test_ui_wiring.py` 19 → 7.
 
 | Area | Tests | Files | What it proves |
@@ -65,6 +66,7 @@ legacy frontend removal shrank `test_ui_wiring.py` 19 → 7.
 | Muse and model layer | 89 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure, report fold across entity types; Copilot closed vocabulary |
 | Pipeline, API, jobs, UI | 81 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end |
 | Entity contracts and onboarding | 63 | 5 | Specs ship as validated data; the onboarding compiler derives a bundle or refuses; unknown entity types fail closed; the DeepMatcher harness pins metric maths and raw counts |
+| Autonomy controller (M3) | 19 | 1 | Per-entity modes (off/shadow/suggest/auto), kill switch, breakers, deterministic audit sampling, defaults fail closed |
 
 Per file:
 
@@ -97,6 +99,7 @@ Per file:
 | `test_spec_files.py` | 11 | Shipped specs load from data; invalid specs fail closed; a new entity is a data drop |
 | `test_schema_contract.py` | 10 | Roles, normalizers, prompt compiler, privacy gate, verdict cache keys |
 | `test_eval_deepmatcher.py` | 7 | Metric maths, raw-data counts, truth construction for the ground-truth harness |
+| `test_autonomy.py` | 19 | Modes, freeze demotes auto->shadow, breakers, audit sampling, off/shadow end-to-end via /build |
 | `test_structure.py` | 3 | Whole-document validation; mismatch withholds the golden |
 | `test_olist_brazilian.py` | 3 | Real Olist data end to end on an isolated stack |
 | `test_matching_engine.py` | 3 | Health, `/match` contract, proposer-only behaviour |
@@ -127,6 +130,8 @@ Per file:
 | Unknown entity types fail closed (422 / raise), never silently judged | `test_muse_candidates.py` (55), `test_schema_contract.py` (10) | verified |
 | The onboarding compiler derives a bundle or refuses; nothing is half-derived | `test_onboarding.py` (16) | verified |
 | A merged product golden never publishes guessed identity | `test_muse_candidates.py` (55) | verified |
+| Auto-apply is opt-in per entity; default is fail-closed; kill switch works | `test_autonomy.py` (19) | verified |
+| Breakers label the batch; deliberate off/shadow never masquerade as failure | `test_autonomy.py` (19) | verified |
 
 ## Measured benchmarks
 
@@ -182,6 +187,27 @@ the 54 misses all share a placeholder or missing email (N/A, `-`, none, null,
 behaviour on real-world dirty dirt, not semantic discrimination — every gold
 pair is exact after normalisation.
 
+### Autonomy calibration (M3, mock judge, 2026-11-05)
+
+`scripts/eval_calibration.py` measures precision/recall/F1/impure clusters at
+both shipped confidence floors, on the same docs for each arm. Mock rows below
+(measured 2026-11-05); the mock judge is **not calibrated** and over-merges the
+product/publication suites — a mock row is plumbing evidence only, never a
+floor witness. The live floor is **unwitnessed** until a live run is approved
+and executed.
+
+| Benchmark | Arm | Result | Status |
+| --- | --- | --- | --- |
+| Amazon-Google | Muse mock, high & medium | precision 12.3%, recall 8.9%, F1 10.3%, 161 merges (over-merge — not a witness) | measured (mock, 2026-11-05) |
+| DBLP-ACM dirty | Muse mock, high & medium | precision 39.9%, recall 3.6%, F1 6.5%, 26 merges (over-merge — not a witness) | measured (mock, 2026-11-05) |
+| Kaggle messy-customers | Muse mock, high & medium | precision **100%**, recall 91.9%, F1 95.8%, 0 impure | measured (mock, 2026-11-05) |
+| Precision at the auto floor | any | **not witnessed** — needs the live arm (approx. 18.5k judged pairs across both suites) | **not verified** |
+
+The breaker/kill-switch/audit pieces are unit- and integration-tested instead:
+auto demotes to shadow under freeze, deliberate off never raises a breaker,
+and the 1% audit sampler plus 100% of withheld decisions is deterministic
+across runs.
+
 ### Scale runs (end-to-end stacks, 2026-11-05)
 
 Full three-service stacks (real trust-engine + Splink 5.0.0 + mosaic-api),
@@ -206,6 +232,7 @@ python3 scripts/eval_hard_names.py --judge mock|live
 python3 scripts/eval_muse_candidates.py
 python3 scripts/eval_taxonomy_gap.py --dataset semantic --arms A B C D
 python3 scripts/kaggle_e2e.py --sample data/kaggle/customer360_sample_5000.json
+python3 scripts/eval_calibration.py                      # mock; --judge live for the real floor
 OLIST_SAMPLE=data/olist/sample_olist_large.json python3 -m pytest tests/test_olist_brazilian.py
 ```
 
