@@ -10,6 +10,7 @@ is only version selection + attribute allow-listing.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from schemas import Policy
@@ -44,21 +45,48 @@ def policies_dir() -> Path:
     raise PolicyError("trust-engine policies directory not found")
 
 
+def _entity_dirs(base: Path) -> list[Path]:
+    """Every directory directly under the policy root is an entity type.
+
+    A directory is a valid entity namespace iff its name is a lower-case
+    slug (``user``, ``product``, ...) and it contains at least one ``*.json``.
+    Anything else (``semantic``, stray files) is ignored. When two staged
+    policy versions exist, the one whose ``policy_version`` sorts last wins —
+    that is the documented composition convention: overlay a staged dataset
+    policy (e.g. ``pol-user-olist-...``) on top of the repo defaults in one
+    composed ``POLICY_DIR`` and the staged one wins.
+    """
+    if not base.is_dir():
+        return []
+    slug = re.compile(r"^[a-z][a-z0-9_]*$")
+    out: list[Path] = []
+    for child in sorted(base.iterdir()):
+        if child.is_dir() and slug.fullmatch(child.name) and any(child.glob("*.json")):
+            out.append(child)
+    return out
+
+
 def load_policies(policy_dir: Path | None = None) -> dict[str, Policy]:
-    """Load the latest policy version per entity type (user, product)."""
+    """Load the latest policy version per entity type.
+
+    Every entity type with at least one policy JSON under the root is loaded —
+    no hard-coded entity list. Selection among staged versions is lexical on
+    ``policy_version`` (the composition convention documented above). Fail
+    closed when the root is missing or yields nothing.
+    """
     base = Path(policy_dir) if policy_dir else policies_dir()
+    dirs = _entity_dirs(base)
+    if not dirs:
+        raise PolicyError(f"no entity policy directories under {base}")
     active: dict[str, Policy] = {}
-    for entity_type in ("user", "product"):
-        entity_dir = base / entity_type
-        if not entity_dir.is_dir():
-            raise PolicyError(f"no policy directory for {entity_type}")
+    for entity_dir in dirs:
         versions: list[Policy] = []
         for path in sorted(entity_dir.glob("*.json")):
             versions.append(Policy.model_validate_json(path.read_text(encoding="utf-8")))
-        if not versions:
-            raise PolicyError(f"no policy JSON for {entity_type}")
+        if not versions:  # pragma: no cover - _entity_dirs already filtered this
+            raise PolicyError(f"no policy JSON for {entity_dir.name}")
         versions.sort(key=lambda policy: policy.policy_version)
-        active[entity_type] = versions[-1]
+        active[entity_dir.name] = versions[-1]
     return active
 
 

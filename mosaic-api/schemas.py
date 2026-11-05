@@ -499,7 +499,8 @@ class BuildResponse(StrictModel):
     goldens: list[GoldenRecord] = Field(default_factory=list)
     conflicts: list[ConflictFact] = Field(default_factory=list)
     steward_queue: list[StewardItem] = Field(default_factory=list)
-    policy_version_user: str = Field(min_length=1)
+    policy_version_user: str | None = None  # legacy alias kept for the frontend
+    policy_versions: dict[str, str] = Field(default_factory=dict)
     taxonomy_version: str = Field(min_length=1)
     splink_status: str = Field(min_length=1)
 

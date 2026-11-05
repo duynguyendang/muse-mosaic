@@ -545,7 +545,10 @@ def _build_summary(
         "goldens": goldens,
         "conflicts": conflicts,
         "steward_queue": stewards,
-        "policy_version_user": ctx.policies["user"].policy_version,
+        # Kept for API compatibility; null when the build carried no person
+        # policy. ``policy_versions`` is the full, entity-keyed map.
+        "policy_version_user": getattr(ctx.policies.get("user"), "policy_version", None),
+        "policy_versions": {etype: policy.policy_version for etype, policy in ctx.policies.items()},
         "taxonomy_version": ctx.taxonomy_version,
         "splink_status": ctx.splink_status,
         "proposals": proposals or [],

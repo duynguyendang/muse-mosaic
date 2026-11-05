@@ -18,8 +18,8 @@ async def health(request: Request) -> HealthResponse:
     trust_engine = None if killed else await _trust_engine_health(current.health_url())
     splink_status, splink_versions = await _matching_engine_health(current)
     policies = request.app.state.policies
-    user_version = policies["user"].policy_version
-    product_version = policies["product"].policy_version
+    user_version = getattr(policies.get("user"), "policy_version", None)
+    product_version = getattr(policies.get("product"), "policy_version", None)
     if trust_engine is not None:
         user_version = trust_engine.get("policy_version_user") or user_version
         product_version = trust_engine.get("policy_version_product") or product_version

@@ -96,7 +96,11 @@ async def _matching_engine_health(
 
 
 def _load_expected_structures() -> dict[str, dict[str, Any]]:
-    """Baked-in default expected structures per entity type (CSD 12.6)."""
+    """Baked-in default expected structures per entity type (CSD 12.6).
+
+    Every ``expected_<entity>_golden.json`` under the template directory is
+    loaded; a new entity type's contract is a data drop, not a code edit.
+    """
     from config import API_DIR, REPO_ROOT
 
     structures: dict[str, dict[str, Any]] = {}
@@ -107,10 +111,11 @@ def _load_expected_structures() -> dict[str, dict[str, Any]]:
     base = next((path for path in candidates if path.is_dir()), None)
     if base is None:
         return structures
-    for name in ("user", "product"):
-        path = base / f"expected_{name}_golden.json"
-        if path.is_file():
-            structures[name] = json.loads(path.read_text(encoding="utf-8"))
+    slug = re.compile(r"^expected_([a-z][a-z0-9_]*)_golden\.json$")
+    for path in sorted(base.glob("expected_*_golden.json")):
+        match = slug.match(path.name)
+        if match and match.group(1) not in structures:
+            structures[match.group(1)] = json.loads(path.read_text(encoding="utf-8"))
     return structures
 
 
