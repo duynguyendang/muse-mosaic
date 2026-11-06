@@ -13,9 +13,14 @@ def test_taxonomy_versions_load():
     from taxonomies import default_version
 
     all_tax = taxonomies()
-    assert set(all_tax) == {"tax-user-2026-10-27-v1", "tax-product-2026-10-27-v1"}
+    assert set(all_tax) == {
+        "tax-user-2026-10-27-v1",
+        "tax-product-2026-10-27-v1",
+        "tax-publication-2026-11-06-v1",
+    }
     assert default_version(all_tax, "user") == "tax-user-2026-10-27-v1"
     assert default_version(all_tax, "product") == "tax-product-2026-10-27-v1"
+    assert default_version(all_tax, "publication") == "tax-publication-2026-11-06-v1"
 
 
 def test_alias_mapping_never_guesses():

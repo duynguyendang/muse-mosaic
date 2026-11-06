@@ -101,10 +101,27 @@ async def _match_documents(
     splink_cfg = getattr(first_policy, "splink", None) if first_policy else None
     threshold = float(getattr(splink_cfg, "threshold", 0.9) or 0.9)
     blocking = list(getattr(splink_cfg, "blocking", None) or ["email", "phone", "order_id"])
+    # Deterministic engine route: a pure function of shape + identifier
+    # coverage; never of labels or benchmark results.
+    from engine_router import route_dataset
+
+    blocking_by_entity = {
+        etype: list(
+            getattr(getattr(policy, "splink", None), "blocking", None)
+            or ["email", "phone", "order_id"]
+        )
+        for etype, policy in policies.items()
+    }
+    route = route_dataset(documents, blocking_by_entity)
+    splink_enabled = bool(getattr(current, "splink_enabled", True))
+    if current.muse_engine_router == "enforce" and not route.splink:
+        # enforce may only shrink to the deterministic exact matcher; it
+        # never turns Muse on implicitly (that stays double-gated)
+        splink_enabled = False
     splink_out = await asyncio.to_thread(
         run_splink,
         splink_rows,
-        enabled=bool(getattr(current, "splink_enabled", True)),
+        enabled=splink_enabled,
         threshold=threshold,
         blocking=blocking,
         service_url=current.matching_service_url,
@@ -115,6 +132,10 @@ async def _match_documents(
         known_policy_versions=sorted({policy.policy_version for policy in policies.values()}),
     )
     _note_splink_result(splink_out)
+    splink_out["engine_route"] = route.to_dict() | {
+        "mode": current.muse_engine_router,
+        "splink_applied": splink_enabled,
+    }
     status = splink_out["status"]
     if status != "ok":
         status = f"unavailable ({splink_out.get('detail', '')})"
@@ -420,6 +441,7 @@ async def _derive_persist(
         purchased_edges=_purchased,
         clusters=ctx.splink_out.get("clusters"),
         fact_documents=fact_documents,
+        policies=ctx.policies,
     )
     payload = response.model_dump(mode="json")
     return (
@@ -532,18 +554,24 @@ def _autonomy_block(
     """Autonomy report: modes in play, breakers tripped, audit samples.
 
     Breakers grade the build's own per-entity Muse runs — no model calls.
-    The batch is *labelled*, never silently degraded; when a breaker fires the
-    report says so and the operator decides (jobs stop further clusters, the
-    sync path labels only — documented in docs/ROADMAP.md M3).
+    They are **enforced** in ``jobs.execute_full_build`` *before* any golden
+    is derived (``autonomy.enforce_breakers``): a tripped breaker halts the
+    build, so a surviving report here always carries ``breakers == []``.
+    The list is kept in the summary for post-mortem and for clients that
+    consume the report shape; do not read it as optional.
     """
     by_entity = (ctx.splink_out.get("muse_candidates") or {}).get("by_entity") or {}
     entity_types = sorted(
         {getattr(d, "entity_type", None) or "user" for d in ctx.request.dataset.documents}
     )
+    # breaker knobs are versioned policy data, traced via policy_versions
+    overrides = {
+        etype: autonomy.breaker_overrides(policy) for etype, policy in ctx.policies.items()
+    }
     return {
         "frozen": bool(getattr(ctx, "autonomy_frozen", False)),
         "modes": autonomy.resolve_modes(ctx.settings, entity_types),
-        "breakers": autonomy.evaluate_breakers(by_entity),
+        "breakers": autonomy.evaluate_breakers(by_entity, overrides=overrides),
         "audit_samples": autonomy.report_audit(
             goldens, stewards, rate=ctx.settings.autonomy_audit_rate
         ),
@@ -586,6 +614,7 @@ def _build_summary(
             "detail": ctx.splink_out.get("detail", ""),
             "splink_version": ctx.splink_out.get("splink_version"),
             "duckdb_version": ctx.splink_out.get("duckdb_version"),
+            "engine_route": ctx.splink_out.get("engine_route"),
         },
         "muse_candidates": ctx.splink_out.get("muse_candidates"),
         "taxonomy_extension": ctx.splink_out.get("taxonomy_extension"),
@@ -763,11 +792,20 @@ async def _build_clusters(
                     settings, entity_clusters, mode=mode, frozen=frozen
                 )
             else:  # auto
+                rate = float(getattr(settings, "autonomy_canary_rate", 0.0) or 0.0)
+                apply_merge = _canary_predicate(entity_type, rate)
                 entity_clusters, info = await muse_candidates.propose_and_merge(
-                    settings, entity_clusters
+                    settings, entity_clusters, apply_merge=apply_merge
                 )
-                info["autonomy"] = {"mode": "auto", "frozen": frozen}
+                info["autonomy"] = {
+                    "mode": "auto",
+                    "frozen": frozen,
+                    "canary_rate": rate,
+                    "canary_held": info.get("would_merge", 0),
+                }
             _record_muse_run(splink_out, entity_type, info)
+            if mode == "suggest" or (mode == "auto" and info.get("held_merges")):
+                _persist_merge_proposals(settings, policies, entity_type, info)
         clusters.extend(entity_clusters)
     return clusters
 
@@ -806,6 +844,65 @@ def _copy_value(value: Any) -> Any:
     if isinstance(value, list):
         return list(value)
     return value
+
+
+def _canary_predicate(entity_type: str, rate: float):
+    """Deterministic per-pair canary selector for AUTONOMY canary builds.
+
+    Hash-stable for a given (entity_type, left_cluster, right_cluster): the
+    same pair either always lands in the canary slice or never does, so a
+    held merge stays held across replays. ``rate <= 0`` disables the canary
+    (returns None → everything applies, plain auto); ``rate >= 1`` applies
+    everything (the whole build is the canary).
+    """
+    if rate <= 0.0:
+        return None
+    if rate >= 1.0:
+        return lambda pair: True
+
+    def _in_canary(pair) -> bool:
+        key = f"{entity_type}|{pair.left}|{pair.right}"
+        digest = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16) % 10_000
+        return digest < int(rate * 10_000)
+
+    return _in_canary
+
+
+def _persist_merge_proposals(
+    settings,
+    policies: dict,
+    entity_type: str,
+    info: dict[str, Any],
+) -> None:
+    """File the would-merge proposals that were held back into the review queue."""
+    held = info.get("held_merges") or []
+    if not held:
+        return
+    policy = policies.get(entity_type)
+    policy_version = getattr(policy, "policy_version", None)
+    persisted = 0
+    for proposal in held:
+        docs_key = f"{entity_type}|{proposal['left_cluster']}|{proposal['right_cluster']}"
+        digest = hashlib.sha256(docs_key.encode("utf-8")).hexdigest()[:32]
+        ledger.record_merge_proposal(
+            settings.database_path,
+            proposal_id=f"mp-{digest}",
+            entity_type=entity_type,
+            left_cluster=str(proposal["left_cluster"]),
+            right_cluster=str(proposal["right_cluster"]),
+            left_docs=proposal.get("left_docs") or [],
+            right_docs=proposal.get("right_docs") or [],
+            confidence=str(proposal.get("confidence") or "unknown"),
+            tier=str(proposal.get("tier") or "semantic_only"),
+            name_score=proposal.get("name_score"),
+            address_score=proposal.get("address_score"),
+            reason=proposal.get("reason"),
+            model=str(info.get("mode") or "mock"),
+            policy_version=policy_version,
+            created_at=utcnow_iso(),
+        )
+        persisted += 1
+    info["proposals_queued"] = persisted
 
 
 def _record_muse_run(splink_out: dict[str, Any], entity_type: str, info: dict[str, Any]) -> None:
@@ -944,12 +1041,22 @@ async def build(request: Request) -> dict[str, Any]:
     current: Settings = request.app.state.settings
     from jobs import execute_full_build
 
-    return await execute_full_build(
-        current,
-        request.app.state.policies,
-        getattr(request.app.state, "taxonomies", None),
-        getattr(request.app.state, "expected_structures", {}) or {},
-        build_request,
-        engine_killed=getattr(request.app.state, "engine_killed", False),
-        autonomy_frozen=getattr(request.app.state, "autonomy_frozen", False),
-    )
+    try:
+        return await execute_full_build(
+            current,
+            request.app.state.policies,
+            getattr(request.app.state, "taxonomies", None),
+            getattr(request.app.state, "expected_structures", {}) or {},
+            build_request,
+            engine_killed=getattr(request.app.state, "engine_killed", False),
+            autonomy_frozen=getattr(request.app.state, "autonomy_frozen", False),
+        )
+    except autonomy.BreakerTripped as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "m3_breaker_tripped",
+                "message": str(exc),
+                "breakers": exc.breakers,
+            },
+        ) from exc

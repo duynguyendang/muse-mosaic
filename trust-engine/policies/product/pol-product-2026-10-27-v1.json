@@ -1,8 +1,12 @@
 {
   "policy_version": "pol-product-2026-10-27-v1",
   "entity_type": "product",
-  "allowed_attributes": ["category"],
-  "golden_attributes": ["category"],
+  "allowed_attributes": [
+    "category"
+  ],
+  "golden_attributes": [
+    "category"
+  ],
   "authority_matrix": {
     "category": {
       "pim-like": 1,
@@ -11,9 +15,27 @@
     }
   },
   "critical_attributes": [],
-  "rules": ["R1", "R2", "R3", "R4", "L1", "C1", "C2", "T1", "I1"],
+  "rules": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "L1",
+    "C1",
+    "C2",
+    "T1",
+    "I1"
+  ],
   "thresholds": {
-    "low_confidence": "demo parameter, reviewed once before recording"
+    "low_confidence": "demo parameter, reviewed once before recording",
+    "borderline_band": {
+      "low": 0.6,
+      "high": 0.85
+    },
+    "m3_breakers": {
+      "zero_candidates_clusters": 200,
+      "judge_failure_limit": 0.1
+    }
   },
   "ttls_seconds": {
     "detector-like": 600,
@@ -21,6 +43,8 @@
   },
   "splink": {
     "threshold": 0.9,
-    "blocking": ["category"]
+    "blocking": [
+      "category"
+    ]
   }
 }

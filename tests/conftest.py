@@ -32,6 +32,60 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
+def write_witness(tmp_path) -> str:
+    """A minimal but valid live calibration witness for auto-mode tests.
+
+    The auto gate (auto_witness.verify_auto_witness) requires a live-judge
+    run log with precision >= floor on every dataset; this stands in for
+    one without spending a single token.
+    """
+    import json
+
+    path = Path(tmp_path) / "witness.json"
+    path.write_text(
+        json.dumps(
+            {
+                "harness": "scripts/eval_calibration.py",
+                "date_utc": "20261106T000000Z",
+                "git_sha": "0" * 40,
+                "judge": "live",
+                "floor": 0.995,
+                "model_id": "test-live-model",
+                "max_pairs": 0,
+                "datasets": [
+                    {
+                        "dataset": "dblp-acm-dirty",
+                        "entity_type": "publication",
+                        "documents": 4910,
+                        "pairs_positive": 2220,
+                        "floor": 0.995,
+                        "best_precision": 0.999,
+                        "arms": [
+                            {
+                                "arm": "M Muse (live, min_confidence=high)",
+                                "confidence": "high",
+                                "precision": 0.999,
+                                "recall": 0.9,
+                                "f1": 0.94,
+                                "clusters": 2708,
+                                "impure_clusters": 0,
+                                "judged": 18500,
+                                "merged": 1000,
+                                "judge_calls": 18500,
+                                "cache_hits": 0,
+                                "tokens": 1000000,
+                            }
+                        ],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return str(path)
+
+
 _COMPOSED_DIR: Path | None = None
 
 
@@ -49,12 +103,19 @@ def _composed_policy_dir() -> Path:
     import tempfile
 
     base = Path(tempfile.mkdtemp(prefix="mosaic-policies-"))
+    for source_dir in (TE_DIR / "policies",):
+        # every shipped entity policy directory is mirrored: a new policy
+        # file must not need a conftest edit (same rule as the engine)
+        for entity_dir in source_dir.iterdir():
+            if not entity_dir.is_dir() or not any(entity_dir.glob("*.json")):
+                continue
+            dest = base / entity_dir.name
+            dest.mkdir(parents=True, exist_ok=True)
+            for path in entity_dir.glob("*"):
+                shutil.copy(path, dest / path.name)
     for entity in ("user", "product"):
         dest = base / entity
-        dest.mkdir(parents=True)
-        for source_dir in (TE_DIR / "policies" / entity,):
-            for path in source_dir.glob("*"):
-                shutil.copy(path, dest / path.name)
+        dest.mkdir(exist_ok=True)
         for profile in ("retail-balanced", "analytical-mesh"):
             staged = ROOT / "data" / profile / "policies" / entity
             if staged.is_dir():

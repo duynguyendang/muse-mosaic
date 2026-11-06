@@ -1,0 +1,64 @@
+{
+  "policy_version": "pol-publication-2026-11-06-v1",
+  "entity_type": "publication",
+  "allowed_attributes": [
+    "title",
+    "authors",
+    "venue",
+    "year"
+  ],
+  "golden_attributes": [
+    "venue"
+  ],
+  "authority_matrix": {
+    "title": {
+      "dblp": 1,
+      "acm": 1
+    },
+    "venue": {
+      "dblp": 1,
+      "acm": 1
+    },
+    "year": {
+      "dblp": 1,
+      "acm": 1
+    },
+    "authors": {
+      "dblp": 1,
+      "acm": 1
+    }
+  },
+  "critical_attributes": [],
+  "rules": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "L1",
+    "C1",
+    "C2",
+    "T1",
+    "I1",
+    "S1",
+    "S2",
+    "S3"
+  ],
+  "thresholds": {
+    "low_confidence": "demo parameter, reviewed once before recording",
+    "borderline_band": {
+      "low": 0.6,
+      "high": 0.85
+    },
+    "m3_breakers": {
+      "zero_candidates_clusters": 200,
+      "judge_failure_limit": 0.1
+    }
+  },
+  "ttls_seconds": {},
+  "splink": {
+    "threshold": 0.9,
+    "blocking": [
+      "title"
+    ]
+  }
+}

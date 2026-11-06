@@ -291,3 +291,57 @@ def test_job_terminal_row_keeps_charged_tokens(tmp_path):
     # Replayed decisions carry no new usage; fresh cluster charged 150.
     assert hooks.tokens_used == 150
     assert ledger.fetch_job(db, "j1")["tokens_used"] == 150
+
+
+def _trip_breaker(monkeypatch):
+    """Make the Muse run look broken at scale: 250 clusters, 0 candidates."""
+    import routes.build as build_module
+
+    async def fake_match(settings, policies, documents, work_id):
+        splink_out = {
+            "status": "ok",
+            "clusters": [],
+            "pairs": [],
+            "muse_candidates": {
+                "by_entity": {
+                    "user": {
+                        "clusters_in": 250,
+                        "candidate_pairs": 0,
+                        "judge_calls": 0,
+                        "judge_failures": 0,
+                    },
+                },
+            },
+        }
+        return splink_out, "ok"
+
+    async def fake_clusters(
+        settings, policies, taxonomies, documents, splink_out, autonomy_frozen=False
+    ):
+        return [{"cluster_id": "c1", "entity_type": "user", "member_docs": documents[:1]}]
+
+    monkeypatch.setattr(build_module, "_match_documents", fake_match)
+    monkeypatch.setattr(build_module, "_build_clusters", fake_clusters)
+
+
+def test_breaker_stops_sync_build_before_derivation(job_client, monkeypatch):
+    _trip_breaker(monkeypatch)
+    response = job_client.post("/build", json=hidden_body("job-breaker-sync"))
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["reason"] == "m3_breaker_tripped"
+    assert [b["breaker"] for b in detail["breakers"]] == ["zero_candidates_at_scale"]
+
+
+def test_breaker_fails_job_without_retry(job_client, monkeypatch):
+    _trip_breaker(monkeypatch)
+    response = job_client.post("/jobs", json=hidden_body("job-breaker-job"))
+    assert response.status_code == 202, response.text
+    job_id = response.json()["job_id"]
+
+    drive(job_client, limit=3)
+    got = job_client.get(f"/jobs/{job_id}").json()
+    assert got["status"] == "failed"
+    assert "breaker" in (got["error"] or "").lower()
+    # Never retried: a tripped breaker is terminal, not transient.
+    assert got["attempts"] == 1

@@ -35,7 +35,13 @@ def downstream(
         raise HTTPException(status_code=404, detail=f"unknown downstream agent {agent!r}")
     _check_entity(entity_type)
     current: Settings = request.app.state.settings
-    wanted = field or ("category" if entity_type == "product" else "phone")
+    # no field named: the entity's first golden attribute from its policy
+    # (product -> category, user -> phone), never a hardcoded per-type literal
+    policy = (getattr(request.app.state, "policies", None) or {}).get(entity_type)
+    default_field = "phone"
+    if policy is not None:
+        default_field = next(iter(policy.golden_attributes or policy.allowed_attributes), "phone")
+    wanted = field or default_field
     golden = ledger.fetch_latest_golden(current.database_path, entity_type, entity_id)
     if golden is None:
         return DownstreamAnswer(

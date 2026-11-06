@@ -48,8 +48,18 @@ def taxonomies_dir(mock_data_dir: str | Path | None = None) -> Path:
 
 
 def load_taxonomies(taxonomy_dir: str | Path | None = None) -> dict[str, Taxonomy]:
-    """Load every taxonomy JSON, keyed by taxonomy_version."""
+    """Load every taxonomy JSON, keyed by taxonomy_version.
+
+    Fails closed when the directory is (or sits under) an onboarding bundle
+    whose review is pending human approval.
+    """
     base = Path(taxonomy_dir) if taxonomy_dir else taxonomies_dir()
+    from bundle_review import ReviewPending, refuse_pending_bundle
+
+    try:
+        refuse_pending_bundle(base)
+    except ReviewPending as exc:
+        raise TaxonomyError(f"taxonomy bundle refused: {exc}") from exc
     loaded: dict[str, Taxonomy] = {}
     for path in sorted(base.glob("*.json")):
         taxonomy = Taxonomy.model_validate_json(path.read_text(encoding="utf-8"))

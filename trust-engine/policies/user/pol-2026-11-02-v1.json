@@ -63,7 +63,15 @@
     "S3"
   ],
   "thresholds": {
-    "low_confidence": "demo parameter, reviewed once before recording"
+    "low_confidence": "demo parameter, reviewed once before recording",
+    "borderline_band": {
+      "low": 0.6,
+      "high": 0.85
+    },
+    "m3_breakers": {
+      "zero_candidates_clusters": 200,
+      "judge_failure_limit": 0.1
+    }
   },
   "ttls_seconds": {
     "detector-like": 600,

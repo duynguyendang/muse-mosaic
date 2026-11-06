@@ -24,6 +24,7 @@ import dataclasses
 import muse_candidates as mc
 import pytest
 from config import Settings
+from schema_contract import USER_SPEC
 
 
 def product(doc_id, name, manufacturer=None, price=None, source="amazon"):
@@ -130,8 +131,8 @@ def test_unknown_entity_type_fails_closed():
 
 
 def test_each_entity_gets_its_own_question():
-    assert mc.system_prompt_for("user") is mc.SYSTEM_PROMPT
-    assert mc.system_prompt_for(None) is mc.SYSTEM_PROMPT
+    assert mc.system_prompt_for("user") is mc.system_prompt_for(None)
+    assert mc.system_prompt_for("user") == USER_SPEC.question
     product_prompt = mc.system_prompt_for("product")
     publication_prompt = mc.system_prompt_for("publication")
     assert "SAME product" in product_prompt and "person" not in product_prompt
@@ -378,7 +379,7 @@ def test_live_judge_batches_are_grouped_by_prompt(monkeypatch):
         mc._judge_batch(Settings(use_mock_muse=False), batch, asyncio.Semaphore(2))
     )
     assert len(verdicts) == 2 and tokens == 20
-    assert set(seen) == {mc.SYSTEM_PROMPT, mc.PRODUCT_PROMPT}
+    assert set(seen) == {mc.system_prompt_for("user"), mc.PRODUCT_PROMPT}
 
 
 def test_outage_message_still_reads_as_unavailable(monkeypatch):

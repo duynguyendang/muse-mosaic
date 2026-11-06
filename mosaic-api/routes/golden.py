@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import ledger
 from config import Settings
 from fastapi import APIRouter, HTTPException, Request
@@ -22,6 +25,21 @@ def get_golden(entity_type: str, entity_id: str, request: Request) -> GoldenReco
             status_code=404,
             detail=f"no golden record for {entity_type}/{entity_id}",
         )
+    stored = record.get("content_sha256")
+    if stored:
+        # Ledger integrity: the stored attributes must hash to the anchor
+        # written with the row. A mismatch means the ledger was edited out
+        # from under the engine — refuse to serve it.
+        canonical = json.dumps(record["attributes"], sort_keys=True, ensure_ascii=False)
+        actual = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        if actual != stored:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"golden record for {entity_type}/{entity_id} v{record.get('version')} "
+                    f"failed the ledger integrity check; refusing to serve it"
+                ),
+            )
     try:
         return GoldenRecord.model_validate(record)
     except ValueError as exc:

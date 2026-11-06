@@ -126,19 +126,6 @@ def canonicalize_documents(
     return out
 
 
-SYSTEM_PROMPT = (
-    "You decide whether two customer records describe the SAME real person, "
-    "using only the display names and addresses given. Different people can "
-    "share a name, so a matching name with a different or missing address is "
-    "'unsure', never 'same'. Say 'same' only when both the names and the "
-    "addresses plausibly match after typos, casing, abbreviation or word "
-    "order. Say 'different' when the evidence points to different people. "
-    "Each pair may carry 'identifier_hints' computed by code (a phone or email "
-    "that is nearly, but not exactly, the same). A hint is supporting evidence, "
-    "never enough on its own: the names must still be compatible. "
-    "Use nothing that is not in the input. Give one short reason."
-)
-
 # The person question is FROZEN, verbatim: it is hashed into every verdict
 # cache key that exists today, and its wording is itself the privacy contract
 # (a phone or email is only ever a HINT, never proof). Every other entity's
@@ -146,10 +133,6 @@ SYSTEM_PROMPT = (
 # entity type is a data drop rather than a new prompt string in this file.
 PRODUCT_PROMPT = compile_judge_prompt(PRODUCT_SPEC)
 PUBLICATION_PROMPT = compile_judge_prompt(PUBLICATION_SPEC)
-
-# schema_version -> prompt text shipped for that version. A spec version not
-# listed here gets its question compiled on demand from the spec.
-FROZEN_PROMPTS: dict[str, str] = {USER_SPEC.schema_version: SYSTEM_PROMPT}
 
 
 def system_prompt_for(entity_type: str | None) -> str:
@@ -161,8 +144,7 @@ def system_prompt_for(entity_type: str | None) -> str:
     must fail loud, never be silently judged with the person question.
     """
     spec = get_schema_spec(entity_type)
-    frozen = FROZEN_PROMPTS.get(spec.schema_version)
-    return frozen if frozen is not None else compile_judge_prompt(spec)
+    return spec.question or compile_judge_prompt(spec)
 
 
 JUDGE_SCHEMA: dict[str, Any] = {
@@ -238,13 +220,14 @@ def cluster_profile(
 ) -> dict[str, list[str]]:
     """Exactly what this entity's schema says may leave the process.
 
-    The primary label lands under ``"names"``, the address under
-    ``"addresses"`` (only a person spec declares an address, so every other
-    type keeps an empty list and the payload shape stays uniform), and every
-    other visible field under its own canonical name, normalised by the
-    normalizer that field declares -- ``preserve_punct`` keeps a price of
-    ``$19.99`` readable, ``edition_tokens`` derives edition/platform/tier
-    hints from the title.
+    The primary label lands under ``"names"``; the text-fold hard
+    discriminators land under ``"addresses"`` (only the person spec declares a
+    text-fold address discriminator today, so every other type keeps an
+    empty list and the payload shape stays uniform), and every other visible
+    field under its own canonical name, normalised by the normalizer that
+    field declares -- ``preserve_punct`` keeps a price of ``$19.99``
+    readable, ``edition_tokens`` derives edition/platform/tier hints from
+    the title.
 
     The privacy boundary is ``spec.visible_to_judge()``: a ``private_
     identifier`` is never read here, for any entity type, so phone and email
@@ -252,6 +235,11 @@ def cluster_profile(
     """
     spec = spec or get_schema_spec(cluster.get("entity_type"))
     label_field = spec.primary_label.canonical_name
+    discriminator_fields = [
+        field.canonical_name
+        for field in spec.fields
+        if field.role == "hard_discriminator" and field.normalizer == "text_fold"
+    ]
     collected: dict[str, set[str]] = {}
     for document in cluster["member_docs"]:
         for mapping in spec.visible_to_judge():
@@ -273,10 +261,12 @@ def cluster_profile(
                     bucket.add(normalised)
     profile: dict[str, list[str]] = {
         "names": sorted(collected.get(label_field, set())),
-        "addresses": sorted(collected.get("address", set())),
+        "addresses": sorted(
+            {value for name in discriminator_fields for value in collected.get(name, ())}
+        ),
     }
     for canonical in sorted(collected):
-        if canonical in (label_field, "address") or not collected[canonical]:
+        if canonical in (label_field, *discriminator_fields) or not collected[canonical]:
             continue
         profile[canonical] = sorted(collected[canonical])
     return profile
@@ -616,6 +606,10 @@ def shortlist(
 # --------------------------------------------------------------------------
 
 
+_MOCK_SAME_SCORE = 0.85  # name score at which the mock may confirm
+_MOCK_CONFIRM_SCORE = 0.85  # discriminator (address) score that confirms a label
+
+
 def mock_judge(pairs: list[CandidatePair]) -> list[Verdict]:
     """Deterministic stand-in. Not a model: strict string thresholds.
 
@@ -630,42 +624,6 @@ def mock_judge(pairs: list[CandidatePair]) -> list[Verdict]:
     """
     out: list[Verdict] = []
     for p in pairs:
-        if p.entity_type == "user":
-            if p.name_score >= 0.85 and (p.address_score >= 0.85 or p.hints):
-                out.append(
-                    Verdict(
-                        pair_id=p.pair_id,
-                        verdict="same",
-                        confidence="high",
-                        reason=(
-                            f"name {p.name_score:.2f} matches with "
-                            + (
-                                "a near-identical " + "/".join(p.hints)
-                                if p.hints
-                                else f"address {p.address_score:.2f}"
-                            )
-                        ),
-                    )
-                )
-            elif p.name_score >= 0.85:
-                out.append(
-                    Verdict(
-                        pair_id=p.pair_id,
-                        verdict="unsure",
-                        confidence="low",
-                        reason="name matches but the address does not confirm it",
-                    )
-                )
-            else:
-                out.append(
-                    Verdict(
-                        pair_id=p.pair_id,
-                        verdict="different",
-                        confidence="medium",
-                        reason="names are not close enough",
-                    )
-                )
-            continue
         spec = get_schema_spec(p.entity_type)
         anchor = spec.anchor_group
         strong_field = anchor.canonical_name if anchor else None
@@ -674,22 +632,46 @@ def mock_judge(pairs: list[CandidatePair]) -> list[Verdict]:
             and p.left_profile.get(strong_field)
             and set(p.left_profile[strong_field]) & set(p.right_profile.get(strong_field, []))
         )
-        if p.name_score >= 0.85 and (strong or p.hints):
+        # What corroborates a label, per the contract: an anchor_group shared
+        # (maker/venue), a hard_discriminator score (the address profile is the
+        # one discriminator score the pair carries today), or an identifier
+        # hint. User labels corroborate on the address; products/publications
+        # have no address, so they admit on the anchor alone (the judge, not a
+        # threshold, decides the rest). No per-entity branch.
+        discriminator = next((f for f in spec.fields if f.role == "hard_discriminator"), None)
+        discriminator_ok = (
+            discriminator is not None
+            and discriminator.canonical_name == "address"
+            and p.address_score >= _MOCK_CONFIRM_SCORE
+        )
+        confirmation_field = strong_field or (
+            discriminator.canonical_name if discriminator is not None else None
+        )
+        if p.name_score >= _MOCK_SAME_SCORE and (strong or discriminator_ok or p.hints):
+            confirm = (
+                "a near-identical " + "/".join(p.hints)
+                if p.hints
+                else (
+                    f"address {p.address_score:.2f}"
+                    if discriminator_ok
+                    else f"the same {strong_field}"
+                )
+            )
             out.append(
                 Verdict(
                     pair_id=p.pair_id,
                     verdict="same",
                     confidence="high",
-                    reason=f"name {p.name_score:.2f} with the same {strong_field}",
+                    reason=f"name {p.name_score:.2f} matches with {confirm}",
                 )
             )
-        elif p.name_score >= 0.85:
+        elif p.name_score >= _MOCK_SAME_SCORE:
             out.append(
                 Verdict(
                     pair_id=p.pair_id,
                     verdict="unsure",
                     confidence="low",
-                    reason=f"name matches but the {strong_field} does not confirm it",
+                    reason=f"name matches but the {confirmation_field} does not confirm it",
                 )
             )
         elif p.name_score >= spec.admission.min_label_score:
@@ -1076,9 +1058,18 @@ def _representative(cluster: dict[str, Any]) -> str:
 
 
 async def propose_and_merge(
-    settings: Settings, clusters: list[dict[str, Any]]
+    settings: Settings,
+    clusters: list[dict[str, Any]],
+    *,
+    apply_merge=None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Run the three steps. Never raises: failure means no merges, labelled."""
+    """Run the three steps. Never raises: failure means no merges, labelled.
+
+    ``apply_merge`` (canary): when given, a merge is applied only when the
+    callable returns True for that pair; the rest are held, reported in
+    ``info['held_merges']`` and counted under ``info['would_merge']`` —
+    judged but never applied.
+    """
     mode = "mock" if settings.use_mock_muse else "live"
     info: dict[str, Any] = {
         "enabled": True,
@@ -1130,9 +1121,17 @@ async def propose_and_merge(
         return clusters, info
     info["judged"] = len(verdicts)
     merges = select_merges(pairs, verdicts, settings.muse_candidate_min_confidence)
+    if apply_merge is not None:
+        held = [merge for merge in merges if not apply_merge(merge[0])]
+        merges = [merge for merge in merges if apply_merge(merge[0])]
+    else:
+        held = []
     merged, applied = apply_merges(clusters, merges)
     info["merged"] = applied
     info["clusters_out"] = len(merged)
+    info["would_merge"] = len(held)
+    if held:
+        info["held_merges"] = held_merge_report(clusters, held)
     info["elapsed_s"] = round(perf_counter() - started, 1)
     tiers: dict[str, int] = {}
     for cluster in merged:
@@ -1145,6 +1144,39 @@ async def propose_and_merge(
 
 
 MAX_REPORTED_DECLINED = 50
+MAX_HELD_MERGES = 200
+
+
+def held_merge_report(
+    clusters: list[dict[str, Any]],
+    merges: list[tuple[CandidatePair, Verdict]],
+    *,
+    cap: int = MAX_HELD_MERGES,
+) -> list[dict[str, Any]]:
+    """Mergeable pairs a canary (or shadow/suggest) held back, fully described
+    for the review queue. Cluster references resolve to cluster_ids and member
+    document ids — never to list indices, which are meaningless after reorder."""
+    out: list[dict[str, Any]] = []
+    for pair, verdict in merges[:cap]:
+        try:
+            left, right = clusters[pair.left], clusters[pair.right]
+        except IndexError:
+            continue
+        out.append(
+            {
+                "pair_id": pair.pair_id,
+                "left_cluster": left.get("cluster_id"),
+                "right_cluster": right.get("cluster_id"),
+                "left_docs": [d.get("document_id") for d in left.get("member_docs", [])],
+                "right_docs": [d.get("document_id") for d in right.get("member_docs", [])],
+                "confidence": verdict.confidence,
+                "reason": verdict.reason,
+                "tier": "semantic_verified" if pair.evidence else "semantic_only",
+                "name_score": round(pair.name_score, 3),
+                "address_score": round(pair.address_score, 3),
+            }
+        )
+    return out
 
 
 def declined_report(

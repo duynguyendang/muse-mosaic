@@ -37,5 +37,6 @@
       "role": "private_identifier",
       "normalizer": "email_lower"
     }
-  ]
+  ],
+  "question": "You decide whether two customer records describe the SAME real person, using only the display names and addresses given. Different people can share a name, so a matching name with a different or missing address is 'unsure', never 'same'. Say 'same' only when both the names and the addresses plausibly match after typos, casing, abbreviation or word order. Say 'different' when the evidence points to different people. Each pair may carry 'identifier_hints' computed by code (a phone or email that is nearly, but not exactly, the same). A hint is supporting evidence, never enough on its own: the names must still be compatible. Use nothing that is not in the input. Give one short reason."
 }

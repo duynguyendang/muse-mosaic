@@ -152,9 +152,12 @@ class Settings:
     # Autonomy ladder (M3). Per entity type, never one global switch:
     #   off      - Muse is not applied at all for the entity
     #   shadow   - Muse judges and records; nothing merges from its verdicts
-    #   suggest  - like shadow, and the build reports how many merges it would
-    #              have applied (review-queue wiring is the G4 milestone)
-    #   auto     - Muse-merged clusters are applied (MUSE_CANDIDATE_MATCHING)
+    #   suggest  - like shadow, and the build persists its would-merge pairs as
+    #              proposals in the review queue (/api/v1/suggestions); a human
+    #              labels them, the labels are never applied to goldens
+    #   auto     - Muse-merged clusters are applied (MUSE_CANDIDATE_MATCHING);
+    #              with AUTONOMY_CANARY_RATE in (0, 1) only a deterministic
+    #              slice is applied and the rest are held for the queue
     # AUTONOMY_MODE_<ENTITY> overrides the build-wide mode for one entity type
     # (e.g. AUTONOMY_MODE_PRODUCT=auto). Legacy values manual -> off and
     # supervised -> suggest are accepted and normalised.
@@ -165,6 +168,23 @@ class Settings:
     # starts frozen; a restart always recovers the same way the engine kill
     # switch recovers.
     autonomy_kill_switch: bool = False
+    # Deterministic engine router (see engine_router.py). "advisory" (default):
+    # the recommendation is reported in the build summary, nothing changes.
+    # "enforce": gates the free, deterministic Splink dimension when the rule
+    # says exact-only. Never turns Muse on implicitly.
+    muse_engine_router: str = "advisory"
+    # AUTONOMY_MODE=auto may only start on witnessed evidence: a live
+    # calibration run log (scripts/eval_calibration.py --judge live --run-log)
+    # with precision >= muse_auto_precision_floor on every measured dataset.
+    # Fail-closed: auto with a missing/mock/below-floor witness refuses to
+    # start. Empty (default) = no witness = auto refused.
+    muse_auto_witness: str = ""
+    muse_auto_precision_floor: float = 0.995
+    # Canary slice for autonomy auto mode: deterministic per pair, in [0, 1).
+    # 0 (default) = no canary. Auto mode with rate in (0, 1) applies merges
+    # only on the canary digest range; the rest are held for the review
+    # queue. Auto startup still requires a witnessed floor either way.
+    autonomy_canary_rate: float = 0.0
     # Fraction of decisions sampled for audit (deterministic hash sampling).
     autonomy_audit_rate: float = 0.01
     # Opt-in: let Muse propose near-match cluster merges that exact identifiers
@@ -268,8 +288,22 @@ class Settings:
             or 0,
             autonomy_mode=_normalize_autonomy_mode(get("AUTONOMY_MODE") or "off", "AUTONOMY_MODE"),
             autonomy_modes=_parse_autonomy_modes(source),
+            muse_engine_router=(get("MUSE_ENGINE_ROUTER") or "advisory").strip().lower(),
             autonomy_kill_switch=_parse_bool(
                 get("AUTONOMY_KILL_SWITCH") or "false", "AUTONOMY_KILL_SWITCH"
+            ),
+            muse_auto_witness=get("MUSE_AUTO_WITNESS"),
+            muse_auto_precision_floor=_parse_float(
+                get("MUSE_AUTO_PRECISION_FLOOR") or "0.995",
+                "MUSE_AUTO_PRECISION_FLOOR",
+                minimum=0.5,
+                maximum=1.0,
+            ),
+            autonomy_canary_rate=_parse_float(
+                get("AUTONOMY_CANARY_RATE") or "0.0",
+                "AUTONOMY_CANARY_RATE",
+                minimum=0.0,
+                maximum=1.0,
             ),
             autonomy_audit_rate=_parse_float(
                 get("AUTONOMY_AUDIT_RATE") or "0.01",
@@ -330,6 +364,10 @@ class Settings:
             raise ConfigurationError(
                 f"MUSE_TAXONOMY_PROPOSALS must be off, rules or muse, got {self.taxonomy_proposals!r}"
             )
+        if self.muse_engine_router not in ("advisory", "enforce"):
+            raise ConfigurationError(
+                f"MUSE_ENGINE_ROUTER must be advisory or enforce, got {self.muse_engine_router!r}"
+            )
         if self.muse_blocking_mode not in ("token", "rarest_pair"):
             raise ConfigurationError(
                 f"MUSE_BLOCKING_MODE must be token or rarest_pair, got {self.muse_blocking_mode!r}"
@@ -347,6 +385,16 @@ class Settings:
                 raise ConfigurationError(
                     f"{label} must be off, shadow, suggest or auto, got {value!r}"
                 )
+        auto_in_play = self.autonomy_mode == "auto" or any(
+            normalize == "auto" for normalize in self.autonomy_modes.values()
+        )
+        if auto_in_play:
+            from auto_witness import WitnessError, verify_auto_witness
+
+            try:
+                verify_auto_witness(self.muse_auto_witness, self.muse_auto_precision_floor)
+            except WitnessError as exc:
+                raise ConfigurationError(f"AUTONOMY_MODE=auto refused: {exc}") from exc
         if not self.use_mock_muse:
             missing = [
                 name

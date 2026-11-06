@@ -72,9 +72,17 @@ def load_policies(policy_dir: Path | None = None) -> dict[str, Policy]:
     Every entity type with at least one policy JSON under the root is loaded —
     no hard-coded entity list. Selection among staged versions is lexical on
     ``policy_version`` (the composition convention documented above). Fail
-    closed when the root is missing or yields nothing.
+    closed when the root is missing or yields nothing — and fail closed when
+    the root is (or sits under) an onboarding bundle whose review is
+    pending human approval.
     """
     base = Path(policy_dir) if policy_dir else policies_dir()
+    from bundle_review import ReviewPending, refuse_pending_bundle
+
+    try:
+        refuse_pending_bundle(base)
+    except ReviewPending as exc:
+        raise PolicyError(f"policy bundle refused: {exc}") from exc
     dirs = _entity_dirs(base)
     if not dirs:
         raise PolicyError(f"no entity policy directories under {base}")

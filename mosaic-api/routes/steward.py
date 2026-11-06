@@ -7,6 +7,7 @@ file (single-use, bound to one suggested action) and re-derives under it.
 
 from __future__ import annotations
 
+import hashlib
 import json as jsonlib
 from datetime import UTC, datetime
 from typing import Any
@@ -403,23 +404,25 @@ def _insert_split_golden(
         with connection:
             latest_version = latest_version_of(current, entity_type, entity_id)
             golden_id = f"golden-{decision_id}"
+            restored_json = jsonlib.dumps(restored, sort_keys=True, ensure_ascii=False)
             connection.execute(
                 """
                 INSERT INTO golden_records
                   (golden_id, entity_type, entity_id, version, attributes,
                    decision_id, policy_version, taxonomy_version,
-                   created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   content_sha256, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     golden_id,
                     entity_type,
                     entity_id,
                     latest_version + 1,
-                    jsonlib.dumps(restored, sort_keys=True, ensure_ascii=False),
+                    restored_json,
                     decision_id,
                     policy_version,
                     taxonomy_version or None,
+                    hashlib.sha256(restored_json.encode("utf-8")).hexdigest(),
                     created_at,
                     created_at,
                 ),

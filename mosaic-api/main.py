@@ -45,6 +45,7 @@ from routes import reference as reference_routes
 from routes import resolve as resolve_routes
 from routes import similar as similar_routes
 from routes import steward as steward_routes
+from routes import suggestions as suggestions_routes
 from routes import upload as upload_routes
 from routes.deps import (
     _load_expected_structures,
@@ -120,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     for routes_module in (
         health_routes,
         autonomy_routes,
+        suggestions_routes,
         entities_routes,
         reference_routes,
         demo_routes,

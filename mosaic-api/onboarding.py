@@ -26,11 +26,18 @@ gates:
    the correct conservative default under no evidence) and derived
    ``critical`` / ``categorical`` facts. The engine still decides; nothing
    here publishes anything.
-5. **Bundle assembly** — manifest with every decision, hash, and artifact.
+5. **Bundle assembly** — manifest with every decision, hash, and artifact,
+   plus ``review.json``: the minted terms and the derived authority ranks,
+   with the observations behind them. The bundle lands **pending review**:
+   nothing loads from it (loaders, the run CLI) until a human approves the
+   review (``--accept``), recording who signed off and binding the approval
+   to the review digest. A majority-wrong source cannot become policy just
+   because it was frequent.
 
 Nothing is ever auto-loaded from a bundle: the caller runs the build with
 ``POLICY_DIR``/``TAXONOMY_DIR`` (or the equivalent in-process arguments)
-pointing at it, exactly like a staged policy profile.
+pointing at it, exactly like a staged policy profile — and only once the
+review is approved.
 """
 
 from __future__ import annotations
@@ -528,6 +535,7 @@ def derive_taxonomy_bootstrap(
             chosen[canonical] = counter
 
     terms: list[dict[str, Any]] = []
+    review_terms: list[dict[str, Any]] = []
     attributes: list[str] = []
     enum_values: dict[str, list[str]] = {}
     if isinstance(expected_structure, dict):
@@ -545,6 +553,14 @@ def derive_taxonomy_bootstrap(
             by_count = sorted(group, key=lambda v: counter.get(v, 0), reverse=True)
             head, rest = by_count[0], by_count[1:]
             attr_terms.append({"term": head, "synonyms": rest})
+            review_terms.append(
+                {
+                    "attribute": canonical,
+                    "term": head,
+                    "support": counter.get(head, 0),
+                    "variants": [{"value": v, "count": counter.get(v, 0)} for v in group],
+                }
+            )
             if len(attr_terms) >= max_terms:
                 break
         attributes.append(canonical)
@@ -565,6 +581,9 @@ def derive_taxonomy_bootstrap(
         # meta lives in the manifest only; the engine's strict decode rejects
         # any extra field in the taxonomy artifact
         "categorical_attributes": attributes,
+        # review material for the human gate: what was minted, from which
+        # observations, at what counts. Never written into the taxonomy file.
+        "review_terms": review_terms,
     }
 
 
@@ -647,6 +666,23 @@ def derive_policy(
     authority_matrix = {
         attr: {source: mode_rank(attr, source) for source in sources} for attr in allowed
     }
+    # review material for the human gate: every rank the matrix claims, with
+    # the votes behind it, and every source that had none (defaulted to 1).
+    votes_summary = []
+    for attr in allowed:
+        for source in sources:
+            counter = votes.get((attr, source)) or Counter()
+            votes_summary.append(
+                {
+                    "attribute": attr,
+                    "source": source,
+                    "rank": authority_matrix[attr][source],
+                    "votes": {str(rank): counter[rank] for rank in sorted(counter)},
+                }
+            )
+    defaulted_rank_sources = sorted(
+        {source for source in sources if not any((attr, source) in votes for attr in allowed)}
+    )
     golden = list(allowed)  # matches both shipped profiles' semantics
     critical = sorted(set(required) & set(allowed))
     blocking = [c for c in ("email", "phone", "order_id", "category", "name") if c in allowed][:3]
@@ -694,7 +730,14 @@ def derive_policy(
         line = _replace_header(line, policy_version, entity_type)
         mg_lines.append(line)
     mg = "\n".join(mg_lines) + "\n"
-    return {"policy_json": policy, "mg": mg, "blocking": blocking, "sources": sources}
+    return {
+        "policy_json": policy,
+        "mg": mg,
+        "blocking": blocking,
+        "sources": sources,
+        "votes_summary": votes_summary,
+        "defaulted_rank_sources": defaulted_rank_sources,
+    }
 
 
 def _replace_header(line: str, policy_version: str, entity_type: str) -> str:
@@ -811,11 +854,30 @@ async def assemble_bundle(
             details={"path": str(bundle)},
         )
 
+    review = {
+        "review_version": 1,
+        "status": "pending",
+        "entity_type": entity_type,
+        "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "documents_sha256": docs_sha,
+        # what was minted, and from what — the human signs off on this, not
+        # on the pipeline's intent
+        "terms": taxonomy_bundle["review_terms"],
+        "authority_matrix": policy["votes_summary"],
+        "defaulted_rank_sources": policy["defaulted_rank_sources"],
+        "how_to_approve": f"python3 scripts/onboard.py --accept {bundle} --reviewer <id>",
+    }
     manifest = {
         "bundle_version": 1,
         "derived_by": "muse-mosaic onboarding",
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "entity_type": entity_type,
+        "review": {
+            "status": "pending",
+            "file": "review.json",
+            "terms": len(review["terms"]),
+            "matrix_rows": len(review["authority_matrix"]),
+        },
         "inputs": {
             "document_count": len(documents),
             "documents_sha256": docs_sha,
@@ -846,6 +908,7 @@ async def assemble_bundle(
             "policy_json": f"policies/{entity_type}/{policy_name}.json",
             "policy_mg": f"policies/{entity_type}/{policy_name}.mg",
             "taxonomy": f"taxonomy/{taxonomy['taxonomy_version']}.json",
+            "review": "review.json",
         },
     }
 
@@ -861,6 +924,10 @@ async def assemble_bundle(
         write_text_atomic(
             bundle / "taxonomy" / f"{taxonomy['taxonomy_version']}.json",
             json.dumps(taxonomy, indent=2, ensure_ascii=False) + "\n",
+        )
+        write_text_atomic(
+            bundle / "review.json",
+            json.dumps(review, indent=2, ensure_ascii=False) + "\n",
         )
         if expected_structure is not None:
             write_text_atomic(
@@ -880,3 +947,98 @@ async def assemble_bundle(
         raise
     manifest["bundle_dir"] = str(bundle)
     return manifest
+
+
+# ---------------------------------------------------------------------------
+# 6. Human review gate: the bundle is derived, never loaded unreviewed
+# ---------------------------------------------------------------------------
+
+from bundle_review import ONBOARDING_BUNDLE, ReviewPending  # noqa: E402
+
+
+def _read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise ReviewPending(f"{path} is unreadable: {exc}") from exc
+
+
+def verify_bundle_approved(bundle_dir: str | Path) -> dict[str, Any]:
+    """Return the manifest if the bundle's review is approved; else raise."""
+    from bundle_review import check_bundle_approved
+
+    manifest = check_bundle_approved(Path(bundle_dir))
+    if manifest is None:
+        raise ReviewPending(f"{bundle_dir} is not an onboarding bundle")
+    return manifest
+
+
+def accept_review(bundle_dir: str | Path, *, reviewer: str, note: str = "") -> dict[str, Any]:
+    """Record the human sign-off for a derived bundle.
+
+    Flips ``review.json`` to approved, writes ``approval.json`` binding the
+    review to its digest and to the derivation input, and marks the manifest
+    approved. Fails closed on anything inconsistent (wrong input, missing
+    files, an unrecognised bundle). Idempotent for the same reviewer.
+    """
+    from taxonomies import write_text_atomic
+
+    bundle = Path(bundle_dir)
+    reviewer = str(reviewer or "").strip()
+    if not reviewer:
+        raise ReviewPending("--reviewer must name the person signing off the bundle")
+    manifest_path = bundle / "manifest.json"
+    review_path = bundle / "review.json"
+    approval_path = bundle / "approval.json"
+    if not manifest_path.is_file():
+        raise ReviewPending(f"no manifest.json under {bundle}; is this a bundle?")
+    manifest = _read_json(manifest_path)
+    if not isinstance(manifest, dict) or manifest.get("derived_by") != ONBOARDING_BUNDLE:
+        raise ReviewPending(f"{manifest_path} is not a muse-mosaic onboarding bundle")
+    review = _read_json(review_path)
+    if not isinstance(review, dict):
+        raise ReviewPending(f"{review_path} is not a JSON object")
+    status = str(review.get("status") or "")
+    if status == "approved":
+        approval = _read_json(approval_path)
+        if str(approval.get("reviewer")) == reviewer:
+            return {"already_approved": True, **approval}
+        raise ReviewPending(
+            f"bundle already approved by {approval.get('reviewer')!r} "
+            f"at {approval.get('approved_at')!r}; refusing to re-approve"
+        )
+    if status != "pending":
+        raise ReviewPending(f"bundle review status is {status!r}, cannot approve")
+    inputs = manifest.get("inputs") if isinstance(manifest.get("inputs"), dict) else {}
+    if inputs.get("documents_sha256") != review.get("documents_sha256"):
+        raise ReviewPending(
+            "review.json does not match the bundle's derivation input; refusing to approve"
+        )
+
+    approved_at = datetime.now(UTC).isoformat(timespec="seconds")
+    # 1) flip the review to approved (this is the document being signed)
+    review.update(
+        {
+            "status": "approved",
+            "approved": {"reviewer": reviewer, "approved_at": approved_at, "note": note or ""},
+        }
+    )
+    write_text_atomic(review_path, json.dumps(review, indent=2, ensure_ascii=False) + "\n")
+    # 2) bind the approval to the *final* review digest
+    review_sha = hashlib.sha256(review_path.read_bytes()).hexdigest()
+    approval = {
+        "approval_version": 1,
+        "approved_at": approved_at,
+        "reviewer": reviewer,
+        "note": note or "",
+        "documents_sha256": inputs.get("documents_sha256"),
+        "policy_version": (manifest.get("policy") or {}).get("policy_version"),
+        "taxonomy_version": (manifest.get("taxonomy") or {}).get("taxonomy_version"),
+        "review_sha256": review_sha,
+    }
+    write_text_atomic(approval_path, json.dumps(approval, indent=2, ensure_ascii=False) + "\n")
+    # 3) flip the manifest last: the loader refuses an approved review whose
+    #    manifest still says pending, so a crash mid-way can only under-share
+    manifest.setdefault("review", {}).update({"status": "approved", "file": "review.json"})
+    write_text_atomic(manifest_path, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    return {"already_approved": False, **approval}

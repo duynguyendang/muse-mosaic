@@ -281,6 +281,14 @@ def test_assemble_bundle_round_trip(tmp_path: Path, ok_engine) -> None:
     bundle = Path(manifest["bundle_dir"])
     assert (bundle / "manifest.json").is_file()
     assert (bundle / "expected_structure.json").is_file()
+    # a fresh bundle is pending human review: nothing loads from it yet
+    assert manifest["review"]["status"] == "pending"
+    from policies import PolicyError
+
+    with pytest.raises(PolicyError, match="refused"):
+        load_policies(bundle / "policies")
+    approval = onboarding.accept_review(bundle, reviewer="test-steward")
+    assert approval["reviewer"] == "test-steward"
     # derived artifacts load through the real loaders (they validate schemas)
     policies = load_policies(bundle / "policies")
     taxonomies = load_taxonomies(bundle / "taxonomy")

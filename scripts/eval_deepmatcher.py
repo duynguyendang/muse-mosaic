@@ -41,9 +41,12 @@ import asyncio
 import csv
 import dataclasses
 import io
+import json
+import subprocess
 import sys
 import zipfile
 from collections import Counter, defaultdict
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -478,7 +481,26 @@ def build_settings(judge: str, min_confidence: str, max_pairs: int) -> Settings:
     )
 
 
-async def run(name: str, args: argparse.Namespace) -> None:
+def _git_sha() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:  # noqa: BLE001 - a missing sha is a logged unknown, not a crash
+        return "unknown"
+
+
+def _git_dirty() -> bool | None:
+    try:
+        out = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
+        )
+        return bool(out.strip())
+    except Exception:  # noqa: BLE001 - a missing dirty flag is a logged unknown
+        return None
+
+
+async def run(name: str, args: argparse.Namespace) -> dict[str, Any]:
     spec = DATASETS[name]
     docs, truth, stats = load(spec)
     source_label = (
@@ -505,12 +527,27 @@ async def run(name: str, args: argparse.Namespace) -> None:
         f"{'precision':>11}{'recall':>9}{'F1':>8}{'clusters':>10}{'impure':>8}"
     )
     pipeline_candidates: set[tuple[str, str]] = set()
+    arms: list[dict[str, Any]] = []
     for label, strategy in strategies:
         candidates = blocking_candidates(docs, strategy)
         if strategy == "tokens_any":
             pipeline_candidates = candidates
         recall_c, found, golden = candidate_recall(docs, candidates, truth)
         stats_row = score(clusters_from_pairs(docs, candidates), truth)
+        arms.append(
+            {
+                "arm": label,
+                "code": strategy,
+                "candidate_recall": recall_c,
+                "found": found,
+                "golden": golden,
+                "precision": stats_row["precision"],
+                "recall": stats_row["recall"],
+                "f1": stats_row["f1"],
+                "clusters": stats_row["clusters"],
+                "impure_clusters": stats_row["impure_clusters"],
+            }
+        )
         print(
             f"{label:38}{recall_c:>13.1%}{f'{found:,}/{golden:,}':>14}"
             f"{stats_row['precision']:>11.1%}{stats_row['recall']:>9.1%}"
@@ -542,6 +579,26 @@ async def run(name: str, args: argparse.Namespace) -> None:
     merged, info = await mc.propose_and_merge(settings, base)
     muse_clusters = [[d["document_id"] for d in c["member_docs"]] for c in merged]
     muse = score(muse_clusters, truth)
+    arms.append(
+        {
+            "arm": f"M  Muse on top of B ({args.judge})",
+            "code": "muse",
+            "candidate_recall": reach_recall,
+            "found": reach_found,
+            "golden": reach_golden,
+            "precision": muse["precision"],
+            "recall": muse["recall"],
+            "f1": muse["f1"],
+            "clusters": muse["clusters"],
+            "impure_clusters": muse["impure_clusters"],
+            "judge_calls": info["judge_calls"],
+            "cache_hits": info["cache_hits"],
+            "tokens": info["tokens"],
+            "judged": info["judged"],
+            "merged": info["merged"],
+            "min_confidence": args.min_confidence,
+        }
+    )
     print(
         f"{'M  Muse on top of B (' + args.judge + ')':38}{reach_recall:>13.1%}"
         f"{f'{reach_found:,}/{reach_golden:,}':>14}"
@@ -568,6 +625,20 @@ async def run(name: str, args: argparse.Namespace) -> None:
     }
     oracle = score(clusters_from_pairs(docs, oracle_pairs), truth)
     recall_c, found, golden = candidate_recall(docs, pipeline_candidates, truth)
+    arms.append(
+        {
+            "arm": "O  oracle over T0 candidates",
+            "code": "oracle_tokens",
+            "candidate_recall": recall_c,
+            "found": found,
+            "golden": golden,
+            "precision": oracle["precision"],
+            "recall": oracle["recall"],
+            "f1": oracle["f1"],
+            "clusters": oracle["clusters"],
+            "impure_clusters": oracle["impure_clusters"],
+        }
+    )
     print(
         f"{'O  oracle over T0 candidates':38}{recall_c:>13.1%}{f'{found:,}/{golden:,}':>14}"
         f"{oracle['precision']:>11.1%}{oracle['recall']:>9.1%}"
@@ -579,6 +650,17 @@ async def run(name: str, args: argparse.Namespace) -> None:
         "M cand recall = golden pairs grouped by exact blocking OR shown to the judge; "
         "O is a ceiling (true pairs kept only), not a result."
     )
+    return {
+        "dataset": name,
+        "entity_type": spec["entity_type"],
+        "rows_a": stats["rows_a"],
+        "rows_b": stats.get("rows_b"),
+        "documents": stats["documents"],
+        "pairs_labelled": stats["pairs_labelled"],
+        "pairs_positive": stats["pairs_positive"],
+        "truth_clusters": stats["truth_clusters"],
+        "arms": arms,
+    }
 
 
 async def _amain(args: argparse.Namespace) -> int:
@@ -597,8 +679,34 @@ async def _amain(args: argparse.Namespace) -> int:
         )
         return 1
     names = list(DATASETS) if args.dataset == "all" else [args.dataset]
+    records = []
     for name in names:
-        await run(name, args)
+        records.append(await run(name, args))
+    if args.run_log:
+        sha = _git_sha()
+        settings = build_settings(args.judge, args.min_confidence, args.max_pairs)
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        log = {
+            "harness": "scripts/eval_deepmatcher.py",
+            "date_utc": stamp,
+            "git_sha": sha,
+            "git_dirty": _git_dirty(),
+            "judge": args.judge,
+            "min_confidence": args.min_confidence,
+            "max_pairs": args.max_pairs,
+            "model_id": (
+                "mock (deterministic, no model)"
+                if args.judge == "mock"
+                else (getattr(settings, "muse_model_id", "") or "unknown")
+            ),
+            "datasets": records,
+        }
+        runs_dir = ROOT / "docs" / "runs"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        slug = args.dataset if args.dataset != "all" else "all"
+        path = runs_dir / f"{stamp}-deepmatcher-{slug}-{args.judge}-{sha[:12]}.json"
+        path.write_text(json.dumps(log, indent=2) + "\n", encoding="utf-8")
+        print(f"\nrun log written: {path}")
     return 0
 
 
@@ -613,6 +721,11 @@ def main() -> int:
         help="merge floor: 'medium' lets the judge decide the middle band (default)",
     )
     ap.add_argument("--max-pairs", type=int, default=0, help="cap judged pairs (0 = uncapped)")
+    ap.add_argument(
+        "--run-log",
+        action="store_true",
+        help="write a run record under docs/runs/ (sha, date, model id, full breakdown)",
+    )
     args = ap.parse_args()
     return asyncio.run(_amain(args))
 

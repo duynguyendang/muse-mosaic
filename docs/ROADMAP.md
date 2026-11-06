@@ -29,12 +29,25 @@ real per entity type: `AUTONOMY_MODE` (build-wide) and
 `auto` applies as before. A process-local kill switch
 (`/api/v1/autonomy/freeze`) demotes auto -> shadow without stopping reads;
 breakers (zero candidates at scale, judge failure > 10%, entity run failed)
-label the batch; a deterministic 1% audit sample plus all withheld decisions
-is reported. Integration tests pin the default, shadow, freeze and deliberate
+**enforce**: `jobs.execute_full_build` calls `autonomy.enforce_breakers`
+after clustering and before any golden is derived — a tripped breaker stops
+the build (jobs land `failed`, never retried; the sync `/build` path returns
+409 with the breaker detail). The summary keeps the (now always-empty)
+breaker list for post-mortem compatibility; a deterministic 1% audit sample
+plus all withheld decisions is reported. **Evidence discipline:** measured
+claims re-run and logged under `docs/runs/` (see
+`docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`); the
+live Muse rows are unlogged claims and `AUTONOMY_MODE=auto` refuses to start
+without a witnessed floor (`MUSE_AUTO_WITNESS`, verified in
+`mosaic-api/auto_witness.py`). Integration tests pin the default, shadow, freeze and deliberate
 off paths end to end. Not landed: the live precision floor (needs an approved
 live run; the mock judge over-merges and is not a witness — see
-`scripts/eval_calibration.py`), and the review queue for merge proposals
-(G4 proper) — `suggest` currently only reports the would-merge count.
+`scripts/eval_calibration.py`), and the witnessed auto gate (`MUSE_AUTO_WITNESS`).
+The review queue for merge proposals (G4) is **landed**: `suggest` builds persist
+would-merge pairs to `merge_proposals`, labelled accepted/rejected at
+`/api/v1/suggestions` — labels are recorded, never applied to goldens. Canary
+auto-apply is in (`AUTONOMY_CANARY_RATE`): only a deterministic hash slice of
+pairs is applied, the rest are held for the same queue.
 
 **M0–M2 (zero-touch onboarding slice) landed on `main` (2026-11-05).** Entity
 schema contracts are versioned data (`data/schemas/*.json`, loaded and
@@ -376,9 +389,7 @@ gate promotes it.
 - **Budgets.** `MUSE_JOB_TOKEN_BUDGET`, `MUSE_DAILY_TOKEN_BUDGET`, max pairs per
   cluster, max judge calls per batch. Exceeding a budget stops the batch and
   labels it; it never silently truncates.
-- **Circuit breakers.** Zero candidates at scale, judge failure rate > 10%,
-  precision proxy below floor, or a schema change with no confirmed mapping all
-  stop auto mode.
+- **Circuit breakers.** Zero candidates at scale, judge failure rate > 10%. These are enforced: the build stops before derivation when one fires (`autonomy.enforce_breakers`, called in `jobs.execute_full_build`). Precision proxy below floor stops auto mode once the witnessed floor lands (see M3 status above).
 - **Audit sampling.** At A4, a random 1% of auto decisions plus 100% of
   auto-withheld decisions are replayable with one click; an auditor can open an
   incident, which rolls back the responsible rule or threshold.

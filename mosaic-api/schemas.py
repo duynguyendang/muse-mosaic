@@ -116,6 +116,7 @@ class GoldenRecord(StrictModel):
     decision_id: str = Field(min_length=1)
     policy_version: str = Field(min_length=1)
     taxonomy_version: str | None = None
+    content_sha256: str | None = None  # legacy rows predate the hash
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
 
@@ -390,6 +391,43 @@ class SplinkSettings(StrictModel):
     blocking: list[str] = Field(default_factory=list)
 
 
+def _validate_thresholds(thresholds: dict[str, Any]) -> None:
+    """Fail closed on malformed policy thresholds.
+
+    Unknown keys are allowed (forward compatibility); known keys must be
+    well-formed, because every threshold is a decision a golden record will
+    trace back to this policy.
+    """
+    if not isinstance(thresholds, dict):
+        raise ValueError("thresholds must be a JSON object")
+    band = thresholds.get("borderline_band")
+    if band is not None:
+        if not isinstance(band, dict):
+            raise ValueError("thresholds.borderline_band must be an object")
+        low, high = band.get("low"), band.get("high")
+        for label, value in (("low", low), ("high", high)):
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise ValueError(f"thresholds.borderline_band.{label} must be a number")
+            if not 0.0 <= float(value) <= 1.0:
+                raise ValueError(f"thresholds.borderline_band.{label} must lie in [0, 1]")
+        if not float(low) < float(high):
+            raise ValueError("thresholds.borderline_band.low must be < high")
+    breakers = thresholds.get("m3_breakers")
+    if breakers is not None:
+        if not isinstance(breakers, dict):
+            raise ValueError("thresholds.m3_breakers must be an object")
+        clusters = breakers.get("zero_candidates_clusters")
+        if not isinstance(clusters, int) or isinstance(clusters, bool) or clusters < 1:
+            raise ValueError(
+                "thresholds.m3_breakers.zero_candidates_clusters must be an integer >= 1"
+            )
+        limit = breakers.get("judge_failure_limit")
+        if not isinstance(limit, (int, float)) or isinstance(limit, bool):
+            raise ValueError("thresholds.m3_breakers.judge_failure_limit must be a number")
+        if not 0.0 < float(limit) <= 1.0:
+            raise ValueError("thresholds.m3_breakers.judge_failure_limit must lie in (0, 1]")
+
+
 class Policy(StrictModel):
     """Externalized policy file shape (CSD 12.7, v2.3 rule tiers).
 
@@ -431,6 +469,7 @@ class Policy(StrictModel):
         for window, seconds in self.ttls_seconds.items():
             if seconds <= 0:
                 raise ValueError(f"ttl_seconds for {window!r} must be > 0")
+        _validate_thresholds(self.thresholds)
         return self
 
 

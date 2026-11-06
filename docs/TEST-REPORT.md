@@ -5,8 +5,8 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | | |
 | --- | --- |
-| Date | 2026-11-05 |
-| Commit | branch `main` (M0–M2 + M3 autonomy controller verified by this run) |
+| Date | 2026-11-06 |
+| Commit | branch `main` (2026-11-06: breaker enforcement, M4 ladder, trap suite, publication policy; see per-change logs under `docs/runs/`) |
 | Python | 3.12.3 |
 | pytest | 9.1.1 |
 | Go | 1.25.1 |
@@ -17,7 +17,7 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Python tests | `python3 -m pytest -q` | **381 passed, 0 failed**, 107.50 s |
+| Python tests | `python3 -m pytest -q` | **437 passed, 0 failed**, 131.90 s (2026-11-06; log `docs/runs/20261106T040824Z-pytest-05e1db3cc4fa.txt`) |
 | Lint | `ruff check mosaic-api matching-engine scripts tests shared` | **clean** |
 | Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 101 files unchanged |
 | Go format | `gofmt -l .` | **clean**, no output |
@@ -31,42 +31,42 @@ run needs no external network and no Meta API key.
 
 ```text
 $ python3 -m pytest -q
-........................................................................ [ 21%]
-........................................................................ [ 42%]
-........................................................................ [ 64%]
-........................................................................ [ 85%]
-...............................................                          [100%]
-381 passed in 107.50s (0:01:48)
+437 passed in 131.90s (0:02:11)
 
 $ python3 -m ruff check mosaic-api matching-engine scripts tests shared
 All checks passed!
 
 $ python3 -m black --check mosaic-api matching-engine scripts tests shared
-All done! 97 files would be left unchanged.
+All done! 113 files would be left unchanged.
 
 $ cd trust-engine && gofmt -l . && go vet ./... && go test -count=1 ./...
-ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.037s
+ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.046s
 ```
 
 ## Suite inventory
 
-381 collected tests across 36 files. Since the 2026-11-03 snapshot (302):
-six new files — `test_onboarding.py` (16) and `test_spec_files.py` (11) from
-the M0–M2 onboarding work, `test_schema_contract.py` (10),
-`test_entity_judging.py` (19) and `test_eval_deepmatcher.py` (7) from the
-entity-contract / DeepMatcher slice, and `test_autonomy.py` (19) from the M3
-autonomy controller; `test_muse_candidates.py` grew 48 → 55 (unknown-entity
-422, product-golden publication, report fold); the archived
-legacy frontend removal shrank `test_ui_wiring.py` 19 → 7.
+437 collected tests across 46 files. Since the 2026-11-05 snapshot (381):
+ten new files — `test_traps.py` (the six release-gate traps),
+`test_engine_router.py` (deterministic matcher router),
+`test_auto_witness.py` (the auto floor gate, 12 cases),
+`test_run_logs.py` (run-log discipline), `test_onboarding_review.py` (the
+human-review gate), `test_suggestions.py` (G4 review queue + canary
+predicate), `test_publication_policy.py`, and `test_policy_thresholds.py`
+(borderline band + M3 breaker knobs as versioned policy data); `test_jobs.py`
+grew the two breaker-enforcement integration tests, `test_autonomy.py` grew
+the `enforce_breakers` unit tests, `test_onboarding.py` now approves before
+loading (the pending-review gate), and `test_taxonomy.py` tracks the shipped
+publication taxonomy.
 
 | Area | Tests | Files | What it proves |
 | --- | --- | --- | --- |
 | Contract, rules, trust gate | 88 | 9 | Facts and goldens carry provenance; user/product authority, freshness, TTL and conflict rules hold; S1/S2 semantic evidence and the S3 guard behave; split, rollback and replay are exact; killing the engine publishes nothing |
 | Taxonomy | 41 | 3 | Versioned vocabulary, exact-match mapping, steward Accept creates a new version and re-derives, evidence-verified extension accepts only what the data attests |
 | Muse and model layer | 89 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure, report fold across entity types; Copilot closed vocabulary |
-| Pipeline, API, jobs, UI | 81 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end |
+| Pipeline, API, jobs, UI | 83 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end; breaker stops the build (2 new cases) |
 | Entity contracts and onboarding | 63 | 5 | Specs ship as validated data; the onboarding compiler derives a bundle or refuses; unknown entity types fail closed; the DeepMatcher harness pins metric maths and raw counts |
-| Autonomy controller (M3) | 19 | 1 | Per-entity modes (off/shadow/suggest/auto), kill switch, breakers, deterministic audit sampling, defaults fail closed |
+| Autonomy controller (M3) | 21 | 1 | Per-entity modes (off/shadow/suggest/auto), kill switch, breakers (now enforced before derivation), deterministic audit sampling, defaults fail closed, policy-borne breaker knobs |
+| Reliability and flexibility | 52 | 8 | The six traps (handler bypass, tampered stored field, expired approval, replay, policy-version mismatch, house-number neighbour); auto witness gate (10); deterministic engine router (8); G4 review queue + canary (8); run-log lint (2); publication policy ships a data drop; onboarding review gate; policy-borne thresholds fail closed |
 
 Per file:
 
@@ -130,8 +130,15 @@ Per file:
 | Unknown entity types fail closed (422 / raise), never silently judged | `test_muse_candidates.py` (55), `test_schema_contract.py` (10) | verified |
 | The onboarding compiler derives a bundle or refuses; nothing is half-derived | `test_onboarding.py` (16) | verified |
 | A merged product golden never publishes guessed identity | `test_muse_candidates.py` (55) | verified |
-| Auto-apply is opt-in per entity; default is fail-closed; kill switch works | `test_autonomy.py` (19) | verified |
-| Breakers label the batch; deliberate off/shadow never masquerade as failure | `test_autonomy.py` (19) | verified |
+| Auto-apply is opt-in per entity; default is fail-closed; kill switch works | `test_autonomy.py` (21), `test_auto_witness.py` (10) | verified |
+| Breakers stop the build before derivation; deliberate off/shadow never masquerade as failure | `test_jobs.py` (12), `test_autonomy.py` (21) | verified |
+| The six release traps hold: handler bypass, tampered stored field, expired approval, replay, policy-version mismatch, house-number neighbour | `test_traps.py` (6) | verified |
+| Suggested merges are labelled, never applied; accept/reject is exactly-once | `test_suggestions.py` (8) | verified |
+| Auto never starts without a witnessed live floor | `test_auto_witness.py` (10) | verified |
+| Engine selection is a deterministic rule of shape and coverage, never of benchmarks | `test_engine_router.py` (8) | verified |
+| An unapproved onboarding bundle never loads; approval binds the review digest | `test_onboarding_review.py` (9) | verified |
+| Publication ships as data: policy + taxonomy; a new entity needs no code | `test_publication_policy.py` (2), `test_spec_files.py` (11) | verified |
+| Measured claims carry run logs with SHA/date/model id; bare claims fail the suite | `test_run_logs.py` (2), `docs/runs/` | verified |
 
 ## Measured benchmarks
 
@@ -159,24 +166,27 @@ the Muse arms; the numbers below are the ones recorded in `README.md`.
 ### Ground-truth accuracy (labelled pair sets, `eval_deepmatcher.py`)
 
 `eval_deepmatcher.py` scores blocking and judge arms on labelled pair sets —
-nothing sampled, truth from union-find over the published pairs. Mock rows are
-from the 2026-11-05 rerun; the live Muse rows are the recorded live run quoted
-in `README.md` (commits `3997f60`..`b74368d`).
+nothing sampled, truth from union-find over the published pairs. Mock rows
+reproduce deterministically and were re-run and logged 2026-11-06
+(`docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`). The
+live Muse rows have **no run log**: they were never recorded with SHA, date
+and model id, so they are unlogged claims, not measurements, until a live
+witness run is executed and written to `docs/runs/`.
 
 | Benchmark | Arm | Result | Status |
 | --- | --- | --- | --- |
-| Amazon-Google (4,589 docs, 1,167 positive pairs) | String rules (T) | F1 15.2% | measured (mock, 2026-11-05) |
-| Amazon-Google | Token candidate recall | 93.9% | measured (mock, 2026-11-05) |
-| Amazon-Google | Oracle over token candidates | F1 96.9% | measured (mock, 2026-11-05) |
-| Amazon-Google | Muse on top of B | F1 50.4% | measured (live, recorded run) |
-| DBLP-ACM dirty (4,910 docs, 2,220 positive pairs) | String rules (T) | F1 23.9% | measured (mock, 2026-11-05) |
-| DBLP-ACM dirty | Token candidate recall | 99.2% | measured (mock, 2026-11-05) |
-| DBLP-ACM dirty | Oracle over token candidates | F1 99.6% | measured (mock, 2026-11-05) |
-| DBLP-ACM dirty | Muse on top of B | F1 85.8% | measured (live, recorded run) |
-| Kaggle messy-customers (10,666 rows, 666 gold pairs) | Exact name, raw / normalised | recall 100% but precision 0.1% / 0.0% — 50 / 20 impure mega-clusters | measured (mock, 2026-11-05) |
-| Kaggle messy-customers | Token block | 0 candidates: every name in the 30-name pool is hot | measured (mock, 2026-11-05) |
-| Kaggle messy-customers | Exact email (identity hint) | precision **100%**, recall 91.9% (612/666), F1 **95.8%**, 0 impure clusters | measured (mock, 2026-11-05) |
-| Kaggle messy-customers | M arm on identifier base (mock) | identical to the E arm; the judge is never called — there is no middle band to decide | measured (mock, 2026-11-05) |
+| Amazon-Google (4,589 docs, 1,167 positive pairs) | String rules (T) | F1 15.2% | measured (mock; reproduced + logged 2026-11-06, `docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`) |
+| Amazon-Google | Token candidate recall | 93.9% | measured (mock; reproduced + logged 2026-11-06) |
+| Amazon-Google | Oracle over token candidates | F1 96.9% | measured (mock; reproduced + logged 2026-11-06) |
+| Amazon-Google | Muse on top of B | F1 50.4% | **unlogged claim** — no run log with SHA/date/model id; do not cite until a live witness run is executed |
+| DBLP-ACM dirty (4,910 docs, 2,220 positive pairs) | String rules (T) | F1 23.9% | measured (mock; reproduced + logged 2026-11-06) |
+| DBLP-ACM dirty | Token candidate recall | 99.2% | measured (mock; reproduced + logged 2026-11-06) |
+| DBLP-ACM dirty | Oracle over token candidates | F1 99.6% | measured (mock; reproduced + logged 2026-11-06) |
+| DBLP-ACM dirty | Muse on top of B | F1 85.8% | **unlogged claim** — no run log with SHA/date/model id; do not cite until a live witness run is executed |
+| Kaggle messy-customers (10,666 rows, 666 gold pairs) | Exact name, raw / normalised | recall 100% but precision 0.1% / 0.0% — 50 / 20 impure mega-clusters | measured (mock; reproduced + logged 2026-11-06) |
+| Kaggle messy-customers | Token block | 0 candidates: every name in the 30-name pool is hot | measured (mock; reproduced + logged 2026-11-06) |
+| Kaggle messy-customers | Exact email (identity hint) | precision **100%**, recall 91.9% (612/666), F1 **95.8%**, 0 impure clusters | measured (mock; reproduced + logged 2026-11-06) |
+| Kaggle messy-customers | M arm on identifier base (mock) | identical to the E arm; the judge is never called — there is no middle band to decide | measured (mock; reproduced + logged 2026-11-06) |
 
 Reading the messy-customers rows: the name pool is 30 distinct values across
 10,666 rows, so name-only matching merges strangers (precision ~0) and token
@@ -190,11 +200,14 @@ pair is exact after normalisation.
 ### Autonomy calibration (M3, mock judge, 2026-11-05)
 
 `scripts/eval_calibration.py` measures precision/recall/F1/impure clusters at
-both shipped confidence floors, on the same docs for each arm. Mock rows below
-(measured 2026-11-05); the mock judge is **not calibrated** and over-merges the
-product/publication suites — a mock row is plumbing evidence only, never a
-floor witness. The live floor is **unwitnessed** until a live run is approved
-and executed.
+both shipped confidence floors, on the same docs for each arm. Mock rows
+below reproduce deterministically (re-run + logged 2026-11-06:
+`docs/runs/20261106T020739Z-calibration-all-mock-05e1db3cc4fa.json`); the
+mock judge is **not calibrated** and over-merges the product/publication
+suites — a mock row is plumbing evidence only, never a floor witness. The
+live floor is **unwitnessed** until a live run is approved, executed and
+logged to `docs/runs/`; `AUTONOMY_MODE=auto` now refuses to start without it
+(`MUSE_AUTO_WITNESS`, see `.env.example`).
 
 | Benchmark | Arm | Result | Status |
 | --- | --- | --- | --- |
@@ -235,6 +248,44 @@ python3 scripts/kaggle_e2e.py --sample data/kaggle/customer360_sample_5000.json
 python3 scripts/eval_calibration.py                      # mock; --judge live for the real floor
 OLIST_SAMPLE=data/olist/sample_olist_large.json python3 -m pytest tests/test_olist_brazilian.py
 ```
+
+## What the guards now enforce (2026-11-06)
+
+The flexibility/reliability work landed in this snapshot; each item below is
+code-enforced, not reported:
+
+- **M3 breakers halt the build.** `jobs.execute_full_build` calls
+  `autonomy.enforce_breakers` after clustering and before any golden is
+  derived: zero candidates at scale or judge failures > 10% stop the job
+  (`failed`, never retried) and make the sync `/build` answer 409. The
+  constants ride the policy file (`thresholds.m3_breakers`) and are
+  fail-closed validated at load.
+- **Auto-apply refuses to start without a witnessed floor.**
+  `MUSE_AUTO_WITNESS` must point at a live calibration run log (precision
+  ≥ 0.995 by default on every measured dataset, judged pairs > 0); anything
+  missing, mock-judged, or below the floor is refused at startup. The full
+  path is covered by `test_auto_witness.py`.
+- **Suggest/canary produce a labelled queue.** `suggest` persists
+  would-merge pairs to `merge_proposals`; humans label them at
+  `/api/v1/suggestions` (accept/reject, exactly-once, audit fields);
+  `AUTONOMY_CANARY_RATE` restricts auto to a deterministic hash slice and
+  holds the rest for the same queue. Labels are never applied to goldens.
+- **Onboarding bundles require human sign-off.** Derived terms and ranks
+  land as pending review; `load_policies`/`load_taxonomies`/the run CLI all
+  refuse an unapproved bundle (tamper evidence: approval binds the review
+  digest; a changed review is rejected). `--accept` records reviewer and
+  timestamp; the engine reloads only the approved bundle.
+- **Write-layer gate at the ledger's edge.** `persist_decision` refuses a
+  golden outside the policy's `golden_attributes` or one derived under a
+  no-longer-active policy version — nothing is written, ever (the
+  "handler bypass" trap).
+- **Stored goldens are integrity-checked.** New rows carry `content_sha256`;
+  `/golden` recomputes before serving and answers 409 on a mismatch
+  (the "tampered stored field" trap). Legacy rows predate the hash and are
+  served unverified by design.
+- **Every measured claim is logged.** `docs/runs/` holds the run records
+  cited on this page; `tests/test_run_logs.py` fails the suite if a quoted
+  claim loses its evidence or an old untraceable provenance phrase returns.
 
 ## Not verified
 

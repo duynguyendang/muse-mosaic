@@ -1,0 +1,12 @@
+{
+  "taxonomy_version": "tax-publication-2026-11-06-v1",
+  "entity_type": "publication",
+  "created_at": "2026-11-06T00:00:00+00:00",
+  "attribute_aliases": {
+    "title": ["paper_title", "name"],
+    "venue": ["journal", "conference", "booktitle"],
+    "year": ["pub_year"],
+    "authors": ["author_list", "creator"]
+  },
+  "terms": []
+}

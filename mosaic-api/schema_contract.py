@@ -129,6 +129,33 @@ class AdmissionPolicy:
     require_house_number_guard: bool = False
 
 
+_VALUE_LIKE = re.compile(r"\d{7,}|@")
+
+
+def _question_from(raw_question: object, path: Path) -> str | None:
+    """Optional entity-specific judge question from the spec.
+
+    The question may describe the role of each field, never a value from the
+    data: any run of 7+ digits or an '@' fails closed, so a spec cannot leak
+    samples into prompts. A spec without a question gets the compiler.
+    """
+    if raw_question is None:
+        return None
+    if not isinstance(raw_question, str):
+        raise SchemaContractError(f"{path}: question must be a string")
+    question = raw_question.strip()
+    if not question:
+        raise SchemaContractError(f"{path}: question must be non-empty")
+    if len(question) > 2000:
+        raise SchemaContractError(f"{path}: question exceeds 2000 characters")
+    if _VALUE_LIKE.search(question):
+        raise SchemaContractError(
+            f"{path}: question contains a value-like pattern (a long digit run or '@'); "
+            "a judge question may describe mechanisms, never data"
+        )
+    return question
+
+
 @dataclass(frozen=True)
 class EntitySchemaSpec:
     """The contract for one entity type: fields, admission, and the question."""
@@ -139,6 +166,7 @@ class EntitySchemaSpec:
     link_proof_type: str
     admission: AdmissionPolicy
     fields: tuple[FieldMapping, ...]
+    question: str | None = None
 
     # --- queries -------------------------------------------------------
 
@@ -410,6 +438,7 @@ def _parse_spec(path: Path) -> EntitySchemaSpec:
         link_proof_type=link_proof_type,
         admission=_admission_from(raw.get("admission"), path),
         fields=fields,
+        question=_question_from(raw.get("question"), path),
     )
 
 

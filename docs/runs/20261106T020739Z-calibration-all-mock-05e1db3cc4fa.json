@@ -1,0 +1,126 @@
+{
+  "harness": "scripts/eval_calibration.py",
+  "date_utc": "20261106T020739Z",
+  "git_sha": "05e1db3cc4fac5c0c8bbf825b339573f642277b9",
+  "git_dirty": true,
+  "judge": "mock",
+  "floor": 0.995,
+  "max_pairs": 0,
+  "model_id": "mock (deterministic, no model)",
+  "datasets": [
+    {
+      "dataset": "amazon-google",
+      "entity_type": "product",
+      "documents": 4589,
+      "pairs_positive": 1167,
+      "floor": 0.995,
+      "best_precision": 0.12289395441030723,
+      "arms": [
+        {
+          "arm": "M Muse (mock, min_confidence=high)",
+          "confidence": "high",
+          "precision": 0.12289395441030723,
+          "recall": 0.08920863309352518,
+          "f1": 0.10337640683618173,
+          "clusters": 4095,
+          "impure_clusters": 244,
+          "judged": 8666,
+          "merged": 161,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        },
+        {
+          "arm": "M Muse (mock, min_confidence=medium)",
+          "confidence": "medium",
+          "precision": 0.12289395441030723,
+          "recall": 0.08920863309352518,
+          "f1": 0.10337640683618173,
+          "clusters": 4095,
+          "impure_clusters": 244,
+          "judged": 8666,
+          "merged": 161,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        }
+      ]
+    },
+    {
+      "dataset": "dblp-acm-dirty",
+      "entity_type": "publication",
+      "documents": 4910,
+      "pairs_positive": 2220,
+      "floor": 0.995,
+      "best_precision": 0.398989898989899,
+      "arms": [
+        {
+          "arm": "M Muse (mock, min_confidence=high)",
+          "confidence": "high",
+          "precision": 0.398989898989899,
+          "recall": 0.03558558558558558,
+          "f1": 0.065343258891646,
+          "clusters": 4765,
+          "impure_clusters": 44,
+          "judged": 9860,
+          "merged": 26,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        },
+        {
+          "arm": "M Muse (mock, min_confidence=medium)",
+          "confidence": "medium",
+          "precision": 0.398989898989899,
+          "recall": 0.03558558558558558,
+          "f1": 0.065343258891646,
+          "clusters": 4765,
+          "impure_clusters": 44,
+          "judged": 9860,
+          "merged": 26,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        }
+      ]
+    },
+    {
+      "dataset": "messy-customers",
+      "entity_type": "user",
+      "documents": 10666,
+      "pairs_positive": 666,
+      "floor": 0.995,
+      "best_precision": 1.0,
+      "arms": [
+        {
+          "arm": "M Muse (mock, min_confidence=high)",
+          "confidence": "high",
+          "precision": 1.0,
+          "recall": 0.918918918918919,
+          "f1": 0.9577464788732395,
+          "clusters": 10054,
+          "impure_clusters": 0,
+          "judged": 0,
+          "merged": 0,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        },
+        {
+          "arm": "M Muse (mock, min_confidence=medium)",
+          "confidence": "medium",
+          "precision": 1.0,
+          "recall": 0.918918918918919,
+          "f1": 0.9577464788732395,
+          "clusters": 10054,
+          "impure_clusters": 0,
+          "judged": 0,
+          "merged": 0,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        }
+      ]
+    }
+  ]
+}

@@ -229,6 +229,12 @@ def _product_build_body():
     }
 
 
+def _witness(tmp_path: Path) -> str:
+    from conftest import write_witness
+
+    return write_witness(tmp_path)
+
+
 def _client(te_url, matching_engine, tmp_path, **overrides):
     from config import Settings
     from fastapi.testclient import TestClient
@@ -269,7 +275,13 @@ def test_shadow_mode_judges_but_never_merges(te_url, matching_engine, tmp_path):
 
 
 def test_freeze_demotes_auto_to_shadow(te_url, matching_engine, tmp_path):
-    with _client(te_url, matching_engine, tmp_path, autonomy_mode="auto") as client:
+    with _client(
+        te_url,
+        matching_engine,
+        tmp_path,
+        autonomy_mode="auto",
+        muse_auto_witness=_witness(tmp_path),
+    ) as client:
         assert client.post("/api/v1/autonomy/freeze").json()["frozen"] is True
         response = client.post("/build", json=_product_build_body())
         assert client.post("/api/v1/autonomy/unfreeze").json()["frozen"] is False
@@ -290,3 +302,42 @@ def test_deliberate_off_is_configuration_not_a_breaker() -> None:
         },
     }
     assert autonomy.evaluate_breakers(by_entity) == []
+
+
+def test_enforce_breakers_raises_with_breaker_detail() -> None:
+    by_entity = {"user": {"clusters_in": 500, "candidate_pairs": 0}}
+    with pytest.raises(autonomy.BreakerTripped) as excinfo:
+        autonomy.enforce_breakers(by_entity)
+    assert [b["breaker"] for b in excinfo.value.breakers] == ["zero_candidates_at_scale"]
+    assert excinfo.value.breakers[0]["entity_type"] == "user"
+    assert "500" in str(excinfo.value)
+
+
+def test_enforce_breakers_passes_when_quiet() -> None:
+    assert autonomy.enforce_breakers(None) == []
+    assert (
+        autonomy.enforce_breakers(
+            {
+                "user": {
+                    "clusters_in": 50,
+                    "candidate_pairs": 0,
+                    "judge_calls": 9,
+                    "judge_failures": 0,
+                }
+            }
+        )
+        == []
+    )
+    # Deliberate off/shadow labels are configuration, never an enforcement.
+    assert (
+        autonomy.enforce_breakers(
+            {
+                "user": {
+                    "skipped_reason": "autonomy off: Muse not applied for this entity",
+                    "clusters_in": 10**6,
+                    "candidate_pairs": 0,
+                }
+            }
+        )
+        == []
+    )

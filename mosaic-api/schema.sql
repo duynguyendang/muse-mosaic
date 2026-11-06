@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS golden_records (
   decision_id TEXT NOT NULL,
   policy_version TEXT NOT NULL,
   taxonomy_version TEXT,
+  content_sha256 TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(entity_type, entity_id, version)
@@ -200,3 +201,34 @@ CREATE TABLE IF NOT EXISTS export_log (
 
 CREATE INDEX IF NOT EXISTS idx_export_log_created
   ON export_log(created_at);
+
+-- Suggested merges (M4/G4 review queue): what the shadow/suggest/canary
+-- ladder would merge, for a human to label. Append-only; a resolution
+-- (accepted/rejected) is part of the row, nothing is deleted. Recording
+-- labels here is the input rule induction learns from — never applied.
+CREATE TABLE IF NOT EXISTS merge_proposals (
+  proposal_id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  left_cluster TEXT NOT NULL,
+  right_cluster TEXT NOT NULL,
+  left_docs JSON NOT NULL,
+  right_docs JSON NOT NULL,
+  confidence TEXT NOT NULL,
+  tier TEXT NOT NULL,
+  name_score REAL,
+  address_score REAL,
+  reason TEXT,
+  model TEXT,
+  policy_version TEXT,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'rejected')),
+  created_at TEXT NOT NULL,
+  resolved_at TEXT,
+  resolved_by TEXT,
+  resolution_note TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_merge_proposals_unique
+  ON merge_proposals(entity_type, left_cluster, right_cluster);
+CREATE INDEX IF NOT EXISTS idx_merge_proposals_status
+  ON merge_proposals(status, created_at);

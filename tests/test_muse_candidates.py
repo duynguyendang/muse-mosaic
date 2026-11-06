@@ -10,6 +10,7 @@ from pathlib import Path
 import muse_candidates as mc
 import pytest
 from config import Settings
+from conftest import write_witness
 
 
 def doc(doc_id, name, address=None, email=None, phone=None, source="crm"):
@@ -160,8 +161,11 @@ def _client(te_url, matching_engine, tmp_path, enabled):
         enable_background_tasks=False,
         muse_candidate_matching=enabled,
         # the pipeline tests exercise the auto-apply path: the outcome of
-        # MUSE_CANDIDATE_MATCHING with an explicit autonomy grant
+        # MUSE_CANDIDATE_MATCHING with an explicit autonomy grant. The auto
+        # gate requires a witness — the stand-in one keeps these plumbing
+        # tests honest without spending tokens.
         autonomy_mode="auto",
+        muse_auto_witness=write_witness(tmp_path),
     )
     return TestClient(create_app(settings))
 
@@ -1034,7 +1038,14 @@ def test_impact_labels_a_rules_only_taxonomy_run_as_not_the_model():
 
 def test_impact_endpoint_without_a_build_is_unavailable(te_url, matching_engine, tmp_path):
     with _client(te_url, matching_engine, tmp_path, False) as client:
-        assert client.get("/muse/impact").json() == {"available": False, "job_id": None}
+        body = client.get("/muse/impact").json()
+    assert body["available"] is False
+    assert body["job_id"] is None
+    # A silent default is a reliability bug: the empty state must say WHY
+    # Muse never ran, naming the opt-in flags and their defaults.
+    assert "MUSE_CANDIDATE_MATCHING" in body["reason"]
+    assert body["flags"]["muse_candidate_matching"] is False
+    assert body["flags"]["muse_taxonomy_proposals"] == "off"
 
 
 def test_declined_report_explains_why_a_pair_was_not_joined():

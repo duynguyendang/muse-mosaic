@@ -735,6 +735,7 @@
   const MUSE_STATUS = {
     live: ["Live model", "bg-status-verified-surface border-status-verified-border text-status-verified-deep"],
     mock: ["Mock — no model ran", "bg-status-warning-surface border-status-warning-border text-status-warning-deep"],
+    shadow: ["Shadow — judged, not applied", "bg-status-warning-surface border-status-warning-border text-status-warning-deep"],
     rules: ["Rules — no model ran", "bg-status-warning-surface border-status-warning-border text-status-warning-deep"],
     skipped: ["Skipped", "bg-status-error-surface border-status-error-border text-status-error-deep"],
     off: ["Off", "bg-surface-muted border-border-subtle text-text-muted"],
@@ -792,7 +793,7 @@
       .join("");
     if (rows) {
       const more = g.merges_total > g.merges.length ? ` (first ${g.merges.length} of ${num(g.merges_total)})` : "";
-      parts.push(`<div class="font-label-md text-label-md uppercase tracking-wider text-text-muted">Joins to review${more}</div><div class="text-text-muted font-code-sm text-code-sm"><b>verified</b>: a phone or email is also nearly identical, so the engine can check the link. <b>names only</b>: joined for grouping, but the values stay held until something verifies them.</div><div class="space-y-1" style="max-height:18rem;overflow-y:auto">${rows}</div>`);
+      parts.push(`<div class="font-label-md text-label-md uppercase tracking-wider text-text-muted">Joins to review${more}</div><div class="text-text-muted font-code-sm text-code-sm"><b>verified</b>: a phone or email is also nearly identical, so the engine can check the link. <b>names only</b>: joined for grouping, but the values stay held until something verifies them. Suggested merges are labelled via <code>/api/v1/suggestions</code> (suggest builds) or the autonomy ladder.</div><div class="space-y-1" style="max-height:18rem;overflow-y:auto">${rows}</div>`);
     }
     const declined = (g.declined || [])
       .map((m) => {
@@ -844,9 +845,15 @@
     try {
       const data = await api("/muse/impact");
       if (!data.available) {
-        sub.textContent = "No finished build has a Muse report yet. Run a build, then open this again.";
-        $("muse-grouping").innerHTML = museOffNote("Nothing to show yet.");
-        $("muse-taxonomy").innerHTML = museOffNote("Nothing to show yet.");
+        sub.textContent = "Muse did not run (or has not reported yet).";
+        const why = data.reason || "Run a build through the jobs queue, then open this again.";
+        const flags = data.flags
+          ? `<div class="mt-space-sm font-code-sm text-code-sm text-text-muted">MUSE_CANDIDATE_MATCHING=${data.flags.muse_candidate_matching} · MUSE_TAXONOMY_PROPOSALS=${escapeHtml(String(data.flags.muse_taxonomy_proposals))}</div>`
+          : "";
+        $("muse-grouping").innerHTML = museOffNote(why) + flags;
+        $("muse-taxonomy").innerHTML = museOffNote(
+          "Set MUSE_TAXONOMY_PROPOSALS=muse to let Muse propose terms that the data verifies. Until then, categories the taxonomy does not contain are held, never guessed."
+        );
         return;
       }
       sub.textContent = `Latest build, job ${data.job_id}, ${data.at}. Numbers come from that build's own report.`;

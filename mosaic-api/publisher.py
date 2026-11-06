@@ -59,6 +59,41 @@ NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 CRITICAL_DOWNGRADE_CONFIDENCES = {"low", "abstain"}
 
 
+class GoldenGateError(RuntimeError):
+    """A golden was handed to the write layer that the policy would never
+    derive — an internal misuse or a bypass attempt. Nothing is written."""
+
+
+def _enforce_golden_gate(
+    policies: dict,
+    entity_type: str,
+    policy_version: str,
+    golden: list[GoldenFact],
+) -> None:
+    """Last fail-closed check at the ledger's edge.
+
+    The pipeline validates before persist; this exists for the day a caller
+    reaches the write layer directly (a handler wired wrong, a refactor
+    that skips derivation). A golden outside the policy's golden_attributes,
+    or derived under a policy version that is no longer the active one,
+    never reaches the ledger.
+    """
+    policy = active_version(policies, entity_type)
+    allowed = set(policy.golden_attributes or [])
+    offenders = sorted({f.attribute for f in golden if f.attribute not in allowed})
+    if offenders:
+        raise GoldenGateError(
+            f"golden facts outside the {entity_type!r} policy's golden_attributes "
+            f"{sorted(allowed)}: {offenders} (policy {policy.policy_version!r}); "
+            f"refusing to write"
+        )
+    if policy.policy_version != policy_version:
+        raise GoldenGateError(
+            f"decision was derived under {policy_version!r} but the active {entity_type!r} "
+            f"policy is {policy.policy_version!r}; refusing to write"
+        )
+
+
 class IdempotencyConflictError(RuntimeError):
     """Same idempotency key, different payload. No write happened."""
 
@@ -334,6 +369,7 @@ async def resolve_flow(
         purchased_edges=purchased,
         nested_products=nested,
         publish_golden=bool(golden),
+        policies=policies,
         traces={
             "subagents": {
                 "trace": [
@@ -594,15 +630,21 @@ def taxonomy_steward_items(
     """Steward items for Taxonomist new-term proposals (steward-only Accept).
 
     Plus deterministic T1 items for unknown categorical values the proposer
-    did not cover: when a taxonomy-gated attribute (product ``category``)
-    publishes nothing and some candidate value matches no term or synonym,
-    a steward item proposes ``create new term "X"``. Users are skipped (T1
-    is vacuous for user v1, same convention as the attribute mapping above).
+    did not cover: when a taxonomy-gated attribute publishes nothing and
+    some candidate value matches no term or synonym, a steward item proposes
+    ``create new term "X"``.
+
+    The taxonomy-gated attribute is read from the loaded taxonomy (the
+    canonical attributes in ``attribute_aliases`` of a taxonomy that actually
+    ships terms) — no entity type or category name is hardcoded here.
     """
     conflicts: list[ConflictFact] = []
     stewards: list[StewardItem] = []
-    attribute = "category" if entity_type == "product" else "display_name"
+    gated_attributes = []
+    if taxonomy is not None and getattr(taxonomy, "terms", None):
+        gated_attributes = sorted(taxonomy.attribute_aliases or {})
     covered = set()
+    new_term_attribute = gated_attributes[0] if gated_attributes else "display_name"
     for term in proposal.new_terms:
         covered.add(term.raw_value)
         stewards.append(
@@ -610,7 +652,7 @@ def taxonomy_steward_items(
                 steward_id=f"st-{decision_id}-tax-{_slug(term.raw_value)}",
                 entity_type=entity_type,
                 entity_id=entity_id,
-                attribute=attribute,
+                attribute=new_term_attribute,
                 owner="steward-001",
                 deputy="steward-002",
                 deadline=_deadline_from_facts(facts),
@@ -624,7 +666,7 @@ def taxonomy_steward_items(
             ConflictFact(
                 entity_type=entity_type,
                 entity_id=entity_id,
-                attribute=attribute,
+                attribute=new_term_attribute,
                 reason_code="TAXONOMY_NEW_TERM_PROPOSED",
                 rule_fired="T1",
                 fact_ids=[],
@@ -632,7 +674,9 @@ def taxonomy_steward_items(
                 taxonomy_version=taxonomy_version,
             )
         )
-    if taxonomy is not None and entity_type == "product" and attribute not in published_attrs:
+    for attribute in gated_attributes:
+        if attribute in published_attrs:
+            continue
         from taxonomies import canonical_term as _canonical_term
 
         unknown: dict[str, list] = {}
@@ -1366,23 +1410,27 @@ def _write_golden_and_tombstones(ctx: _PersistCtx) -> None:
                 continue  # handled above; nested data is not a loser fact
             ctx.merged.pop(attr, None)
 
+        attributes_json = json.dumps(ctx.merged, sort_keys=True, ensure_ascii=False)
+        content_sha256 = hashlib.sha256(attributes_json.encode("utf-8")).hexdigest()
+
         ctx.connection.execute(
             """
             INSERT INTO golden_records
               (golden_id, entity_type, entity_id, version, attributes,
                decision_id, policy_version, taxonomy_version,
-               created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               content_sha256, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ctx.golden_id,
                 ctx.request.entity_type,
                 ctx.request.entity_id,
                 ctx.new_version,
-                json.dumps(ctx.merged, sort_keys=True, ensure_ascii=False),
+                attributes_json,
                 ctx.decision_id,
                 ctx.policy_version,
                 ctx.taxonomy_version,
+                content_sha256,
                 ctx.created_at,
                 ctx.created_at,
             ),
@@ -1554,6 +1602,7 @@ def persist_decision(
     nested_products: list[dict[str, Any]] | None = None,
     clusters: list[dict[str, Any]] | None = None,
     fact_documents: dict[str, str] | None = None,
+    policies: dict | None = None,
 ) -> ResolveResponse:
     """Write one decision atomically: facts, decision, golden (if validated),
     tombstones, conflicts, stewards, graph, agent traces.
@@ -1562,7 +1611,22 @@ def persist_decision(
     except the golden record: the previous golden stays latest, nothing is
     silently published. Graph nodes/edges are written in the same transaction
     as the golden (CSD 3.1 [STRUCTURE] gate).
+
+    The golden facts are re-checked here against the policy's
+    ``golden_attributes`` (and the policy version they were derived under)
+    before a single row is written: this layer trusts no caller.
     """
+    if golden:
+        if policies is None:
+            try:
+                from policies import load_policies
+
+                policies = load_policies()
+            except Exception as exc:  # noqa: BLE001 - the gate fails closed
+                raise GoldenGateError(
+                    f"no policies available to verify the golden against: {exc}"
+                ) from exc
+        _enforce_golden_gate(policies, request.entity_type, policy_version, golden)
     ctx = _PersistCtx(
         settings=settings,
         request=request,

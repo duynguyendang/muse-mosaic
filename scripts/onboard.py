@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Zero-touch onboarding: sources + expected result -> derived bundle -> run.
 
-    # step 1: derive only (free; no engine needed; no model unless USE_MOCK_MUSE=false)
+    # step 1: derive only (free; no engine needed; no model unless USE_MOCK_MUSE=false).
+    # Derived terms/ranks land as *pending review*; nothing loads until approval.
     python3 scripts/onboard.py --deepmatcher amazon-google \
         --expected-structure expected.json --out /tmp/onboard
 
+    # step 1b: review and approve the derived terms/ranks (human gate)
+    python3 scripts/onboard.py --show-review /tmp/onboard/<bundle>
+    python3 scripts/onboard.py --accept /tmp/onboard/<bundle> --reviewer you
+
     # step 2: restart the trust engine with the bundle, then run the build
-    # against the *same* input; the script refuses a mismatched input
+    # against the *same* input; the script refuses a mismatched input or an
+    # unapproved bundle
     POLICY_DIR=/tmp/onboard/<bundle>/policies TAXONOMY_DIR=/tmp/onboard/<bundle>/taxonomy ...
     python3 scripts/onboard.py --deepmatcher amazon-google \
         --expected-structure expected.json --bundle /tmp/onboard/<bundle>
@@ -126,6 +132,18 @@ def _verify_bundle_matches(
     if not manifest_path.is_file():
         raise SystemExit(f"no manifest.json under {bundle_dir}; is this a bundle?")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    from bundle_review import ReviewPending
+
+    try:
+        manifest = onboarding.verify_bundle_approved(bundle_dir)
+    except ReviewPending as exc:
+        raise SystemExit(
+            f"bundle review is not approved: {exc}\n"
+            f"review it, then approve with:\n"
+            f"  python3 scripts/onboard.py --accept {bundle_dir} --reviewer <id>\n"
+            f"inspect first with:\n"
+            f"  python3 scripts/onboard.py --show-review {bundle_dir}"
+        ) from exc
     inputs = manifest.get("inputs", {})
     digest = onboarding._stable_digest(documents)
     if inputs.get("documents_sha256") != digest:
@@ -150,9 +168,23 @@ def _verify_bundle_matches(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group(required=False)
     source.add_argument("--documents", type=Path, help="JSON file with a document list")
     source.add_argument("--deepmatcher", choices=sorted(_DEEPMATCHER))
+    parser.add_argument(
+        "--accept",
+        type=Path,
+        default=None,
+        help="review gate: approve a derived bundle (requires --reviewer)",
+    )
+    parser.add_argument(
+        "--show-review",
+        type=Path,
+        default=None,
+        help="print the pending (or approved) review for a bundle and exit",
+    )
+    parser.add_argument("--reviewer", default=None, help="person signing off the bundle")
+    parser.add_argument("--note", default="", help="approval note (stored in approval.json)")
     parser.add_argument("--entity-type", default=None)
     parser.add_argument("--expected-structure", type=Path, default=None)
     parser.add_argument(
@@ -162,9 +194,39 @@ def main() -> int:
         "--bundle",
         type=Path,
         default=None,
-        help="run mode: an already-derived bundle to build against",
+        help="run mode: an already-derived, **approved** bundle to build against",
     )
     args = parser.parse_args()
+
+    # --- review gate modes: no dataset input required -----------------------
+    if args.show_review is not None:
+        review_path = args.show_review / "review.json"
+        if not review_path.is_file():
+            print(f"no review.json under {args.show_review}; is this a bundle?", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                json.loads(review_path.read_text(encoding="utf-8")), indent=2, ensure_ascii=False
+            )
+        )
+        return 0
+    if args.accept is not None:
+        if not args.reviewer:
+            parser.error("--accept requires --reviewer (name of the person signing off)")
+        from bundle_review import ReviewPending
+
+        try:
+            approval = onboarding.accept_review(args.accept, reviewer=args.reviewer, note=args.note)
+        except ReviewPending as exc:
+            print(f"refusing to approve: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"approved": True, **approval}, indent=2, ensure_ascii=False))
+        return 0
+
+    if not args.deepmatcher and not args.documents:
+        parser.error(
+            "one of --documents / --deepmatcher is required (or use --accept / --show-review)"
+        )
 
     if args.deepmatcher:
         documents = documents_from_deepmatcher(args.deepmatcher)
@@ -222,10 +284,14 @@ def main() -> int:
         return 2
     print(json.dumps(manifest, indent=2, ensure_ascii=False, default=str))
     print(
-        "\nnext: start the trust engine with\n"
+        "first: review the derived decisions, then approve the bundle:\n"
+        f"  python3 scripts/onboard.py --show-review {manifest['bundle_dir']}\n"
+        f"  python3 scripts/onboard.py --accept {manifest['bundle_dir']} --reviewer <you>\n"
+        "then: start the trust engine with\n"
         f"  POLICY_DIR={manifest['bundle_dir']}/policies "
         f"TAXONOMY_DIR={manifest['bundle_dir']}/taxonomy\n"
-        "then re-run with the same input plus --bundle <dir> to execute the build.",
+        "then re-run with the same input plus --bundle <dir> to execute the build "
+        "(the run refuses an unapproved bundle).",
         file=sys.stderr,
     )
     return 0

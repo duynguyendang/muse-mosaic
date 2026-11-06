@@ -21,6 +21,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import autonomy
 import ledger
 from config import Settings
 from schemas import BuildRequest, JobStatus
@@ -353,6 +354,14 @@ async def execute_full_build(
         documents=documents,
         splink_out=splink_out,
         autonomy_frozen=autonomy_frozen,
+    )
+    # M3 enforcement: a breaker that fired during clustering stops the build
+    # here — before any golden is derived or persisted. The job runner lands
+    # on the failure path (never retried); the sync path maps this to 409.
+    overrides = {etype: autonomy.breaker_overrides(policy) for etype, policy in policies.items()}
+    autonomy.enforce_breakers(
+        (splink_out.get("muse_candidates") or {}).get("by_entity"),
+        overrides=overrides,
     )
     return await execute_build(ctx, clusters, hooks=hooks)
 

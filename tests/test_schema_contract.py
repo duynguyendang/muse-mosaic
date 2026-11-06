@@ -111,9 +111,9 @@ def test_ignored_fields_are_also_invisible():
 
 
 def test_frozen_person_prompt_carries_no_values():
-    """The frozen prompt may NAME the hint concept; it never carries a value."""
+    """The contract question may NAME the hint concept; never a value."""
     prompt = mc.system_prompt_for("user")
-    assert prompt is mc.SYSTEM_PROMPT
+    assert prompt == USER_SPEC.question
     assert "@" not in prompt and "0900" not in prompt
 
 

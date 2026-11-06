@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,11 +29,21 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
 
 
 def init_db(database_path: str | Path) -> None:
-    """Create the ledger schema if it does not exist."""
+    """Create the ledger schema if it does not exist.
+
+    Includes the idempotent v2.4 upgrade: content_sha256 on golden_records.
+    Existing ledgers keep serving their rows (NULL hash = legacy, unverified
+    but not rejected); new rows always carry the hash.
+    """
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
     connection = connect(database_path)
     try:
         connection.executescript(schema)
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(golden_records)").fetchall()
+        }
+        if "content_sha256" not in columns:
+            connection.execute("ALTER TABLE golden_records ADD COLUMN content_sha256 TEXT")
         connection.commit()
     finally:
         connection.close()
@@ -48,7 +59,7 @@ def fetch_latest_golden(
             """
             SELECT golden_id, entity_type, entity_id, version, attributes,
                     decision_id, policy_version, taxonomy_version,
-                    created_at, updated_at
+                    content_sha256, created_at, updated_at
             FROM golden_records
             WHERE entity_type = ? AND entity_id = ?
             ORDER BY version DESC
@@ -575,3 +586,151 @@ def sum_job_tokens_since(database_path: str | Path, since_iso: str) -> int:
     finally:
         connection.close()
     return int(row["total"])
+
+
+def record_merge_proposal(
+    database_path: str | Path,
+    *,
+    proposal_id: str,
+    entity_type: str,
+    left_cluster: str,
+    right_cluster: str,
+    left_docs: list[str],
+    right_docs: list[str],
+    confidence: str,
+    tier: str,
+    name_score: float | None,
+    address_score: float | None,
+    reason: str | None,
+    model: str | None,
+    policy_version: str | None,
+    created_at: str,
+) -> dict[str, Any]:
+    """Record one suggested merge (idempotent on the unique key)."""
+    connection = connect(database_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO merge_proposals
+                  (proposal_id, entity_type, left_cluster, right_cluster,
+                   left_docs, right_docs, confidence, tier,
+                   name_score, address_score, reason, model, policy_version,
+                   status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (
+                    proposal_id,
+                    entity_type,
+                    left_cluster,
+                    right_cluster,
+                    json.dumps(left_docs, ensure_ascii=False),
+                    json.dumps(right_docs, ensure_ascii=False),
+                    confidence,
+                    tier,
+                    name_score,
+                    address_score,
+                    reason,
+                    model,
+                    policy_version,
+                    created_at,
+                ),
+            )
+        row = connection.execute(
+            "SELECT * FROM merge_proposals WHERE entity_type = ? AND left_cluster = ? AND right_cluster = ?",
+            (entity_type, left_cluster, right_cluster),
+        ).fetchone()
+    finally:
+        connection.close()
+    return _proposal_row(row) if row else {"proposal_id": proposal_id, "status": "pending"}
+
+
+def fetch_merge_proposals(
+    database_path: str | Path,
+    *,
+    status: str | None = None,
+    entity_type: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    connection = connect(database_path)
+    try:
+        clauses, params = [], []
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if entity_type:
+            clauses.append("entity_type = ?")
+            params.append(entity_type)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = connection.execute(
+            f"SELECT * FROM merge_proposals {where} ORDER BY created_at DESC LIMIT ?",
+            (*params, int(limit)),
+        ).fetchall()
+    finally:
+        connection.close()
+    return [_proposal_row(row) for row in rows]
+
+
+def fetch_merge_proposal(database_path: str | Path, proposal_id: str) -> dict[str, Any] | None:
+    connection = connect(database_path)
+    try:
+        row = connection.execute(
+            "SELECT * FROM merge_proposals WHERE proposal_id = ?", (proposal_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    return _proposal_row(row) if row else None
+
+
+def decide_merge_proposal(
+    database_path: str | Path,
+    proposal_id: str,
+    *,
+    decision: str,
+    resolved_by: str,
+    note: str | None = None,
+    resolved_at: str | None = None,
+) -> dict[str, Any] | None:
+    """Accept or reject a proposal exactly once. Returns the updated row.
+
+    Returns ``None`` when the proposal does not exist; raises ValueError when
+    it was already resolved (a decision id replay is never applied twice).
+    """
+    if decision not in ("accepted", "rejected"):
+        raise ValueError(f"decision must be accepted or rejected, got {decision!r}")
+    resolved_at = resolved_at or datetime.now(UTC).isoformat()
+    connection = connect(database_path)
+    try:
+        with connection:
+            cursor = connection.execute(
+                """
+                UPDATE merge_proposals
+                SET status = ?, resolved_at = ?, resolved_by = ?, resolution_note = ?
+                WHERE proposal_id = ? AND status = 'pending'
+                """,
+                (decision, resolved_at, resolved_by, note, proposal_id),
+            )
+        if cursor.rowcount == 0:
+            existing = connection.execute(
+                "SELECT status FROM merge_proposals WHERE proposal_id = ?",
+                (proposal_id,),
+            ).fetchone()
+    finally:
+        connection.close()
+    if cursor.rowcount == 0:
+        if existing is None:
+            return None
+        raise ValueError(
+            f"proposal {proposal_id} is already {existing[0]}; a decision is applied once"
+        )
+    return fetch_merge_proposal(database_path, proposal_id)
+
+
+def _proposal_row(row) -> dict[str, Any]:
+    record = dict(row)
+    for key in ("left_docs", "right_docs"):
+        try:
+            record[key] = json.loads(record.get(key) or "[]")
+        except json.JSONDecodeError:
+            record[key] = []
+    return record

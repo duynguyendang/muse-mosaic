@@ -349,4 +349,23 @@ def muse_impact_latest(request: Request) -> dict[str, Any]:
         impact = (job.get("result") or {}).get("muse_impact")
         if impact:
             return {"available": True, "job_id": job["job_id"], "at": job["updated_at"], **impact}
-    return {"available": False, "job_id": None}
+    flags = {
+        "muse_candidate_matching": current.muse_candidate_matching,
+        "muse_taxonomy_proposals": current.taxonomy_proposals,
+    }
+    if not current.muse_candidate_matching and current.taxonomy_proposals == "off":
+        reason = (
+            "Muse never ran: both opt-ins default off — MUSE_CANDIDATE_MATCHING=false and "
+            "MUSE_TAXONOMY_PROPOSALS=off. Builds use exact-identifier matching only; Muse "
+            "has not judged or merged anything. Set MUSE_CANDIDATE_MATCHING=true (and "
+            "MUSE_TAXONOMY_PROPOSALS=muse) in the deployment environment and run a build; "
+            "Muse then runs in the configured autonomy mode (off by default) and a witness "
+            "is required before auto may apply."
+        )
+    else:
+        reason = (
+            "No finished build through the jobs queue carries a Muse report yet. A report "
+            "exists after a job-run build with Muse configured; sync /build responses carry "
+            "it inline instead. Check the opt-in flags for this deployment."
+        )
+    return {"available": False, "job_id": None, "reason": reason, "flags": flags}

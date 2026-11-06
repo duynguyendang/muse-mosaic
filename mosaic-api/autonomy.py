@@ -4,8 +4,9 @@ The autonomy ladder advances per entity type, never as one global switch:
 
   off      Muse proposals are not applied at all for the entity
   shadow   Muse judges and records; nothing merges from its verdicts
-  suggest  like shadow, plus the build reports how many merges it would
-           have applied (review-queue wiring is the G4 milestone)
+  suggest  like shadow, plus the would-merge pairs are persisted as proposals
+           (the G4 review queue): a human labels them accepted/rejected at
+           /api/v1/suggestions — labels are recorded, never applied
   auto     Muse-merged clusters are applied as today (MUSE_CANDIDATE_MATCHING)
 
 ``AUTONOMY_MODE`` sets the build-wide default; ``AUTONOMY_MODE_<ENTITY>``
@@ -18,12 +19,16 @@ reads: an ``auto`` entity degrades to ``shadow`` and the report says so. A
 restart always recovers, exactly like the engine kill switch.
 
 Breakers are graded from the build's own per-entity Muse reports — no extra
-model calls — and label the batch:
+model calls — and are **enforced**: when one fires, the build stops before
+any golden is derived (see ``enforce_breakers``):
 
   zero_candidates_at_scale  >= 200 clusters produced 0 candidate pairs
   judge_failure_rate        judge failures exceeded 10% of judge calls
   entity_run_failed         the entity's Muse run failed outright (outage,
                             output rejected)
+
+The build summary still reports the breakers for post-mortem; the report no
+longer doubles as the only tripwire.
 
 Audit sampling is deterministic (sha256 of the decision id): a 1% sample of
 published decisions plus **every withheld decision** (steward queue) is
@@ -151,17 +156,46 @@ def report_audit(
 # ---------------------------------------------------------------------------
 
 
+def breaker_overrides(policy: Any) -> dict[str, Any]:
+    """Per-entity M3 breaker knobs from policy ``thresholds.m3_breakers``.
+
+    Anything missing or malformed falls back to the code constants (never to
+    a looser bound than the policy declares — validation already rejects
+    out-of-range values at load).
+    """
+    raw = (getattr(policy, "thresholds", None) or {}).get("m3_breakers") or {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    clusters = raw.get("zero_candidates_clusters")
+    if isinstance(clusters, int) and not isinstance(clusters, bool) and clusters >= 1:
+        out["zero_warn"] = clusters
+    limit = raw.get("judge_failure_limit")
+    if (
+        isinstance(limit, (int, float))
+        and not isinstance(limit, bool)
+        and 0.0 < float(limit) <= 1.0
+    ):
+        out["judge_failure_limit"] = float(limit)
+    return out
+
+
 def evaluate_breakers(
     by_entity: dict[str, Any] | None,
     *,
     zero_warn: int = ZERO_WARN_CLUSTERS,
     judge_failure_limit: float = JUDGE_FAILURE_LIMIT,
+    overrides: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Grade each entity's folded Muse report against the M3 breakers."""
     breakers: list[dict[str, Any]] = []
+    overrides = overrides or {}
     for name, info in (by_entity or {}).items():
         if not isinstance(info, dict):
             continue
+        override = overrides.get(name) or {}
+        entity_zero_warn = override.get("zero_warn", zero_warn)
+        entity_failure_limit = override.get("judge_failure_limit", judge_failure_limit)
         reason = str(info.get("skipped_reason") or "")
         if reason.startswith("autonomy "):
             # a deliberate off/shadow label set by the controller itself is
@@ -178,7 +212,7 @@ def evaluate_breakers(
             continue
         clusters = int(info.get("clusters_in") or 0)
         candidate_pairs = int(info.get("candidate_pairs") or 0)
-        if clusters >= zero_warn and candidate_pairs == 0:
+        if clusters >= entity_zero_warn and candidate_pairs == 0:
             breakers.append(
                 {
                     "breaker": "zero_candidates_at_scale",
@@ -188,17 +222,52 @@ def evaluate_breakers(
             )
         judge_calls = int(info.get("judge_calls") or 0)
         judge_failures = int(info.get("judge_failures") or 0)
-        if judge_calls > 0 and judge_failures / judge_calls > judge_failure_limit:
+        if judge_calls > 0 and judge_failures / judge_calls > entity_failure_limit:
             breakers.append(
                 {
                     "breaker": "judge_failure_rate",
                     "entity_type": name,
                     "detail": (
                         f"{judge_failures}/{judge_calls} judge calls failed "
-                        f"(> {judge_failure_limit:.0%})"
+                        f"(> {entity_failure_limit:.0%})"
                     ),
                 }
             )
+    return breakers
+
+
+class BreakerTripped(RuntimeError):
+    """A build-halting M3 breaker fired; the build must stop.
+
+    Carries the graded breakers so the job ledger / HTTP layer can record
+    exactly which one fired. Never retried: raising the scale/failure
+    budget and re-running is the operator's explicit act.
+    """
+
+    def __init__(self, breakers: list[dict[str, Any]]):
+        self.breakers = list(breakers)
+        detail = "; ".join(
+            f"{b.get('entity_type')}: {b.get('breaker')} ({b.get('detail')})" for b in self.breakers
+        )
+        super().__init__(f"M3 breaker(s) tripped; build halted before derivation: {detail}")
+
+
+def enforce_breakers(
+    by_entity: dict[str, Any] | None,
+    *,
+    zero_warn: int = ZERO_WARN_CLUSTERS,
+    judge_failure_limit: float = JUDGE_FAILURE_LIMIT,
+    overrides: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Raise BreakerTripped if any breaker fires; else return the (empty) list."""
+    breakers = evaluate_breakers(
+        by_entity,
+        zero_warn=zero_warn,
+        judge_failure_limit=judge_failure_limit,
+        overrides=overrides,
+    )
+    if breakers:
+        raise BreakerTripped(breakers)
     return breakers
 
 
@@ -281,6 +350,10 @@ async def shadow_scan(
     merges = mc.select_merges(pairs, verdicts, settings.muse_candidate_min_confidence)
     info["judged"] = len(verdicts)
     info["would_merge"] = len(merges)
+    # suggest mode is the review-queue rung: the proposals are fully described
+    # so the build can persist them as labels for a human (never applied)
+    if mode == "suggest" and merges:
+        info["held_merges"] = mc.held_merge_report(clusters, merges)
     info["elapsed_s"] = round(perf_counter() - started, 1)
     return clusters, info
 

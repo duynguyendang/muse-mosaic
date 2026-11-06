@@ -33,10 +33,18 @@ async def upload(request: Request) -> dict[str, Any]:
     entity_type, confidence = detect_entity_type({"fragments": fragments} if fragments else {})
     if entity_type == "unknown":
         entity_type = "user_profile"
+    # the detector's organic names map onto shipped contracts; anything that is
+    # neither product-like nor user-like previews as a person (fail-safe demo
+    # path — never a publish, since nothing here reaches the ledger)
+    pipeline_entity = (
+        entity_type
+        if entity_type in ("user", "product")
+        else ("user" if entity_type.startswith("user") else "product")
+    )
     link_proposals: list[dict[str, Any]] = []
     try:
         facts = to_candidate_facts(
-            "user" if entity_type == "user_profile" else "product",
+            pipeline_entity,
             "upload-preview",
             [Fragment.model_validate(item) for item in fragments],
             work_id="upload-preview",
