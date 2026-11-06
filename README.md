@@ -106,7 +106,7 @@ cd mosaic-api && USE_MOCK_MUSE=true uvicorn main:app --reload --port 8000
 
 ## Key Verified Benchmarks
 
-Comprehensive verified benchmark results across 439 automated tests:
+Comprehensive verified benchmark results across 444 automated tests:
 
 - **Semantic Disambiguation (10,000 entities, 4,496 pairs):**
   - *Standard string rules:* 255/600 recovered, **116 false merges**.
@@ -127,6 +127,9 @@ Comprehensive verified benchmark results across 439 automated tests:
   - O(V+E) monotonic fixpoint evaluated in **9 milliseconds**.
 - **Human Steward Touch:**
   - **0.0% manual touch** needed on clean runs; automatic fail-closed isolation on conflicts.
+- **Multi-Model Orchestration, verified live (2026-11-06):**
+  - Muse (`MUSE_MODEL_ID`) carries the wide-bandwidth work: the shortlist and the 18.5k-pair judge. **Wonder (`muse-wonder-1.0`)** carries deep governance reasoning at 1–3 calls per run: the Policy Copilot maps natural language into the closed `PolicySpec` vocabulary (time-window instructions are refused, live), and escalations return a steward adjudication note — never a publish, never a winner.
+  - Verified in 3 calls / 2,288 tokens with `mkit` compiling the drafted change: [`docs/runs/20261106T051617Z-wonder-45b168156cb9.json`](docs/runs/20261106T051617Z-wonder-45b168156cb9.json). Both models stay under the deterministic control of Manglekit Datalog — neither writes Datalog, publishes, or overrides the engine.
 
 *(Full benchmark logs and methodology: [`docs/TEST-REPORT.md`](docs/TEST-REPORT.md))*
 

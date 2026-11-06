@@ -8,6 +8,8 @@ verified connector exists, labelled as such. Nothing here calls the network.
 
 from __future__ import annotations
 
+import dataclasses
+
 from config import Settings
 
 
@@ -94,3 +96,17 @@ def test_meta_client_never_called_in_tests(monkeypatch):
     )
     assert out["status"] == "not_available"
     assert calls == []
+
+
+def test_wonder_status_reports_configuration_not_success():
+    from meta_tooling import wonder_status
+
+    stub = wonder_status(settings())
+    assert stub["status"] == "stubbed"
+    assert wonder_status(None)["status"] == "stubbed"
+
+    pinned = dataclasses.replace(settings(), wonder_model_id="wonder-pin-1", use_mock_muse=False)
+    status = wonder_status(pinned)
+    assert status["status"] == "pinned"
+    assert "wonder-pin-1" in status["detail"]
+    assert "docs/runs/" in status["detail"]  # claims live evidence by log, never by status

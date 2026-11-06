@@ -17,9 +17,9 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Python tests | `python3 -m pytest -q` | **439 passed, 0 failed**, 157.95 s (2026-11-06; log `docs/runs/20261106T045256Z-pytest-556c8dfef636.txt`) |
+| Python tests | `python3 -m pytest -q` | **444 passed, 0 failed**, 119.46 s (2026-11-06; log `docs/runs/20261106T051929Z-pytest-45b168156cb9.txt`) |
 | Lint | `ruff check mosaic-api matching-engine scripts tests shared` | **clean** |
-| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 113 files unchanged |
+| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 114 files unchanged |
 | Go format | `gofmt -l .` | **clean**, no output |
 | Go vet | `go vet ./...` | **clean**, no output |
 | Go tests | `go test -count=1 ./...` | **ok**, 0.046 s |
@@ -31,13 +31,13 @@ run needs no external network and no Meta API key.
 
 ```text
 $ python3 -m pytest -q
-439 passed in 157.95s (0:02:37)
+444 passed in 119.46s (0:01:59)
 
 $ python3 -m ruff check mosaic-api matching-engine scripts tests shared
 All checks passed!
 
 $ python3 -m black --check mosaic-api matching-engine scripts tests shared
-All done! 113 files would be left unchanged.
+All done! 114 files would be left unchanged.
 
 $ cd trust-engine && gofmt -l . && go vet ./... && go test -count=1 ./...
 ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.046s
@@ -45,7 +45,7 @@ ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.046s
 
 ## Suite inventory
 
-439 collected tests across 44 files. Since the 2026-11-05 snapshot (381):
+444 collected tests across 44 files. Since the 2026-11-05 snapshot (381):
 eight new files — `test_traps.py` (the six release-gate traps),
 `test_engine_router.py` (deterministic matcher router),
 `test_auto_witness.py` (the auto floor gate, 12 cases),
@@ -54,7 +54,9 @@ human-review gate), `test_suggestions.py` (G4 review queue + canary
 predicate), `test_publication_policy.py`, and `test_policy_thresholds.py`
 (borderline band + M3 breaker knobs as versioned policy data); `test_jobs.py`
 grew the two breaker-enforcement integration tests, `test_autonomy.py` grew
-the `enforce_breakers` unit tests, `test_onboarding.py` now approves before
+the `enforce_breakers` unit tests, `test_policy_copilot.py` grew the
+Wonder-channel cases (14 → 18) and `test_meta_tooling.py` the
+pinned-status case (4 → 5), `test_onboarding.py` now approves before
 loading (the pending-review gate), and `test_taxonomy.py` tracks the shipped
 publication taxonomy.
 
@@ -62,7 +64,7 @@ publication taxonomy.
 | --- | --- | --- | --- |
 | Contract, rules, trust gate | 88 | 9 | Facts and goldens carry provenance; user/product authority, freshness, TTL and conflict rules hold; S1/S2 semantic evidence and the S3 guard behave; split, rollback and replay are exact; killing the engine publishes nothing |
 | Taxonomy | 41 | 3 | Versioned vocabulary, exact-match mapping, steward Accept creates a new version and re-derives, evidence-verified extension accepts only what the data attests |
-| Muse and model layer | 89 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure, report fold across entity types; Copilot closed vocabulary |
+| Muse and model layer | 94 | 5 | Five sub-agents emit claims only; real-proposer fail-fast and strict validation; candidate shortlist, cache, concurrency, partial failure, report fold across entity types; Copilot closed vocabulary routed to Wonder when pinned (Muse fallback); Wonder status reports configuration, never success |
 | Pipeline, API, jobs, UI | 83 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end; breaker stops the build (2 new cases) |
 | Entity contracts and onboarding | 63 | 5 | Specs ship as validated data; the onboarding compiler derives a bundle or refuses; unknown entity types fail closed; the DeepMatcher harness pins metric maths and raw counts |
 | Autonomy controller (M3) | 21 | 1 | Per-entity modes (off/shadow/suggest/auto), kill switch, breakers (now enforced before derivation), deterministic audit sampling, defaults fail closed, policy-borne breaker knobs |
@@ -82,7 +84,7 @@ Per file:
 | `test_entity_judging.py` | 19 | Per-entity judging, grouping prompt, admission contract |
 | `test_onboarding.py` | 16 | Profiling, mapping refusals, taxonomy bootstrap, policy derivation, all-or-nothing bundles, approve-then-load |
 | `test_semantic_rules.py` | 15 | S1 `semantic_phone`, S2 `semantic_email`, S3 guard, against the live engine |
-| `test_policy_copilot.py` | 14 | Closed vocabulary, deterministic compile, engine verdict, refusal with a reason |
+| `test_policy_copilot.py` | 18 | Closed vocabulary, deterministic compile, engine verdict, refusal with a reason; Wonder routes the live proposal when pinned, Muse is the fallback, drafts are labelled and never applied |
 | `test_auto_witness.py` | 12 | Auto floor gate: witness must be live-judged with SHA, model id and precision >= floor on every judgeable set; mock/missing/below-floor/all-unjudged refused; unjudged sets excluded as no-evidence; startup refuses auto without it |
 | `test_jobs.py` | 12 | Enqueue, run, replay, resume, retry, cancel, budgets, breaker stops the build |
 | `test_spec_files.py` | 11 | Shipped specs load from data; invalid specs fail closed; a new entity is a data drop |
@@ -104,7 +106,7 @@ Per file:
 | `test_policy_thresholds.py` | 7 | Policy-borne M3 breaker knobs; borderline-band and breaker validation fail closed; unknown threshold keys stay forward-compatible |
 | `test_traps.py` | 6 | Release-gate traps: handler bypass, tampered stored field, expired approval, replayed decision id, policy-version mismatch, house-number neighbour |
 | `test_taxonomy_accept.py` | 4 | Steward-only new term, new version, re-derive |
-| `test_meta_tooling.py` | 4 | Wonder and Prompt Guard are conditional and honestly stubbed |
+| `test_meta_tooling.py` | 5 | Wonder pinned-vs-stubbed reports configuration (never success); stub paths never touch the network; Prompt Guard stays a labelled local heuristic |
 | `test_auth.py` | 4 | Token gates every write; reads stay open |
 | `test_analyser.py` | 4 | Orphan, stale and duplicate findings become steward items; overdue scan |
 | `test_taxonomy.py` | 3 | Versioned vocabulary and exact synonym mapping (incl. the shipped publication taxonomy) |
@@ -133,7 +135,8 @@ Per file:
 | Verdict cache never changes a decision, prompt edits invalidate | `test_muse_candidates.py` | verified |
 | Taxonomy extension accepts only attested, related terms | `test_taxonomy_proposals.py` (34) | verified |
 | Copilot cannot write policy or Datalog | `test_policy_copilot.py` (14) | verified |
-| Conditional Meta tools are not simulated | `test_meta_tooling.py` (4) | verified |
+| Wonder is pinned and verified live: Copilot mapping, closed-vocab refusal, escalation adjudication (3 calls, 2,288 tokens, `muse-wonder-1.0`) | `docs/runs/20261106T051617Z-wonder-45b168156cb9.json`, `test_policy_copilot.py` (18), `test_meta_tooling.py` (5) | verified |
+| Conditional Meta tools are not simulated; stub paths never touch the network | `test_meta_tooling.py` (5) | verified |
 | UI references only existing DOM ids | `test_ui_wiring.py` (7) | verified |
 | Entity schema contracts ship as validated data; a bad spec never half-loads | `test_spec_files.py` (11) | verified |
 | Unknown entity types fail closed (422 / raise), never silently judged | `test_muse_candidates.py` (55), `test_schema_contract.py` (10) | verified |
@@ -171,6 +174,7 @@ the Muse arms; the numbers below are the ones recorded in `README.md`.
 | `eval_muse_candidates.py`, 282 Kaggle variants | Muse | 227 links vs 225 deterministic, 0 false merges | measured (live) |
 | `eval_taxonomy_gap.py`, Kaggle 389 products | Rules / Muse + evidence | 389 unified, 0 wrong, 0 held | measured (live engine) |
 | `eval_taxonomy_gap.py`, semantic 88 records | Muse + evidence | 58 unified, 0 fragmented, 0 wrong | measured (live engine, pre-digit-fix caveat) |
+| `verify_wonder.py`, 3 calls | Wonder `muse-wonder-1.0` | Copilot in-vocab → `compiled` (2-line diff, `mkit`-verified), time-window instruction → `unsupported` refusal, escalation → `adjudicated` steward note; **2,288 total tokens** | measured (live, logged 2026-11-06, `docs/runs/20261106T051617Z-wonder-45b168156cb9.json`) |
 
 ### Ground-truth accuracy (labelled pair sets, `eval_deepmatcher.py`)
 
@@ -337,8 +341,11 @@ Stated here so the passing suite is not read as a broader claim:
 - **The taxonomy semantic-set numbers predate the digit fix.** Rerun
   `eval_taxonomy_gap.py --dataset semantic --arms A B C D` before quoting them;
   the script now also prints `vocab`.
-- **Wonder and Prompt Guard are not pinned.** They are tested as labelled stubs,
-  which is what `test_meta_tooling.py` proves, not that they work.
+- **Prompt Guard is not a live connector.** Screening is the labelled local
+  heuristic (`is_prompt_guard_verified()` returns False); a verified
+  connector replaces it via `PromptGuardVerifier` without touching callers.
+  Wonder, by contrast, is pinned and verified live — see the claim matrix
+  and `docs/runs/20261106T051617Z-wonder-45b168156cb9.json`.
 - **A Copilot draft cannot be staged as a live profile.** The test proves the
   draft is closed-vocabulary and engine-validated, not that it can be promoted.
 - **No production accuracy claim.** Benchmarks use synthetic generators, Kaggle

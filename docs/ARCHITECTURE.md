@@ -113,7 +113,7 @@ policy versions and Splink/embedding status.
 |---|---|
 | `ingest.py` | Fragment/document intake, JSON shape validation, type detection, blocking-key flattening |
 | `proposer.py` + `subagents.py` (Scout, Linker, Cluster, Taxonomist, Critic) | Muse boundary: strict `json_schema` calls, claims only, abstain-never-guess; mock mode deterministic for tests |
-| `meta_client.py`, `meta_tooling.py` | Bounded retry (429/500/503, `Retry-After`, ≤3), 30 s circuit breaker; conditional Wonder/Prompt Guard, labelled stubs otherwise |
+| `meta_client.py`, `meta_tooling.py` | Bounded retry (429/500/503, `Retry-After`, ≤3), 30 s circuit breaker; conditional Wonder (pinned: Copilot mapping + escalation adjudication, else labelled stub), Prompt Guard labelled heuristic otherwise |
 | `splink_adapter.py` (+ in-process fallback `splink_local.py`) | Matching-engine HTTP client; `SPLINK_UNAVAILABLE` fallback to Muse + fuzzy; never publishes on fallback alone |
 | `graph.py` | Source + Derived graph, Pathfinder, blast-radius, orphan/stale/duplicate analysers, cluster Entity nodes + `cluster_member` edges |
 | `trust.py`, `policies.py` | Fail-closed derive client (20 s timeout, strict re-validation); read-only versioned policy mirror + allow-list |

@@ -3,7 +3,10 @@
 The architecture rule of the whole product is "proposers never publish".
 The Copilot follows it one level up: a model (or, in mock mode, a small
 deterministic parser) may only *propose* a change, expressed in a CLOSED
-vocabulary (``PolicySpec``). Everything after that is deterministic code:
+vocabulary (``PolicySpec``). The live proposer is **Wonder when a
+``WONDER_MODEL_ID`` is pinned** (one schema-reasoning call per draft),
+Muse otherwise — see ``propose_channel``. Everything after that is
+deterministic code:
 
 1. ``PolicySpec`` validates the proposal (known base profile, tier 1..3,
    identifier-shaped names). Anything outside the vocabulary is refused as
@@ -115,6 +118,22 @@ _TIER_WORDS = {"highest": 3, "top": 3, "most trusted": 3, "lowest": 1, "least tr
 _SRC = r"([a-z][a-z0-9_-]*)"
 
 
+def propose_channel(settings: Settings) -> tuple[str, str]:
+    """(model_id, channel) for the governance proposer.
+
+    Multi-model split: **Wonder maps instructions when pinned** (schema
+    reasoning, 1 call per draft — position B of the Wonder plan); Muse stays
+    the fallback so a deployment without a pinned Wonder id behaves exactly
+    as before. Mock mode never resolves a model id at all.
+    """
+    if settings.use_mock_muse:
+        return "", "mock"
+    wonder = (getattr(settings, "wonder_model_id", "") or "").strip()
+    if wonder:
+        return wonder, "wonder"
+    return settings.muse_model_id, "live"
+
+
 def _norm_attr(name: str) -> str:
     return name.strip().lower().replace("-", "_")
 
@@ -156,12 +175,20 @@ def mock_propose(instruction: str, base_profile: str) -> PolicySpec:
     )
 
 
-async def live_propose(settings: Settings, instruction: str, base_profile: str) -> PolicySpec:
+async def live_propose(
+    settings: Settings, instruction: str, base_profile: str
+) -> tuple[PolicySpec, dict[str, Any]]:
+    """One Wonder/Muse call: NL instruction -> validated closed PolicySpec.
+
+    Returns the spec and the model usage, so a verification run can log what
+    the call actually cost (evidence discipline: numbers with receipts).
+    """
     from meta_client import chat_json
 
-    parsed, _usage = await chat_json(
+    model_id, _channel = propose_channel(settings)
+    parsed, usage = await chat_json(
         settings,
-        model=settings.muse_model_id,
+        model=model_id,
         system=SYSTEM_PROMPT,
         user=f"Base profile: {base_profile}\nInstruction: {instruction}",
         schema_name="mosaic_policy_spec",
@@ -175,7 +202,7 @@ async def live_propose(settings: Settings, instruction: str, base_profile: str) 
         parsed["source_tiers"] = {
             str(p["source"]).strip().lower(): p["tier"] for p in pairs if isinstance(p, dict)
         }
-    return PolicySpec.model_validate(parsed)
+    return PolicySpec.model_validate(parsed), usage
 
 
 # --------------------------------------------------------------------------
@@ -305,23 +332,25 @@ async def draft(settings: Settings, instruction: str, base_profile: str) -> dict
     if profile is None:
         return _refused("invalid", f"Unknown base profile {base_profile!r}.")
 
-    proposer = "mock" if settings.use_mock_muse else "live"
+    _model, proposer = propose_channel(settings)
+    usage: dict[str, Any] | None = None
     try:
-        spec = (
-            mock_propose(instruction, base_profile)
-            if settings.use_mock_muse
-            else await live_propose(settings, instruction, base_profile)
-        )
+        if settings.use_mock_muse:
+            spec = mock_propose(instruction, base_profile)
+        else:
+            spec, usage = await live_propose(settings, instruction, base_profile)
     except (ValidationError, ValueError) as exc:
         return _refused("invalid", f"Model output left the closed vocabulary: {exc}", proposer)
     except Exception as exc:  # noqa: BLE001 - model transport failure must fail closed
         return _refused("unavailable", f"Policy proposer unavailable: {exc}", proposer)
 
     if spec.unsupported:
-        return _refused("unsupported", spec.unsupported, proposer, spec)
+        return _refused("unsupported", spec.unsupported, proposer, spec, usage=usage)
     problems = spec.problems()
     if problems or spec.is_empty:
-        return _refused("invalid", "; ".join(problems) or "Empty change.", proposer, spec)
+        return _refused(
+            "invalid", "; ".join(problems) or "Empty change.", proposer, spec, usage=usage
+        )
 
     entity = profile.default_entity_type
     base_horn = profile.policies[entity].horn_clauses
@@ -350,13 +379,18 @@ async def draft(settings: Settings, instruction: str, base_profile: str) -> dict
         "entity_type": entity,
         "diff": diff,
         "checks": checks,
+        "usage": usage,
         "applied": False,
         "note": "Draft only. Nothing was staged, applied or published.",
     }
 
 
 def _refused(
-    status: str, message: str, proposer: str | None = None, spec: PolicySpec | None = None
+    status: str,
+    message: str,
+    proposer: str | None = None,
+    spec: PolicySpec | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "status": status,
@@ -365,5 +399,6 @@ def _refused(
         "spec": spec.model_dump() if spec else None,
         "diff": [],
         "checks": None,
+        "usage": usage,
         "applied": False,
     }

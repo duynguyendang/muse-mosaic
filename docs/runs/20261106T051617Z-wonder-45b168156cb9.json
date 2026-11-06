@@ -1,0 +1,82 @@
+{
+  "harness": "scripts/verify_wonder.py",
+  "date_utc": "20261106T051617Z",
+  "git_sha": "45b168156cb9b90351f14029768c6333a0180215",
+  "git_dirty": true,
+  "model_id": "muse-wonder-1.0",
+  "muse_model_id": "muse-spark-1.3-contributor",
+  "result": "verified",
+  "calls": [
+    {
+      "name": "copilot_in_vocabulary",
+      "instruction": "treat crm as tier 3 and treat marketplace-like as tier 2",
+      "status": "compiled",
+      "proposer": "wonder",
+      "usage": {
+        "prompt_tokens": 204,
+        "completion_tokens": 443,
+        "total_tokens": 647,
+        "cached_tokens": 0,
+        "reasoning_tokens": 382,
+        "call_id": "chatcmpl-01a1af49-18f8-76f1-b906-0c00e844848c",
+        "model": "muse-wonder-1.0"
+      },
+      "spec": {
+        "base_profile": "retail_balanced",
+        "source_tiers": {
+          "crm": 3,
+          "marketplace-like": 2
+        },
+        "multivalued_attributes": [],
+        "unsupported": null
+      },
+      "diff": [
+        "-source_tier(\"crm\", 1).",
+        "+source_tier(\"crm\", 3).",
+        "-source_tier(\"marketplace-like\", 1).",
+        "+source_tier(\"marketplace-like\", 2)."
+      ],
+      "checks": {
+        "engine_available": true,
+        "compiles": true,
+        "error": null
+      },
+      "applied": false
+    },
+    {
+      "name": "copilot_out_of_vocabulary",
+      "instruction": "expire every fact 24 hours after it arrives",
+      "status": "unsupported",
+      "proposer": "wonder",
+      "message": "Expiring every fact 24 hours after it arrives requires a time window, which cannot be expressed as a source tier or a multivalued attribute.",
+      "usage": {
+        "prompt_tokens": 198,
+        "completion_tokens": 378,
+        "total_tokens": 576,
+        "cached_tokens": 116,
+        "reasoning_tokens": 311,
+        "call_id": "chatcmpl-01a1af49-2a5d-73f9-883f-18873b605898",
+        "model": "muse-wonder-1.0"
+      },
+      "applied": false
+    },
+    {
+      "name": "escalation_adjudication",
+      "status": "adjudicated",
+      "model": "muse-wonder-1.0",
+      "usage": {
+        "prompt_tokens": 222,
+        "completion_tokens": 843,
+        "total_tokens": 1065,
+        "cached_tokens": 0,
+        "reasoning_tokens": 678,
+        "call_id": "chatcmpl-01a1af49-438f-75f2-9408-27693bc83fa9",
+        "model": "muse-wonder-1.0"
+      },
+      "note": "Escalated phone conflict for user/WONDER-VERIFY-1. The sap-like candidate has stronger evidence (authority_rank 1, verified) than the ticket candidate (authority_rank 3, unverified), but per fallback do not use the disputed value until a steward decides.",
+      "stronger_side": "sap-like: +84901234567 (authority_rank 1, verified)",
+      "missing_evidence": "Steward decision; recency and full provenance for both records; direct confirmation from the user that the stronger candidate is their current phone number.",
+      "check_first": "Have the steward confirm the sap-like record's recency and provenance and independently verify ownership and currentness of +84901234567 with the user before any use."
+    }
+  ]
+}

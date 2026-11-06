@@ -98,13 +98,30 @@ def is_prompt_guard_verified() -> bool:
     return False
 
 
-def wonder_status() -> dict[str, Any]:
-    """Honest inventory row for the README/video claim check."""
+def wonder_status(settings: Settings | None = None) -> dict[str, Any]:
+    """Honest inventory row for the README/video claim check.
+
+    Reports CONFIGURATION, never success: "pinned" means a live deployment
+    has a ``WONDER_MODEL_ID`` (the model then only ever appears in the two
+    governance hooks — escalation adjudication and Copilot mapping — and
+    each real call is evidenced by a run log under ``docs/runs/``).
+    "stubbed" means Wonder is not configured here and must not be claimed.
+    """
+    wonder = (getattr(settings, "wonder_model_id", "") or "").strip() if settings else ""
+    live = settings is not None and not settings.use_mock_muse
+    if wonder and live:
+        return {
+            "tool": "Muse Wonder",
+            "status": "pinned",
+            "detail": f"Wonder model id {wonder} drives escalation adjudication "
+            "and Policy Copilot mapping (1-3 calls per run); live evidence "
+            "is a run log under docs/runs/, never this status alone.",
+        }
     return {
         "tool": "Muse Wonder",
         "status": "stubbed",
         "detail": "Wonder adjudication is conditional on a verified model id; "
-        "not verified in this run, never simulated as real.",
+        "not configured in this run, never simulated as real.",
     }
 
 

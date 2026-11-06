@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import dataclasses
+
 import pytest
 from config import Settings
 from fastapi.testclient import TestClient
@@ -139,3 +142,115 @@ def test_noop_change_is_reported_not_called_compiled(client):
         json={"instruction": "treat crm as tier 1", "base_profile": "retail_balanced"},
     )
     assert r.json()["status"] == "no_change"
+
+
+# --- multi-model channel: Wonder maps when pinned, Muse falls back ----------
+
+
+def _live_settings(**overrides) -> Settings:
+    base = Settings(
+        use_mock_muse=False,
+        meta_model_api_key="test-key",
+        muse_model_id="muse-test-1",
+        wonder_model_id="",
+        database_path="/tmp/copilot-test.db",
+        enable_background_tasks=False,
+    )
+    return dataclasses.replace(base, **overrides) if overrides else base
+
+
+def test_propose_channel_splits_wonder_and_muse():
+    from policy_copilot import propose_channel
+
+    assert propose_channel(Settings()) == ("", "mock")
+    assert propose_channel(_live_settings()) == ("muse-test-1", "live")
+    assert propose_channel(_live_settings(wonder_model_id="wonder-2")) == ("wonder-2", "wonder")
+
+
+def test_live_propose_routes_to_the_pinned_wonder(monkeypatch):
+    import meta_client
+
+    seen: list[dict] = []
+
+    async def fake_chat_json(settings, **kwargs):
+        seen.append(kwargs)
+        return (
+            {
+                "base_profile": "retail_balanced",
+                "source_tiers": [{"source": "crm", "tier": 3}],
+                "multivalued_attributes": [],
+                "unsupported": None,
+            },
+            {"total_tokens": 11},
+        )
+
+    monkeypatch.setattr(meta_client, "chat_json", fake_chat_json)
+    from policy_copilot import live_propose
+
+    spec, usage = asyncio.run(
+        live_propose(
+            _live_settings(wonder_model_id="wonder-2"), "trust crm most", "retail_balanced"
+        )
+    )
+    assert spec.source_tiers == {"crm": 3}
+    assert [call["model"] for call in seen] == ["wonder-2"]
+    assert seen[0]["reasoning_effort"] == "low"
+    assert usage == {"total_tokens": 11}  # usage flows to the run log
+
+
+def test_live_propose_falls_back_to_muse_without_wonder(monkeypatch):
+    import meta_client
+
+    seen: list[dict] = []
+
+    async def fake_chat_json(settings, **kwargs):
+        seen.append(kwargs)
+        return (
+            {
+                "base_profile": "retail_balanced",
+                "source_tiers": [],
+                "multivalued_attributes": ["order_id"],
+                "unsupported": None,
+            },
+            {},
+        )
+
+    monkeypatch.setattr(meta_client, "chat_json", fake_chat_json)
+    from policy_copilot import live_propose
+
+    spec, _usage = asyncio.run(
+        live_propose(_live_settings(), "order_id multivalued", "retail_balanced")
+    )
+    assert spec.multivalued_attributes == ["order_id"]
+    assert [call["model"] for call in seen] == ["muse-test-1"]
+
+
+def test_draft_labels_the_wonder_channel(monkeypatch):
+    import policy_copilot
+
+    async def fake_propose(settings, instruction, base_profile):
+        return (
+            PolicySpec(
+                base_profile=base_profile,  # type: ignore[arg-type]
+                source_tiers={"crm": 3},
+            ),
+            {"total_tokens": 5},
+        )
+
+    monkeypatch.setattr(policy_copilot, "live_propose", fake_propose)
+    monkeypatch.setattr(
+        policy_copilot,
+        "verify_with_engine",
+        lambda horn: {"engine_available": True, "compiles": True, "error": None},
+    )
+    out = asyncio.run(
+        policy_copilot.draft(
+            _live_settings(wonder_model_id="wonder-2"),
+            "trust crm most",
+            "retail_balanced",
+        )
+    )
+    assert out["proposer"] == "wonder"
+    assert out["status"] == "compiled"
+    assert out["usage"] == {"total_tokens": 5}  # cost reaches the report
+    assert out["applied"] is False
