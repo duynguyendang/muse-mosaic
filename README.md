@@ -106,18 +106,18 @@ cd mosaic-api && USE_MOCK_MUSE=true uvicorn main:app --reload --port 8000
 
 ## Key Verified Benchmarks
 
-Comprehensive verified benchmark results across 437 automated tests:
+Comprehensive verified benchmark results across 439 automated tests:
 
 - **Semantic Disambiguation (10,000 entities, 4,496 pairs):**
   - *Standard string rules:* 255/600 recovered, **116 false merges**.
   - *Muse Mosaic:* **584/600** recovered with **0 false merges** (100% precision).
 - **DeepMatcher Ground Truth (DBLP-ACM dirty + Amazon-Google):**
-  - *DBLP-ACM dirty:* **F1 23.9% (rules) → 85.8% (Muse, live arm)** — oracle ceiling 99.6%.
-  - *Amazon-Google:* **F1 15.2% (rules) → 50.4% (Muse, live arm)** — oracle ceiling 96.9%.
+  - *DBLP-ACM dirty:* **F1 23.9% (rules) → 89.9% (Muse, live arm, high confidence)** — precision 92.1%, oracle ceiling 99.6%.
+  - *Amazon-Google:* **F1 15.2% (rules) → 49.3% (Muse, live arm, high confidence)** — precision 42.6%, oracle ceiling 96.9%.
   - Candidate recall of the pipeline's own blocking index: **93.9% / 99.2%** — blocking is not the weak point; judge visibility was, and it is now fixed.
   - The deterministic rules/oracle rows **reproduce** and are logged in [`docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`](docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json) (T F1 15.2% / 23.9%, oracle F1 96.9% / 99.6%, mock judge, 2026-11-06).
-  - The live Muse rows (50.4% / 85.8%) are **unlogged claims**: no run log with SHA, date and model id exists yet — they stay until a live witness run is executed and recorded (see `docs/TEST-REPORT.md`).
-  - *Rules → Muse (mock arm):* impure clusters 360 → 244 (Amazon-Google), 62 → 44 (DBLP-ACM); the precision floor for auto-apply is witnessed by the live arm only — per-dataset calibration lives in `scripts/eval_calibration.py` and `docs/TEST-REPORT.md`.
+  - The live Muse rows are now **witnessed**: 2026-11-06 live run, model `muse-spark-1.3-contributor`, SHA `556c8df`, full breakdown in [`docs/runs/20261106T044952Z-calibration-all-live-556c8dfef636.json`](docs/runs/20261106T044952Z-calibration-all-live-556c8dfef636.json) (18,526 judged pairs, ~4.8M tokens). **Measured precision is below the 99.5% auto floor on both suites, so `AUTONOMY_MODE=auto` stays refused** — the gate refusing is the design working, not a bug.
+  - *Rules → Muse (mock arm):* impure clusters 360 → 244 (Amazon-Google), 62 → 44 (DBLP-ACM); per-dataset calibration lives in `scripts/eval_calibration.py` and `docs/TEST-REPORT.md`.
 - **Kaggle messy customers (10,666 rows, 666 labelled duplicate pairs):**
   - *Name-only blocking:* recall 100% but precision ~0% — the name pool has 30 distinct values, so it merges strangers (this is the failure the fail-closed design refuses to paper over).
   - *Identity blocking (exact email):* **precision 100%**, recall 91.9% — every miss shares a placeholder/missing email and is withheld rather than guessed.

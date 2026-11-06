@@ -37,12 +37,15 @@ breaker list for post-mortem compatibility; a deterministic 1% audit sample
 plus all withheld decisions is reported. **Evidence discipline:** measured
 claims re-run and logged under `docs/runs/` (see
 `docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`); the
-live Muse rows are unlogged claims and `AUTONOMY_MODE=auto` refuses to start
-without a witnessed floor (`MUSE_AUTO_WITNESS`, verified in
-`mosaic-api/auto_witness.py`). Integration tests pin the default, shadow, freeze and deliberate
-off paths end to end. Not landed: the live precision floor (needs an approved
-live run; the mock judge over-merges and is not a witness — see
-`scripts/eval_calibration.py`), and the witnessed auto gate (`MUSE_AUTO_WITNESS`).
+live Muse rows are now logged too (SHA `556c8df`, model
+`muse-spark-1.3-contributor`, `docs/runs/20261106T044952Z-calibration-all-live-556c8dfef636.json`).
+`AUTONOMY_MODE=auto` refuses to start without a witnessed floor
+(`MUSE_AUTO_WITNESS`, verified in `mosaic-api/auto_witness.py`). Integration tests pin the default, shadow, freeze and deliberate
+off paths end to end. Not landed: *meeting* the live precision floor — the
+2026-11-06 live witness run measured 42.6% (Amazon-Google) / 92.1%
+(DBLP-ACM) precision at `high`, below the 99.5% requirement, so its artifact
+does not unlock `MUSE_AUTO_WITNESS` and auto stays refused (the mock judge
+over-merges and is never a witness — see `scripts/eval_calibration.py`).
 The review queue for merge proposals (G4) is **landed**: `suggest` builds persist
 would-merge pairs to `merge_proposals`, labelled accepted/rejected at
 `/api/v1/suggestions` — labels are recorded, never applied to goldens. Canary

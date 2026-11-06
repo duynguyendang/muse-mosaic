@@ -17,12 +17,12 @@ before quoting any number; this page is evidence of one run, not a guarantee.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Python tests | `python3 -m pytest -q` | **437 passed, 0 failed**, 131.90 s (2026-11-06; log `docs/runs/20261106T040824Z-pytest-05e1db3cc4fa.txt`) |
+| Python tests | `python3 -m pytest -q` | **439 passed, 0 failed**, 157.95 s (2026-11-06; log `docs/runs/20261106T045256Z-pytest-556c8dfef636.txt`) |
 | Lint | `ruff check mosaic-api matching-engine scripts tests shared` | **clean** |
-| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 101 files unchanged |
+| Format | `black --check mosaic-api matching-engine scripts tests shared` | **clean**, 113 files unchanged |
 | Go format | `gofmt -l .` | **clean**, no output |
 | Go vet | `go vet ./...` | **clean**, no output |
-| Go tests | `go test -count=1 ./...` | **ok**, 0.037 s |
+| Go tests | `go test -count=1 ./...` | **ok**, 0.046 s |
 
 The suite is not a mock-only suite. `tests/conftest.py` builds the pinned
 `mkit` binary, starts the real trust-engine on a free port, and starts the
@@ -31,7 +31,7 @@ run needs no external network and no Meta API key.
 
 ```text
 $ python3 -m pytest -q
-437 passed in 131.90s (0:02:11)
+439 passed in 157.95s (0:02:37)
 
 $ python3 -m ruff check mosaic-api matching-engine scripts tests shared
 All checks passed!
@@ -45,8 +45,8 @@ ok  github.com/duynguyendang/muse-mosaic/trust-engine  0.046s
 
 ## Suite inventory
 
-437 collected tests across 46 files. Since the 2026-11-05 snapshot (381):
-ten new files — `test_traps.py` (the six release-gate traps),
+439 collected tests across 44 files. Since the 2026-11-05 snapshot (381):
+eight new files — `test_traps.py` (the six release-gate traps),
 `test_engine_router.py` (deterministic matcher router),
 `test_auto_witness.py` (the auto floor gate, 12 cases),
 `test_run_logs.py` (run-log discipline), `test_onboarding_review.py` (the
@@ -66,49 +66,58 @@ publication taxonomy.
 | Pipeline, API, jobs, UI | 83 | 13 | `/build`, `/upload`, `/resolve`, export, inbox and jobs; Splink and matching-engine contracts; auth; analyser; static UI wiring; Olist end-to-end; breaker stops the build (2 new cases) |
 | Entity contracts and onboarding | 63 | 5 | Specs ship as validated data; the onboarding compiler derives a bundle or refuses; unknown entity types fail closed; the DeepMatcher harness pins metric maths and raw counts |
 | Autonomy controller (M3) | 21 | 1 | Per-entity modes (off/shadow/suggest/auto), kill switch, breakers (now enforced before derivation), deterministic audit sampling, defaults fail closed, policy-borne breaker knobs |
-| Reliability and flexibility | 52 | 8 | The six traps (handler bypass, tampered stored field, expired approval, replay, policy-version mismatch, house-number neighbour); auto witness gate (10); deterministic engine router (8); G4 review queue + canary (8); run-log lint (2); publication policy ships a data drop; onboarding review gate; policy-borne thresholds fail closed |
+| Reliability and flexibility | 54 | 8 | The six traps (handler bypass, tampered stored field, expired approval, replay, policy-version mismatch, house-number neighbour); auto witness gate (12); deterministic engine router (8); G4 review queue + canary (8); run-log lint (2); publication policy ships a data drop; onboarding review gate (9); policy-borne thresholds fail closed (7) |
+
+Per file:
 
 Per file:
 
 | File | Tests | Covers |
 | --- | --- | --- |
+| `test_muse_candidates.py` | 55 | Shortlist scoring and caps, no global cap, verdict cache (reuse, invalidation, 1,200-key chunking), parallel judge, partial and total failure, merge limits |
 | `test_contract.py` | 35 | Fact/golden schema, provenance, policy and taxonomy rejection, DDL, mock-data shape |
 | `test_taxonomy_proposals.py` | 34 | Evidence checks (ground, attest, not-a-variant, relate, unique), digit-safe skeleton, version lineage, atomic writes, idempotency |
-| `test_muse_candidates.py` | 55 | Shortlist scoring and caps, no global cap, verdict cache (reuse, invalidation, 1,200-key chunking), parallel judge, partial and total failure, merge limits |
 | `test_rules_user.py` | 21 | G-01..G-20 user survivorship through the live engine |
-| `test_ui_wiring.py` | 7 | DOM ids referenced by `studio.js` exist in `index.html`; file split guards |
+| `test_autonomy.py` | 21 | Modes, freeze demotes auto->shadow, breakers enforced (unit + overrides), audit sampling, off/shadow end-to-end via /build |
+| `test_entity_judging.py` | 19 | Per-entity judging, grouping prompt, admission contract |
+| `test_onboarding.py` | 16 | Profiling, mapping refusals, taxonomy bootstrap, policy derivation, all-or-nothing bundles, approve-then-load |
 | `test_semantic_rules.py` | 15 | S1 `semantic_phone`, S2 `semantic_email`, S3 guard, against the live engine |
 | `test_policy_copilot.py` | 14 | Closed vocabulary, deterministic compile, engine verdict, refusal with a reason |
-| `test_jobs.py` | 10 | Enqueue, run, replay, resume, retry, cancel, budgets |
+| `test_auto_witness.py` | 12 | Auto floor gate: witness must be live-judged with SHA, model id and precision >= floor on every judgeable set; mock/missing/below-floor/all-unjudged refused; unjudged sets excluded as no-evidence; startup refuses auto without it |
+| `test_jobs.py` | 12 | Enqueue, run, replay, resume, retry, cancel, budgets, breaker stops the build |
+| `test_spec_files.py` | 11 | Shipped specs load from data; invalid specs fail closed; a new entity is a data drop |
+| `test_schema_contract.py` | 10 | Roles, normalizers, prompt compiler, privacy gate, verdict cache keys |
 | `test_proposer_real.py` | 9 | Fail-fast config and strict output validation without network or credit |
 | `test_inbox.py` | 9 | File and signed-webhook intake queues jobs, never derives |
+| `test_onboarding_review.py` | 9 | Pending bundle refused by both loaders; accept binds reviewer to the review digest; tamper and re-approval refused; CLI `--accept`/`--show-review` covered |
 | `test_splink.py` | 8 | S-01..S-04: hidden chain found, trap separate, malformed response fails closed |
 | `test_flows.py` | 8 | Demo flows A/B/C: authority beats recency, hidden chain, fail closed |
-| `test_subagents.py` | 7 | Five agents, claims only, never publish (mock mode) |
+| `test_reference.py` | 8 | Read-only reference endpoints and demo kill switch |
+| `test_engine_router.py` | 8 | Router is a pure function of shape and identifier coverage; stable across labels; most-demanding entity decides |
+| `test_suggestions.py` | 8 | G4 queue: suggest/canary persist proposals; exactly-once accept/reject; labels never applied to goldens; canary determinism |
+| `test_ui_wiring.py` | 7 | DOM ids referenced by `studio.js` exist in `index.html`; file split guards |
 | `test_rules_product.py` | 7 | P-01..P-06 product category through the live engine |
 | `test_export.py` | 7 | Export shape, lineage per field, policy/taxonomy versions, verify page |
 | `test_build.py` | 7 | End-to-end `/build`, `/upload`, `/graph`, `/downstream`, Accept |
-| `test_reference.py` | 8 | Read-only reference endpoints and demo kill switch |
+| `test_subagents.py` | 7 | Five agents, claims only, never publish (mock mode) |
+| `test_eval_deepmatcher.py` | 7 | Metric maths, raw-data counts, truth construction for the ground-truth harness |
+| `test_policy_thresholds.py` | 7 | Policy-borne M3 breaker knobs; borderline-band and breaker validation fail closed; unknown threshold keys stay forward-compatible |
+| `test_traps.py` | 6 | Release-gate traps: handler bypass, tampered stored field, expired approval, replayed decision id, policy-version mismatch, house-number neighbour |
 | `test_taxonomy_accept.py` | 4 | Steward-only new term, new version, re-derive |
 | `test_meta_tooling.py` | 4 | Wonder and Prompt Guard are conditional and honestly stubbed |
 | `test_auth.py` | 4 | Token gates every write; reads stay open |
 | `test_analyser.py` | 4 | Orphan, stale and duplicate findings become steward items; overdue scan |
-| `test_taxonomy.py` | 3 | Versioned vocabulary and exact synonym mapping |
-| `test_entity_judging.py` | 19 | Per-entity judging, grouping prompt, admission contract |
-| `test_onboarding.py` | 16 | Profiling, mapping refusals, taxonomy bootstrap, policy derivation, all-or-nothing bundles |
-| `test_spec_files.py` | 11 | Shipped specs load from data; invalid specs fail closed; a new entity is a data drop |
-| `test_schema_contract.py` | 10 | Roles, normalizers, prompt compiler, privacy gate, verdict cache keys |
-| `test_eval_deepmatcher.py` | 7 | Metric maths, raw-data counts, truth construction for the ground-truth harness |
-| `test_autonomy.py` | 19 | Modes, freeze demotes auto->shadow, breakers, audit sampling, off/shadow end-to-end via /build |
+| `test_taxonomy.py` | 3 | Versioned vocabulary and exact synonym mapping (incl. the shipped publication taxonomy) |
 | `test_structure.py` | 3 | Whole-document validation; mismatch withholds the golden |
 | `test_olist_brazilian.py` | 3 | Real Olist data end to end on an isolated stack |
 | `test_matching_engine.py` | 3 | Health, `/match` contract, proposer-only behaviour |
 | `test_hidden.py` | 3 | H-01..H-03 hidden-connection scene at the gate |
 | `test_csv_upload.py` | 3 | CSV parsing and `/upload` |
 | `test_idempotency.py` | 2 | Same key and hash replays; different hash does not |
+| `test_run_logs.py` | 2 | Run records complete (sha/date/model id/metrics); the banned untraceable provenance phrase never returns |
+| `test_publication_policy.py` | 2 | Shipped publication policy loads; end-to-end `/build` publishes `venue` only |
 | `test_split.py` | 1 | Merge, approve, split back to the first version |
 | `test_kill_service.py` | 1 | Trust-engine down: no new golden, fail closed |
-
 ## Claim-to-evidence matrix
 
 | README claim | Evidence | Status |
@@ -130,11 +139,11 @@ Per file:
 | Unknown entity types fail closed (422 / raise), never silently judged | `test_muse_candidates.py` (55), `test_schema_contract.py` (10) | verified |
 | The onboarding compiler derives a bundle or refuses; nothing is half-derived | `test_onboarding.py` (16) | verified |
 | A merged product golden never publishes guessed identity | `test_muse_candidates.py` (55) | verified |
-| Auto-apply is opt-in per entity; default is fail-closed; kill switch works | `test_autonomy.py` (21), `test_auto_witness.py` (10) | verified |
+| Auto-apply is opt-in per entity; default is fail-closed; kill switch works | `test_autonomy.py` (21), `test_auto_witness.py` (12) | verified |
 | Breakers stop the build before derivation; deliberate off/shadow never masquerade as failure | `test_jobs.py` (12), `test_autonomy.py` (21) | verified |
 | The six release traps hold: handler bypass, tampered stored field, expired approval, replay, policy-version mismatch, house-number neighbour | `test_traps.py` (6) | verified |
 | Suggested merges are labelled, never applied; accept/reject is exactly-once | `test_suggestions.py` (8) | verified |
-| Auto never starts without a witnessed live floor | `test_auto_witness.py` (10) | verified |
+| Auto never starts without a witnessed live floor | `test_auto_witness.py` (12) | verified |
 | Engine selection is a deterministic rule of shape and coverage, never of benchmarks | `test_engine_router.py` (8) | verified |
 | An unapproved onboarding bundle never loads; approval binds the review digest | `test_onboarding_review.py` (9) | verified |
 | Publication ships as data: policy + taxonomy; a new entity needs no code | `test_publication_policy.py` (2), `test_spec_files.py` (11) | verified |
@@ -166,23 +175,26 @@ the Muse arms; the numbers below are the ones recorded in `README.md`.
 ### Ground-truth accuracy (labelled pair sets, `eval_deepmatcher.py`)
 
 `eval_deepmatcher.py` scores blocking and judge arms on labelled pair sets —
-nothing sampled, truth from union-find over the published pairs. Mock rows
-reproduce deterministically and were re-run and logged 2026-11-06
-(`docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`). The
-live Muse rows have **no run log**: they were never recorded with SHA, date
-and model id, so they are unlogged claims, not measurements, until a live
-witness run is executed and written to `docs/runs/`.
+nothing sampled, truth from union-find over the published pairs. Both sides
+are logged under `docs/runs/` as of 2026-11-06: mock rows reproduce
+deterministically (`20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`),
+and the live Muse arm was run and recorded with SHA `556c8df`, model
+`muse-spark-1.3-contributor`
+(`20261106T044952Z-calibration-all-live-556c8dfef636.json`, 18,526 judged
+pairs, ~4.8M tokens, exit 1 — precision below the 99.5% auto floor on both
+suites, so auto stays refused). The earlier unlogged 50.4%/85.8% claims are
+superseded by these logged measurements.
 
 | Benchmark | Arm | Result | Status |
 | --- | --- | --- | --- |
 | Amazon-Google (4,589 docs, 1,167 positive pairs) | String rules (T) | F1 15.2% | measured (mock; reproduced + logged 2026-11-06, `docs/runs/20261106T020340Z-deepmatcher-all-mock-05e1db3cc4fa.json`) |
 | Amazon-Google | Token candidate recall | 93.9% | measured (mock; reproduced + logged 2026-11-06) |
 | Amazon-Google | Oracle over token candidates | F1 96.9% | measured (mock; reproduced + logged 2026-11-06) |
-| Amazon-Google | Muse on top of B | F1 50.4% | **unlogged claim** — no run log with SHA/date/model id; do not cite until a live witness run is executed |
+| Amazon-Google | Muse on top of B | F1 49.3% (high) / 47.2% (medium), precision 42.6% / 35.2%, 405 / 513 impure | measured (live, logged 2026-11-06; below the auto floor) |
 | DBLP-ACM dirty (4,910 docs, 2,220 positive pairs) | String rules (T) | F1 23.9% | measured (mock; reproduced + logged 2026-11-06) |
 | DBLP-ACM dirty | Token candidate recall | 99.2% | measured (mock; reproduced + logged 2026-11-06) |
 | DBLP-ACM dirty | Oracle over token candidates | F1 99.6% | measured (mock; reproduced + logged 2026-11-06) |
-| DBLP-ACM dirty | Muse on top of B | F1 85.8% | **unlogged claim** — no run log with SHA/date/model id; do not cite until a live witness run is executed |
+| DBLP-ACM dirty | Muse on top of B | F1 89.9% (high) / 88.4% (medium), precision 92.1% / 87.1%, 53 / 83 impure | measured (live, logged 2026-11-06; below the auto floor) |
 | Kaggle messy-customers (10,666 rows, 666 gold pairs) | Exact name, raw / normalised | recall 100% but precision 0.1% / 0.0% — 50 / 20 impure mega-clusters | measured (mock; reproduced + logged 2026-11-06) |
 | Kaggle messy-customers | Token block | 0 candidates: every name in the 30-name pool is hot | measured (mock; reproduced + logged 2026-11-06) |
 | Kaggle messy-customers | Exact email (identity hint) | precision **100%**, recall 91.9% (612/666), F1 **95.8%**, 0 impure clusters | measured (mock; reproduced + logged 2026-11-06) |
@@ -197,24 +209,33 @@ the 54 misses all share a placeholder or missing email (N/A, `-`, none, null,
 behaviour on real-world dirty dirt, not semantic discrimination — every gold
 pair is exact after normalisation.
 
-### Autonomy calibration (M3, mock judge, 2026-11-05)
+### Autonomy calibration (M3, mock + live judge)
 
 `scripts/eval_calibration.py` measures precision/recall/F1/impure clusters at
 both shipped confidence floors, on the same docs for each arm. Mock rows
 below reproduce deterministically (re-run + logged 2026-11-06:
 `docs/runs/20261106T020739Z-calibration-all-mock-05e1db3cc4fa.json`); the
 mock judge is **not calibrated** and over-merges the product/publication
-suites — a mock row is plumbing evidence only, never a floor witness. The
-live floor is **unwitnessed** until a live run is approved, executed and
-logged to `docs/runs/`; `AUTONOMY_MODE=auto` now refuses to start without it
-(`MUSE_AUTO_WITNESS`, see `.env.example`).
+suites — a mock row is plumbing evidence only, never a floor witness.
+
+The **live witness run executed 2026-11-06** (model
+`muse-spark-1.3-contributor`, SHA `556c8df`, log
+`docs/runs/20261106T044952Z-calibration-all-live-556c8dfef636.json`, 18,526
+judged pairs, ~4.8M tokens): precision at `high` is **42.6%** on
+Amazon-Google and **92.1%** on DBLP-ACM dirty — **below the 99.5% floor on
+both suites**. `eval_calibration.py` exited 1, the witness does not qualify,
+and `AUTONOMY_MODE=auto` correctly refuses to start (`MUSE_AUTO_WITNESS`
+stays unset — see `.env.example`). Unlocking auto means *meeting* the floor,
+not relaxing it.
 
 | Benchmark | Arm | Result | Status |
 | --- | --- | --- | --- |
-| Amazon-Google | Muse mock, high & medium | precision 12.3%, recall 8.9%, F1 10.3%, 161 merges (over-merge — not a witness) | measured (mock, 2026-11-05) |
-| DBLP-ACM dirty | Muse mock, high & medium | precision 39.9%, recall 3.6%, F1 6.5%, 26 merges (over-merge — not a witness) | measured (mock, 2026-11-05) |
-| Kaggle messy-customers | Muse mock, high & medium | precision **100%**, recall 91.9%, F1 95.8%, 0 impure | measured (mock, 2026-11-05) |
-| Precision at the auto floor | any | **not witnessed** — needs the live arm (approx. 18.5k judged pairs across both suites) | **not verified** |
+| Amazon-Google | Muse mock, high & medium | precision 12.3%, recall 8.9%, F1 10.3%, 161 merges (over-merge — not a witness) | measured (mock; logged 2026-11-06) |
+| Amazon-Google | Muse live, high / medium | precision **42.6%** / 35.2%, recall 58.6% / 71.5%, F1 49.3% / 47.2%, 405 / 513 impure, 8,666 judged | measured (live; logged 2026-11-06 — **floor not met**) |
+| DBLP-ACM dirty | Muse mock, high & medium | precision 39.9%, recall 3.6%, F1 6.5%, 26 merges (over-merge — not a witness) | measured (mock; logged 2026-11-06) |
+| DBLP-ACM dirty | Muse live, high / medium | precision **92.1%** / 87.1%, recall 87.7% / 89.8%, F1 89.9% / 88.4%, 53 / 83 impure, 9,860 judged | measured (live; logged 2026-11-06 — **floor not met**) |
+| Kaggle messy-customers | Muse mock, high & medium | precision **100%**, recall 91.9%, F1 95.8%, 0 impure | measured (mock; logged 2026-11-06) |
+| Precision at the auto floor | live | measured 42.6% / 92.1% (high) vs 99.5% required | **witness: NOT MET — auto refused (correct)** |
 
 The breaker/kill-switch/audit pieces are unit- and integration-tested instead:
 auto demotes to shadow under freeze, deliberate off never raises a breaker,

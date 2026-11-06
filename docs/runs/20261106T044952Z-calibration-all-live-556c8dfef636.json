@@ -1,0 +1,129 @@
+{
+  "harness": "scripts/eval_calibration.py",
+  "date_utc": "20261106T044952Z",
+  "git_sha": "556c8dfef636256dd5544e06d787c70912d7ec19",
+  "git_dirty": false,
+  "judge": "live",
+  "floor": 0.995,
+  "max_pairs": 0,
+  "model_id": "muse-spark-1.3-contributor",
+  "datasets": [
+    {
+      "dataset": "amazon-google",
+      "entity_type": "product",
+      "documents": 4589,
+      "pairs_positive": 1167,
+      "floor": 0.995,
+      "best_precision": 0.4258098223615465,
+      "judged_total": 17332,
+      "arms": [
+        {
+          "arm": "M Muse (live, min_confidence=high)",
+          "confidence": "high",
+          "precision": 0.4258098223615465,
+          "recall": 0.5863309352517986,
+          "f1": 0.4933414043583536,
+          "clusters": 3351,
+          "impure_clusters": 405,
+          "judged": 8666,
+          "merged": 905,
+          "judge_calls": 434,
+          "cache_hits": 0,
+          "tokens": 2240666
+        },
+        {
+          "arm": "M Muse (live, min_confidence=medium)",
+          "confidence": "medium",
+          "precision": 0.3521076868579525,
+          "recall": 0.7151079136690648,
+          "f1": 0.47187277474483746,
+          "clusters": 2984,
+          "impure_clusters": 513,
+          "judged": 8666,
+          "merged": 1272,
+          "judge_calls": 0,
+          "cache_hits": 8666,
+          "tokens": 0
+        }
+      ]
+    },
+    {
+      "dataset": "dblp-acm-dirty",
+      "entity_type": "publication",
+      "documents": 4910,
+      "pairs_positive": 2220,
+      "floor": 0.995,
+      "best_precision": 0.9214387127307146,
+      "judged_total": 19720,
+      "arms": [
+        {
+          "arm": "M Muse (live, min_confidence=high)",
+          "confidence": "high",
+          "precision": 0.9214387127307146,
+          "recall": 0.8770270270270271,
+          "f1": 0.8986845141933996,
+          "clusters": 2887,
+          "impure_clusters": 53,
+          "judged": 9860,
+          "merged": 1904,
+          "judge_calls": 493,
+          "cache_hits": 0,
+          "tokens": 2559584
+        },
+        {
+          "arm": "M Muse (live, min_confidence=medium)",
+          "confidence": "medium",
+          "precision": 0.8707423580786027,
+          "recall": 0.8981981981981982,
+          "f1": 0.8842572062084257,
+          "clusters": 2799,
+          "impure_clusters": 83,
+          "judged": 9860,
+          "merged": 1992,
+          "judge_calls": 0,
+          "cache_hits": 9860,
+          "tokens": 0
+        }
+      ]
+    },
+    {
+      "dataset": "messy-customers",
+      "entity_type": "user",
+      "documents": 10666,
+      "pairs_positive": 666,
+      "floor": 0.995,
+      "best_precision": null,
+      "judged_total": 0,
+      "arms": [
+        {
+          "arm": "M Muse (live, min_confidence=high)",
+          "confidence": "high",
+          "precision": 1.0,
+          "recall": 0.918918918918919,
+          "f1": 0.9577464788732395,
+          "clusters": 10054,
+          "impure_clusters": 0,
+          "judged": 0,
+          "merged": 0,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        },
+        {
+          "arm": "M Muse (live, min_confidence=medium)",
+          "confidence": "medium",
+          "precision": 1.0,
+          "recall": 0.918918918918919,
+          "f1": 0.9577464788732395,
+          "clusters": 10054,
+          "impure_clusters": 0,
+          "judged": 0,
+          "merged": 0,
+          "judge_calls": 0,
+          "cache_hits": 0,
+          "tokens": 0
+        }
+      ]
+    }
+  ]
+}
